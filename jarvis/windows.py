@@ -283,7 +283,9 @@ def close(hwnd: int) -> None:
 
 # ---------------------------------------------------------------- layouts
 
-LAYOUTS = ("auto", "maximize", "columns", "rows", "grid", "main-left")
+LAYOUTS = ("auto", "maximize", "columns", "rows", "grid", "main-left",
+           "left-half", "right-half", "top-half", "bottom-half")
+HALVES = {"left-half": (False, 0), "right-half": (False, 1), "top-half": (True, 0), "bottom-half": (True, 1)}
 
 
 def _split(area: Rect, n: int, vertical: bool) -> list[Rect]:
@@ -321,6 +323,9 @@ def layout_rects(area: Rect, n: int, layout: str) -> list[Rect]:
             layout = "grid"
     if layout == "maximize":
         return [area] * n
+    if layout in HALVES:  # every window fills that half (normally there's just one)
+        vertical, index = HALVES[layout]
+        return [_split(area, 2, vertical)[index]] * n
     if layout == "columns":
         return _split(area, n, vertical=False)
     if layout == "rows":

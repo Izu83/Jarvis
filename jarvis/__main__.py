@@ -10,7 +10,7 @@ from .windows import enable_dpi_awareness
 
 enable_dpi_awareness()  # before anything touches windows
 
-from . import speak  # noqa: E402
+from . import modes, speak  # noqa: E402
 from .config import ROOT, secret, settings  # noqa: E402
 
 log = logging.getLogger("jarvis")
@@ -68,7 +68,12 @@ def main() -> None:
         while True:
             text, reply = jobs.get()
             log.info("Command: %s", text)
-            answer = brain.handle(text)
+            mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
+            try:
+                answer = modes.run(mode) if mode else brain.handle(text)
+            except Exception as e:
+                log.exception("Command failed")
+                answer = f"Something went wrong: {e}"
             log.info("Jarvis: %s", answer)
             if reply:
                 reply(answer)

@@ -1,7 +1,8 @@
 """The actions Claude can take on this PC: JSON schemas + the Python that runs them."""
 import ctypes
+import json
 
-from . import apps
+from . import apps, modes
 from . import windows as win
 from .config import settings
 
@@ -86,6 +87,57 @@ TOOLS = [
         },
     },
     {
+        "name": "list_modes",
+        "description": "List the saved modes (named window layouts like 'work') with their full definitions.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "run_mode",
+        "description": "Run a saved mode: opens its apps/folders and tiles them on their monitors.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "description": "Mode name, e.g. 'work'"}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "save_mode",
+        "description": "Create or replace a mode. To change an existing mode, call list_modes first and send the "
+                       "complete new definition. Window items: 'app:<Start menu app name>', 'folder:<path>' "
+                       "('folder:' alone = plain File Explorer), 'url:<https://...>' (opened, not placed). "
+                       "Order inside a screen is top->bottom for 'rows' and left->right for 'columns'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Short name without the word 'mode', e.g. 'gaming'"},
+                "screens": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "monitor": {"type": "integer"},
+                            "layout": {"type": "string", "enum": list(win.LAYOUTS)},
+                            "windows": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["monitor", "layout", "windows"],
+                    },
+                },
+                "say": {"type": "string", "description": "Short sentence Jarvis says when the mode is ready"},
+                "icon": {"type": "string", "enum": list(modes.ICONS)},
+            },
+            "required": ["name", "screens"],
+        },
+    },
+    {
+        "name": "delete_mode",
+        "description": "Delete a saved mode.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    },
+    {
         "name": "media_key",
         "description": "Press a media key (controls Spotify or whatever is playing) or change the system volume.",
         "input_schema": {
@@ -145,6 +197,14 @@ def run(name: str, args: dict) -> str:
         elif action == "close":
             win.close(w.hwnd)
         return f"{action}: {w.describe()}"
+    if name == "list_modes":
+        return json.dumps(modes.load(), indent=1)
+    if name == "run_mode":
+        return modes.run(args["name"])
+    if name == "save_mode":
+        return modes.put(args["name"], args["screens"], args.get("say", ""), args.get("icon", "sparkles"))
+    if name == "delete_mode":
+        return modes.remove(args["name"])
     if name == "media_key":
         vk = MEDIA_KEYS[args["key"]]
         for _ in range(max(1, min(int(args.get("times", 1)), 50))):

@@ -8,3 +8,4 @@ __pycache__/
 jarvis.log
 config.json
 .brain/
+modes.json

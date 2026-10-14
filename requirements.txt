@@ -10,3 +10,4 @@ pyttsx3
 faster-whisper
 openwakeword
 mcp>=2.3
+pillow

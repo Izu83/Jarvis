@@ -6,280 +6,350 @@
 <meta name="robots" content="noindex">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Jarvis">
-<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef1f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#07070c" media="(prefers-color-scheme: dark)">
 <title>Jarvis</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root {
-    --bg: #f2f2f7; --card: #ffffff; --label: #000000; --label2: rgba(60,60,67,.6); --label3: rgba(60,60,67,.3);
-    --sep: rgba(60,60,67,.29); --fill: rgba(118,118,128,.12); --bubble: #e9e9eb;
-    --blue: #007aff; --green: #34c759; --red: #ff3b30; --orange: #ff9500;
-    --bar: rgba(249,249,249,.78); --sheet-dim: rgba(0,0,0,.4);
     color-scheme: light dark;
+    --label: #0b0b0f; --label2: rgba(60,60,67,.62); --label3: rgba(60,60,67,.32);
+    --blue: #0a84ff; --green: #30c759; --red: #ff3b30; --orange: #ff9500;
+    --base: #eef1f8;
+    --glass: rgba(255,255,255,.46); --glass-strong: rgba(255,255,255,.72);
+    --rim-hi: rgba(255,255,255,.95); --rim-lo: rgba(255,255,255,.25);
+    --shade: 0 10px 30px -8px rgba(30,40,80,.18), 0 2px 6px rgba(30,40,80,.06);
+    --sep: rgba(60,60,67,.16);
+    --blob1: #b9d6ff; --blob2: #e3cfff; --blob3: #c4f1e3; --blob4: #ffd9c7;
+    --spring: cubic-bezier(.3,1.5,.5,1);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #000000; --card: #1c1c1e; --label: #ffffff; --label2: rgba(235,235,245,.6); --label3: rgba(235,235,245,.3);
-      --sep: rgba(84,84,88,.65); --fill: rgba(118,118,128,.24); --bubble: #262529;
+      --label: #f5f5f7; --label2: rgba(235,235,245,.62); --label3: rgba(235,235,245,.3);
       --blue: #0a84ff; --green: #30d158; --red: #ff453a; --orange: #ff9f0a;
-      --bar: rgba(22,22,24,.78); --sheet-dim: rgba(0,0,0,.6);
+      --base: #07070c;
+      --glass: rgba(58,58,68,.34); --glass-strong: rgba(44,44,52,.78);
+      --rim-hi: rgba(255,255,255,.38); --rim-lo: rgba(255,255,255,.05);
+      --shade: 0 12px 36px -10px rgba(0,0,0,.7), 0 2px 8px rgba(0,0,0,.3);
+      --sep: rgba(255,255,255,.1);
+      --blob1: #15306b; --blob2: #3b1a5c; --blob3: #0c3d3a; --blob4: #4a2312;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--label); }
+  html, body { margin: 0; height: 100%; background: var(--base); color: var(--label); }
   body {
-    font: 17px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
-    letter-spacing: -.41px; display: flex; flex-direction: column; overflow: hidden;
-    -webkit-font-smoothing: antialiased;
+    font: 17px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: -.41px; -webkit-font-smoothing: antialiased; overflow: hidden;
   }
   button { font: inherit; letter-spacing: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
   [hidden] { display: none !important; }
+  svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  /* nav bar */
-  .nav {
-    position: relative; z-index: 2; padding: calc(env(safe-area-inset-top) + 6px) 16px 8px;
-    background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: .5px solid var(--sep);
+  /* ambient "wallpaper" the glass picks colour up from */
+  .ambient { position: fixed; inset: -20%; z-index: 0; pointer-events: none; filter: blur(60px) saturate(130%); }
+  .ambient i { position: absolute; border-radius: 50%; opacity: .9; }
+  .ambient i:nth-child(1) { width: 60vmax; height: 60vmax; left: -5%; top: -10%; background: var(--blob1); }
+  .ambient i:nth-child(2) { width: 50vmax; height: 50vmax; right: -10%; top: 20%; background: var(--blob2); }
+  .ambient i:nth-child(3) { width: 55vmax; height: 55vmax; left: 10%; bottom: -15%; background: var(--blob3); }
+  .ambient i:nth-child(4) { width: 30vmax; height: 30vmax; right: 15%; bottom: 10%; background: var(--blob4); opacity: .55; }
+  @media (prefers-reduced-motion: no-preference) {
+    .ambient i { animation: drift 26s ease-in-out infinite alternate; }
+    .ambient i:nth-child(2) { animation-duration: 32s; animation-direction: alternate-reverse; }
+    .ambient i:nth-child(3) { animation-duration: 38s; }
   }
-  .nav-row { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
-  .nav-title { font-size: 34px; font-weight: 700; letter-spacing: .37px; line-height: 41px; margin: 2px 0 0; }
-  .status { font-size: 13px; letter-spacing: -.08px; color: var(--label2); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--label3); transition: background .3s; }
-  .dot.ok { background: var(--green); } .dot.warn { background: var(--orange); } .dot.bad { background: var(--red); }
-  .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; color: var(--blue); border-radius: 50%; }
-  .icon-btn:active { opacity: .4; }
+  @keyframes drift { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
 
-  /* chat */
+  /* ---------- Liquid Glass ---------- */
+  .glass {
+    position: relative; isolation: isolate;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.04);
+    backdrop-filter: blur(22px) saturate(190%) brightness(1.04);
+    box-shadow: var(--shade), inset 0 1px 0 var(--rim-hi), inset 0 -1px 0 var(--rim-lo);
+  }
+  .glass::before { /* light catching the rim */
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: -1;
+    background: linear-gradient(140deg, var(--rim-hi), transparent 32%, transparent 68%, var(--rim-hi));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; opacity: .8;
+  }
+  .glass::after { /* soft specular highlight across the top */
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+    background: radial-gradient(130% 70% at 25% -10%, rgba(255,255,255,.28), transparent 55%);
+  }
+  .press { transition: transform .35s var(--spring), filter .2s; }
+  .press:active { transform: scale(.94); filter: brightness(1.08); transition-duration: .12s; }
+
+  /* ---------- floating header ---------- */
+  .top {
+    position: fixed; z-index: 5; left: 0; right: 0; top: 0;
+    padding: calc(env(safe-area-inset-top) + 8px) 16px 0; display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none;
+  }
+  .top > * { pointer-events: auto; }
+  .pill { height: 36px; border-radius: 18px; padding: 0 14px 0 12px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.24px; }
+  .pill small { font-weight: 400; color: var(--label2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--label3); box-shadow: 0 0 0 3px transparent; transition: .3s; }
+  .dot.ok { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 22%, transparent); }
+  .dot.warn { background: var(--orange); } .dot.bad { background: var(--red); }
+  .round { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; }
+
+  /* ---------- chat ---------- */
   #log {
-    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-    padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 2px;
+    position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding: calc(env(safe-area-inset-top) + 64px) 14px var(--dock-h, 170px);
+    display: flex; flex-direction: column; gap: 3px;
   }
-  .stamp { align-self: center; font-size: 12px; color: var(--label2); margin: 14px 0 6px; font-weight: 500; letter-spacing: 0; }
+  .hello { padding: 14vh 8px 10px; text-align: center; margin: auto 0; }
+  .orb { width: 84px; height: 84px; margin: 0 auto 18px; border-radius: 24px; display: grid; place-items: center; }
+  .orb svg { width: 84px; height: 84px; }
+  .hello h1 { margin: 0 0 6px; font-size: 32px; font-weight: 700; letter-spacing: .3px; }
+  .hello p { margin: 0 auto; max-width: 280px; color: var(--label2); font-size: 16px; line-height: 21px; letter-spacing: -.3px; }
+  .stamp { align-self: center; font-size: 12px; font-weight: 600; color: var(--label2); margin: 16px 0 6px; letter-spacing: 0; }
   .bubble {
-    max-width: 78%; padding: 7px 13px 8px; border-radius: 19px; font-size: 17px; line-height: 22px;
-    white-space: pre-wrap; overflow-wrap: anywhere; animation: pop .22s cubic-bezier(.2,.9,.3,1.2);
+    max-width: 80%; padding: 9px 14px 10px; border-radius: 21px; font-size: 17px; line-height: 22px;
+    white-space: pre-wrap; overflow-wrap: anywhere; animation: rise .45s var(--spring) both;
   }
-  .me { align-self: flex-end; background: var(--blue); color: #fff; }
-  .jarvis { align-self: flex-start; background: var(--bubble); color: var(--label); }
-  .me + .jarvis, .jarvis + .me { margin-top: 8px; }
-  .jarvis.error { background: transparent; border: 1px solid var(--red); color: var(--red); }
-  .meta { font-size: 11px; color: var(--label2); margin: 2px 6px 0; letter-spacing: .07px; }
-  .meta.right { align-self: flex-end; } .meta.left { align-self: flex-start; }
-  @keyframes pop { from { transform: scale(.85); opacity: 0; } }
-  .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
-  .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--label2); animation: blink 1.2s infinite; }
-  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
-  @keyframes blink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+  .me { align-self: flex-end; color: #fff; background: linear-gradient(180deg, #3d9cff, #0a7cff); box-shadow: 0 6px 18px -6px rgba(10,124,255,.55), inset 0 1px 0 rgba(255,255,255,.35); }
+  .jarvis { align-self: flex-start; }
+  .me + .jarvis, .jarvis + .me, .meta + .me { margin-top: 10px; }
+  .jarvis.error { color: var(--red); }
+  .meta { font-size: 11px; color: var(--label2); margin: 3px 8px 0; align-self: flex-start; letter-spacing: .06px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.92); } }
+  .typing { display: inline-flex; gap: 5px; padding: 5px 2px; }
+  .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--label2); animation: blink 1.3s infinite; }
+  .typing i:nth-child(2) { animation-delay: .18s; } .typing i:nth-child(3) { animation-delay: .36s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
 
-  .empty { margin: auto; text-align: center; padding: 24px; color: var(--label2); }
-  .empty .orb { width: 76px; height: 76px; margin: 0 auto 16px; }
-  .empty h2 { color: var(--label); font-size: 22px; font-weight: 700; letter-spacing: .35px; margin: 0 0 6px; }
-  .empty p { margin: 0; font-size: 15px; letter-spacing: -.24px; line-height: 20px; }
+  /* screenshots card */
+  .shots { align-self: stretch; border-radius: 24px; padding: 12px 0 12px; animation: rise .45s var(--spring) both; }
+  .shots header { display: flex; justify-content: space-between; align-items: baseline; padding: 0 16px 10px; }
+  .shots header b { font-size: 15px; font-weight: 600; } .shots header span { font-size: 13px; color: var(--label2); }
+  .strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 16px; scrollbar-width: none; align-items: flex-end; }
+  .strip::-webkit-scrollbar { display: none; }
+  .shot { flex: none; scroll-snap-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .shot .frame { border-radius: 12px; overflow: hidden; background: var(--sep); display: grid; place-items: center; box-shadow: 0 6px 16px -6px rgba(0,0,0,.35); }
+  .shot .frame.land { width: 216px; height: 122px; } .shot .frame.port { width: 86px; height: 152px; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .shot small { font-size: 12px; color: var(--label2); }
+  .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid var(--label3); border-top-color: var(--label2); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* composer */
-  .composer {
-    padding: 8px 8px calc(env(safe-area-inset-bottom) + 8px);
-    background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
-    border-top: .5px solid var(--sep);
-  }
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 4px 8px; scrollbar-width: none; }
-  .chips::-webkit-scrollbar { display: none; }
-  .chip {
-    flex: none; background: var(--fill); color: var(--blue); border-radius: 16px; padding: 6px 12px;
-    font-size: 15px; letter-spacing: -.24px; font-weight: 500;
-  }
-  .chip:active { opacity: .5; }
-  .input-row { display: flex; align-items: flex-end; gap: 8px; }
-  .field {
-    flex: 1; display: flex; align-items: flex-end; min-height: 36px; border: 1px solid var(--sep);
-    border-radius: 18px; background: var(--card); padding: 0 4px 0 14px;
-  }
+  /* ---------- floating dock ---------- */
+  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 0 10px calc(env(safe-area-inset-bottom) + 10px); }
+  .shelf { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 12px; scrollbar-width: none; -webkit-mask: linear-gradient(90deg, #000 92%, transparent); mask: linear-gradient(90deg, #000 92%, transparent); }
+  .shelf::-webkit-scrollbar { display: none; }
+  .tile { flex: none; height: 40px; border-radius: 20px; padding: 0 14px 0 6px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.24px; }
+  .tile .ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  .tile .ic svg.i { width: 17px; height: 17px; stroke-width: 2.1; }
+  .tile.plain { padding: 0 14px; font-weight: 500; color: var(--label2); }
+  .bar { display: flex; gap: 8px; align-items: flex-end; }
+  .field { flex: 1; min-height: 48px; border-radius: 24px; display: flex; align-items: flex-end; padding: 0 5px 0 18px; }
   #text {
     flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--label); resize: none;
-    font: inherit; font-size: 17px; line-height: 22px; padding: 6px 0; max-height: 110px;
+    font: inherit; font-size: 17px; line-height: 22px; padding: 13px 0; max-height: 120px;
   }
-  #text::placeholder { color: var(--label3); }
+  #text::placeholder { color: var(--label2); }
   #send {
-    width: 28px; height: 28px; margin: 3px 0; border-radius: 50%; background: var(--blue); color: #fff;
-    display: grid; place-items: center; transition: transform .15s, opacity .15s;
+    width: 38px; height: 38px; margin: 5px 0; border-radius: 50%; display: grid; place-items: center; color: #fff;
+    background: linear-gradient(180deg, #3d9cff, #0a7cff); box-shadow: 0 4px 12px -3px rgba(10,124,255,.6), inset 0 1px 0 rgba(255,255,255,.4);
+    transition: transform .35s var(--spring), opacity .2s;
   }
-  #send:disabled { opacity: 0; transform: scale(.5); pointer-events: none; width: 0; margin: 3px 0 3px -4px; }
-  #mic {
-    flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
-    color: var(--blue); background: var(--fill); transition: background .2s, color .2s;
-  }
-  #mic.on { background: var(--red); color: #fff; animation: ring 1.4s ease-out infinite; }
-  @keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(255,59,48,.45); } 100% { box-shadow: 0 0 0 14px rgba(255,59,48,0); } }
+  #send:disabled { transform: scale(.4); opacity: 0; pointer-events: none; }
+  #send svg.i { width: 18px; height: 18px; stroke-width: 2.6; }
+  #mic { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--label); }
+  #mic.on { color: #fff; background: var(--red); animation: halo 1.5s ease-out infinite; }
+  @keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(255,59,48,.5); } 100% { box-shadow: 0 0 0 16px rgba(255,59,48,0); } }
 
-  /* grouped lists (pairing + settings) */
-  .page { flex: 1; overflow-y: auto; padding: 8px 0 calc(env(safe-area-inset-bottom) + 24px); }
-  .hero { text-align: center; padding: 24px 32px 8px; }
-  .hero .orb { width: 88px; height: 88px; margin: 0 auto 14px; }
-  .hero h2 { margin: 0 0 6px; font-size: 28px; font-weight: 700; letter-spacing: .36px; }
-  .hero p { margin: 0; color: var(--label2); font-size: 15px; line-height: 20px; letter-spacing: -.24px; }
-  .section-title { font-size: 13px; color: var(--label2); text-transform: uppercase; letter-spacing: -.08px; margin: 26px 32px 7px; }
-  .section-foot { font-size: 13px; color: var(--label2); letter-spacing: -.08px; line-height: 18px; margin: 7px 32px 0; }
-  .group { background: var(--card); border-radius: 10px; margin: 0 16px; overflow: hidden; }
-  .row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 16px; position: relative; }
-  .row + .row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: .5px solid var(--sep); }
-  .row .grow { flex: 1; padding: 11px 0; }
-  .row .value { color: var(--label2); }
-  .step-num {
-    width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 14px;
-    font-weight: 600; display: grid; place-items: center; flex: none;
-  }
-  .row textarea {
-    width: 100%; border: 0; outline: 0; resize: none; background: transparent; color: var(--label);
-    font: 15px/20px ui-monospace, "SF Mono", Menlo, monospace; padding: 12px 0; min-height: 88px;
-  }
-  .btn-row { width: 100%; justify-content: center; color: var(--blue); font-weight: 400; }
-  .btn-row:active { background: var(--fill); }
-  .danger { color: var(--red); }
-  .error-text { color: var(--red); font-size: 13px; margin: 8px 32px 0; }
-
-  /* iOS switch */
-  .switch { position: relative; width: 51px; height: 31px; flex: none; }
-  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
-  .switch span { position: absolute; inset: 0; border-radius: 16px; background: var(--fill); transition: background .25s; }
-  .switch span::after {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
-    box-shadow: 0 3px 8px rgba(0,0,0,.15), 0 3px 1px rgba(0,0,0,.06); transition: transform .25s;
-  }
-  .switch input:checked + span { background: var(--green); }
-  .switch input:checked + span::after { transform: translateX(20px); }
-
-  /* bottom sheet */
-  .sheet-wrap { position: fixed; inset: 0; z-index: 10; background: var(--sheet-dim); display: flex; align-items: flex-end; animation: fade .25s; }
-  .sheet {
-    width: 100%; max-height: 92%; background: var(--bg); border-radius: 12px 12px 0 0; display: flex; flex-direction: column;
-    animation: up .35s cubic-bezier(.2,.9,.3,1);
-  }
-  .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; }
-  .sheet-head h3 { margin: 0; font-size: 17px; font-weight: 600; }
-  .sheet-head button { color: var(--blue); font-weight: 600; }
-  .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--label3); margin: 6px auto 0; }
-  @keyframes up { from { transform: translateY(100%); } }
+  /* ---------- sheets (settings, pairing) ---------- */
+  .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.28); display: flex; align-items: flex-end; justify-content: center; animation: fade .3s both; }
   @keyframes fade { from { background: transparent; } }
-  @media (min-width: 640px) { .sheet { max-width: 560px; margin: 0 auto; border-radius: 12px 12px 0 0; } .sheet-wrap { justify-content: center; } }
+  .sheet {
+    width: 100%; max-width: 560px; max-height: 92%; border-radius: 34px 34px 0 0; margin: 0 6px;
+    background: var(--glass-strong); display: flex; flex-direction: column; animation: up .5s var(--spring) both;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  @keyframes up { from { transform: translateY(105%); } }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 4px; }
+  .sheet-head h3 { margin: 0; font-size: 17px; font-weight: 600; }
+  .sheet-body { overflow-y: auto; padding: 4px 0 24px; }
+  .group-title { font-size: 13px; color: var(--label2); margin: 22px 34px 7px; letter-spacing: -.08px; }
+  .group-foot { font-size: 13px; color: var(--label2); margin: 7px 34px 0; line-height: 18px; letter-spacing: -.08px; }
+  .group { margin: 0 16px; border-radius: 22px; background: color-mix(in srgb, var(--glass-strong) 70%, transparent); overflow: hidden; box-shadow: inset 0 1px 0 var(--rim-lo); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 18px; position: relative; width: 100%; text-align: left; }
+  .row + .row::before { content: ""; position: absolute; top: 0; left: 18px; right: 0; border-top: .5px solid var(--sep); }
+  .row .grow { flex: 1; padding: 13px 0; min-width: 0; }
+  .row .sub { display: block; font-size: 13px; color: var(--label2); margin-top: 2px; line-height: 17px; letter-spacing: -.08px; }
+  .row .value { color: var(--label2); }
+  .row.btn { justify-content: center; color: var(--blue); }
+  .row.btn:active { background: var(--sep); }
+  .danger { color: var(--red) !important; }
+  .switch { position: relative; width: 63px; height: 28px; flex: none; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; z-index: 1; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 14px; background: var(--sep); transition: background .3s; }
+  .switch span::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 37px; height: 24px; border-radius: 12px; background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,.18); transition: transform .45s var(--spring), width .2s;
+  }
+  .switch input:active + span::after { width: 44px; }
+  .switch input:checked + span { background: var(--green); }
+  .switch input:checked + span::after { transform: translateX(22px); }
+  .switch input:checked:active + span::after { transform: translateX(15px); }
+  .mode-ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: #fff; flex: none; }
+  .mode-ic svg.i { width: 18px; height: 18px; stroke-width: 2.1; }
+
+  /* pairing page */
+  #setup { position: fixed; inset: 0; z-index: 2; overflow-y: auto; padding: calc(env(safe-area-inset-top) + 70px) 0 40px; }
+  #setup .hello { padding-top: 4vh; }
+  .step { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 700; background: linear-gradient(180deg, #3d9cff, #0a7cff); flex: none; }
+  #pairLink { width: 100%; border: 0; outline: 0; resize: none; background: transparent; color: var(--label); font: 15px/20px ui-monospace, "SF Mono", Menlo, monospace; padding: 14px 0; min-height: 84px; }
+  .err { color: var(--red); font-size: 13px; margin: 8px 34px 0; }
+
+  /* screenshot viewer */
+  .viewer { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.92); display: flex; flex-direction: column; animation: fade .25s both; }
+  .viewer .slides { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .viewer .slides::-webkit-scrollbar { display: none; }
+  .viewer .slide { flex: none; width: 100vw; height: 100%; scroll-snap-align: center; display: grid; place-items: center; padding: 70px 8px 90px; }
+  .viewer img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+  .viewer .close { position: absolute; top: calc(env(safe-area-inset-top) + 10px); right: 14px; color: #fff; z-index: 2; }
+  .viewer .caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 22px); color: #fff; z-index: 2; white-space: nowrap; }
 </style>
 </head>
 <body>
 
+<!-- icon set (SF Symbols-style) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <radialGradient id="orbFill" cx="50%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#5ac8fa"/><stop offset="100%" stop-color="#007aff"/>
-    </radialGradient>
-    <symbol id="orb" viewBox="0 0 88 88">
-      <rect width="88" height="88" rx="20" fill="url(#orbFill)"/>
-      <circle cx="44" cy="44" r="22" fill="none" stroke="#fff" stroke-width="4"/>
-      <circle cx="44" cy="44" r="13" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="2.5" stroke-dasharray="5 3.5"/>
-      <circle cx="44" cy="44" r="6.5" fill="#fff"/>
-    </symbol>
-  </defs>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7M3 12.5h18"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></symbol>
+  <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M7.5 7h9A4.5 4.5 0 0 1 21 11.5v1.6a3.4 3.4 0 0 1-6.1 2L14 14h-4l-.9 1.1a3.4 3.4 0 0 1-6.1-2v-1.6A4.5 4.5 0 0 1 7.5 7zM8 9.5v4M6 11.5h4"/><circle cx="15.5" cy="10.5" r=".6"/><circle cx="17.5" cy="12.5" r=".6"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5C10.3 5 7.7 4.5 4 4.5v14c3.7 0 6.3.5 8 2 1.7-1.5 4.3-2 8-2v-14c-3.7 0-6.3.5-8 2zM12 6.5v14"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7.5 4v16M16.5 4v16M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z"/></symbol>
+  <symbol id="i-house" viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></symbol>
+  <symbol id="i-display" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2.5"/><path d="M9 20.5h6M12 16.5v4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5.5v13l11-6.5z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 6v12l9-6zM18 6v12"/></symbol>
+  <symbol id="orb" viewBox="0 0 84 84">
+    <defs><linearGradient id="og" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5ac8fa"/><stop offset="1" stop-color="#0a6cff"/></linearGradient></defs>
+    <rect width="84" height="84" rx="24" fill="url(#og)"/>
+    <circle cx="42" cy="42" r="21" fill="none" stroke="#fff" stroke-width="4"/>
+    <circle cx="42" cy="42" r="12.5" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2.4" stroke-dasharray="5 3.4"/>
+    <circle cx="42" cy="42" r="6" fill="#fff"/>
+  </symbol>
 </svg>
 
-<header class="nav">
-  <div class="nav-row">
-    <span></span>
-    <button class="icon-btn" id="settingsBtn" aria-label="Settings" hidden>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
-  </div>
-  <h1 class="nav-title">Jarvis</h1>
-  <div class="status"><span class="dot" id="dot"></span><span id="status">Not connected</span></div>
+<div class="ambient" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+<header class="top">
+  <div class="pill glass" id="statusPill"><span class="dot" id="dot"></span><span>Jarvis</span><small id="status">Not paired</small></div>
+  <button class="round glass press" id="settingsBtn" aria-label="Settings" hidden><svg class="i"><use href="#i-dots"/></svg></button>
 </header>
 
 <!-- pairing -->
-<section class="page" id="setup" hidden>
-  <div class="hero">
-    <svg class="orb"><use href="#orb"/></svg>
-    <h2>Connect your PC</h2>
-    <p>Pair this phone once and control your computer from anywhere.</p>
+<section id="setup" hidden>
+  <div class="hello">
+    <div class="orb"><svg><use href="#orb"/></svg></div>
+    <h1>Connect your PC</h1>
+    <p>Pair once, then control your computer from anywhere.</p>
   </div>
-  <div class="section-title">How to pair</div>
-  <div class="group">
-    <div class="row"><span class="step-num">1</span><span class="grow">On your PC, run <b>run.bat --pair</b></span></div>
-    <div class="row"><span class="step-num">2</span><span class="grow">Scan the QR code with the Camera app</span></div>
-    <div class="row"><span class="step-num">3</span><span class="grow">Tap <b>Share → Add to Home Screen</b></span></div>
+  <div class="group-title">How to pair</div>
+  <div class="group glass">
+    <div class="row"><span class="step">1</span><span class="grow">On your PC, run <b>run.bat --pair</b></span></div>
+    <div class="row"><span class="step">2</span><span class="grow">Scan the QR code with Camera</span></div>
+    <div class="row"><span class="step">3</span><span class="grow">Share → <b>Add to Home Screen</b></span></div>
   </div>
-  <div class="section-title">Or paste the pairing link</div>
-  <div class="group">
+  <div class="group-title">Or paste the pairing link</div>
+  <div class="group glass">
     <div class="row"><textarea id="pairLink" placeholder="https://…#t=…&amp;k=…" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea></div>
-    <button class="row btn-row" id="pairBtn">Pair</button>
+    <button class="row btn" id="pairBtn">Pair</button>
   </div>
-  <div class="error-text" id="pairErr" hidden></div>
-  <div class="section-foot">Commands are end-to-end encrypted. The relay only ever sees scrambled data.</div>
+  <div class="err" id="pairErr" hidden></div>
+  <div class="group-foot">End-to-end encrypted. The relay only ever sees scrambled data.</div>
 </section>
 
-<!-- chat -->
+<!-- conversation -->
 <main id="log" hidden>
-  <div class="empty" id="empty">
-    <svg class="orb"><use href="#orb"/></svg>
-    <h2>How can I help?</h2>
-    <p>Tap the mic or type a command, like<br>"Open Spotify on my left monitor".</p>
+  <div class="hello" id="hello">
+    <div class="orb"><svg><use href="#orb"/></svg></div>
+    <h1 id="greeting">Hello</h1>
+    <p>Pick a mode, tap Screens, or tell Jarvis what you need.</p>
   </div>
 </main>
 
-<footer class="composer" id="composer" hidden>
-  <div class="chips" id="chips"></div>
-  <div class="input-row">
-    <button id="mic" aria-label="Dictate">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
-    </button>
-    <div class="field">
-      <textarea id="text" rows="1" placeholder="Tell Jarvis…" enterkeyhint="send"></textarea>
-      <button id="send" aria-label="Send" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-      </button>
+<footer class="dock" id="dock" hidden>
+  <div class="shelf" id="shelf"></div>
+  <div class="bar">
+    <button class="glass press" id="mic" aria-label="Dictate"><svg class="i"><use href="#i-mic"/></svg></button>
+    <div class="field glass">
+      <textarea id="text" rows="1" placeholder="Ask Jarvis" enterkeyhint="send"></textarea>
+      <button id="send" aria-label="Send" disabled><svg class="i"><use href="#i-up"/></svg></button>
     </div>
   </div>
 </footer>
 
-<!-- settings sheet -->
-<div class="sheet-wrap" id="sheet" hidden>
-  <div class="sheet" role="dialog" aria-label="Settings">
-    <div class="grabber"></div>
-    <div class="sheet-head"><span style="width:44px"></span><h3>Settings</h3><button id="doneBtn">Done</button></div>
-    <div class="page" style="padding-top:0">
-      <div class="section-title">Replies</div>
+<!-- settings -->
+<div class="scrim" id="sheet" hidden>
+  <div class="sheet glass" role="dialog" aria-label="Settings">
+    <div class="sheet-head">
+      <span style="width:40px"></span><h3>Settings</h3>
+      <button class="round glass press" id="doneBtn" aria-label="Close" style="width:34px;height:34px"><svg class="i" style="width:16px;height:16px;stroke-width:2.4"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <div class="group-title">Modes</div>
+      <div class="group" id="modeList"></div>
+      <div class="group-foot">Create or change a mode by asking, e.g. "Make a gaming mode with Discord on the vertical monitor and Steam on the main one."</div>
+      <div class="group-title">Replies</div>
       <div class="group">
         <label class="row"><span class="grow">Read replies aloud</span><span class="switch"><input type="checkbox" id="speakToggle"><span></span></span></label>
-        <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle" checked><span></span></span></label>
+        <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle"><span></span></span></label>
       </div>
-      <div class="section-title">Connection</div>
+      <div class="group-title">Connection</div>
       <div class="group">
         <div class="row"><span class="grow">Relay</span><span class="value" id="relayName"></span></div>
-        <div class="row"><span class="grow">Encryption</span><span class="value">AES-256</span></div>
+        <div class="row"><span class="grow">Encryption</span><span class="value">AES-256-GCM</span></div>
       </div>
-      <div class="group" style="margin-top:26px">
-        <button class="row btn-row" id="clearBtn">Clear Conversation</button>
-      </div>
-      <div class="group" style="margin-top:26px">
-        <button class="row btn-row danger" id="unpair">Unpair This Phone</button>
-      </div>
+      <div class="group" style="margin-top:22px"><button class="row btn" id="clearBtn">Clear Conversation</button></div>
+      <div class="group" style="margin-top:22px"><button class="row btn danger" id="unpair">Unpair This Phone</button></div>
     </div>
   </div>
+</div>
+
+<!-- screenshot viewer -->
+<div class="viewer" id="viewer" hidden>
+  <button class="round glass press close" id="viewerClose" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+  <div class="slides" id="slides"></div>
+  <div class="pill glass caption" id="viewerCaption"></div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const CHIPS = ["Pause music", "Next song", "Volume up", "What's open?", "Open Spotify on the left monitor"];
-const HISTORY_KEY = "jarvis.chat";
-let cfg = null, key = null, events = null, lastEventId = null;
+const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
+  film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
+const QUICK = [["play", "Play / pause", "Play or pause the music"], ["next", "Next song", "Next song"]];
+const HISTORY_KEY = "jarvis.history", MODES_KEY = "jarvis.modes";
+let cfg = null, key = null, events = null, lastEventId = null, modes = [];
 const pending = new Map();
 
 function store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+const icon = (name, cls = "i") => `<svg class="${cls}"><use href="#i-${name}"/></svg>`;
 
 const b64e = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64d = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const newId = () => crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
 
 function parsePairing(text) {
   const hash = text.includes("#") ? text.slice(text.indexOf("#") + 1) : text;
@@ -288,43 +358,49 @@ function parsePairing(text) {
   return { topic: p.get("t"), key: p.get("k"), server: (p.get("s") || "https://ntfy.sh").replace(/\/$/, "") };
 }
 
-async function encrypt(obj) {
+// ---------- crypto (same scheme as jarvis/remote.py)
+async function seal(bytes, aad) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode("jarvis-cmd") }, key, enc.encode(JSON.stringify(obj)));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(aad) }, key, bytes);
   const out = new Uint8Array(12 + ct.byteLength); out.set(iv); out.set(new Uint8Array(ct), 12);
-  return b64e(out);
+  return out;
 }
+async function open(raw, aad) {
+  return crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: enc.encode(aad) }, key, raw.slice(12));
+}
+const openJson = async text => JSON.parse(dec.decode(await open(b64d(text.trim()), "jarvis-reply")));
 
-async function decrypt(text) {
-  const raw = b64d(text.trim());
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: enc.encode("jarvis-reply") }, key, raw.slice(12));
-  return JSON.parse(dec.decode(pt));
+async function post(payload) {
+  const body = b64e(await seal(enc.encode(JSON.stringify({ ...payload, ts: Date.now() })), "jarvis-cmd"));
+  const r = await fetch(`${cfg.server}/${cfg.topic}?cache=no&firebase=no`, { method: "POST", body });
+  if (!r.ok) throw new Error("HTTP " + r.status);
 }
 
 function setStatus(text, state) { $("status").textContent = text; $("dot").className = "dot" + (state ? " " + state : ""); }
 
-// ---- conversation (kept on this phone so it survives closing the app)
+// ---------- conversation
 let chat = [];
 try { chat = JSON.parse(load(HISTORY_KEY)) || []; } catch {}
-const saveHistory = () => store(HISTORY_KEY, JSON.stringify(chat.slice(-60)));
+const saveChat = () => store(HISTORY_KEY, JSON.stringify(chat.slice(-60)));
 const timeLabel = ts => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const scrollDown = () => requestAnimationFrame(() => $("log").scrollTo({ top: $("log").scrollHeight, behavior: "smooth" }));
 
 let lastStamp = 0;
-function addStamp(ts) {
+function stamp(ts) {
   if (ts - lastStamp < 10 * 60 * 1000) return;
   lastStamp = ts;
   const d = new Date(ts), today = new Date().toDateString() === d.toDateString();
   const el = document.createElement("div");
   el.className = "stamp";
-  el.textContent = (today ? "Today " : d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) + " ") + timeLabel(ts);
+  el.textContent = (today ? "Today " : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + " ") + timeLabel(ts);
   $("log").append(el);
 }
 
-function bubble(text, who, cls = "", ts = Date.now()) {
-  $("empty")?.remove();
-  addStamp(ts);
+function bubble(text, who, ts = Date.now(), error = false) {
+  $("hello")?.remove();
+  stamp(ts);
   const el = document.createElement("div");
-  el.className = `bubble ${who} ${cls}`;
+  el.className = `bubble ${who}` + (who === "jarvis" ? " glass" : "") + (error ? " error" : "");
   if (text === null) el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
   else el.textContent = text;
   $("log").append(el);
@@ -332,18 +408,14 @@ function bubble(text, who, cls = "", ts = Date.now()) {
   return el;
 }
 
-function meta(text, side) {
+function meta(text) {
   const el = document.createElement("div");
-  el.className = "meta " + side; el.textContent = text;
+  el.className = "meta"; el.textContent = text;
   $("log").append(el); scrollDown();
   return el;
 }
 
-const scrollDown = () => requestAnimationFrame(() => $("log").scrollTop = $("log").scrollHeight);
-
-function renderHistory() {
-  for (const m of chat) bubble(m.text, m.who, m.error ? "error" : "", m.ts);
-}
+function remember(who, text, error = false) { chat.push({ who, text, ts: Date.now(), error }); saveChat(); }
 
 function speakText(text) {
   if (!$("speakToggle").checked || !window.speechSynthesis) return;
@@ -351,31 +423,104 @@ function speakText(text) {
   speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
-// ---- relay connection. "since" catches up on replies missed while the phone was asleep.
+function greet() {
+  const h = new Date().getHours();
+  $("greeting").textContent = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+
+// ---------- sending
+function track(id, ui) {
+  ui.timer = setTimeout(() => fail(id, "Your PC didn't answer. Is Jarvis running?"), 12000);
+  pending.set(id, ui);
+}
+
+function fail(id, msg) {
+  const p = pending.get(id);
+  if (!p) return;
+  pending.delete(id); clearTimeout(p.timer);
+  p.meta?.remove();
+  if (p.shots) { p.shots.querySelector("header span").textContent = msg; return; }
+  p.el.className = "bubble jarvis glass error"; p.el.textContent = msg;
+  remember("jarvis", msg, true);
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || !key) return;
+  bubble(text, "me"); remember("me", text);
+  const id = newId();
+  track(id, { el: bubble(null, "jarvis"), meta: meta("Sending…") });
+  try { await post({ type: "cmd", text, id }); const p = pending.get(id); if (p) p.meta.textContent = "Delivered"; }
+  catch { fail(id, "Couldn't reach the relay. Check your connection."); }
+}
+
+async function requestScreens() {
+  if (!key) return;
+  $("hello")?.remove();
+  stamp(Date.now());
+  const card = document.createElement("div");
+  card.className = "shots glass";
+  card.innerHTML = '<header><b>Your screens</b><span>Capturing…</span></header><div class="strip"><div class="shot"><div class="frame land"><div class="spinner"></div></div></div></div>';
+  $("log").append(card); scrollDown();
+  const id = newId();
+  track(id, { shots: card, images: [] });
+  try { await post({ type: "screens", id }); }
+  catch { fail(id, "Couldn't reach the relay."); }
+}
+
+async function addScreenshot(p, info, url) {
+  clearTimeout(p.timer);
+  p.timer = setTimeout(() => fail(info.id, "Some screens didn't arrive."), 20000);
+  const raw = new Uint8Array(await (await fetch(url)).arrayBuffer());
+  const blobUrl = URL.createObjectURL(new Blob([await open(raw, "jarvis-image")], { type: "image/jpeg" }));
+  const img = new Image();
+  img.src = blobUrl;
+  await img.decode().catch(() => {});
+  p.images.push({ url: blobUrl, label: info.label, index: info.index, portrait: img.naturalHeight > img.naturalWidth });
+  p.images.sort((a, b) => a.index - b.index);  // left to right, as the monitors sit on the desk
+  p.shots.querySelector("header span").textContent = p.images.length >= info.count ? timeLabel(Date.now()) : `${p.images.length} of ${info.count}`;
+  const strip = p.shots.querySelector(".strip");
+  strip.innerHTML = "";
+  p.images.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.className = "shot press";
+    b.innerHTML = `<div class="frame ${s.portrait ? "port" : "land"}"><img alt=""></div><small></small>`;
+    b.querySelector("img").src = s.url;
+    b.querySelector("small").textContent = s.label;
+    b.onclick = () => openViewer(p.images, i);
+    strip.append(b);
+  });
+  scrollDown();
+}
+
+// ---------- receiving
 function connect() {
   events?.close();
   const since = lastEventId || Math.floor(Date.now() / 1000) - 300;
   events = new EventSource(`${cfg.server}/${cfg.topic}-r/sse?since=${since}`);
-  events.onopen = () => setStatus("Connected", "ok");
+  events.onopen = () => { setStatus("Connected", "ok"); post({ type: "sync", id: newId() }).catch(() => {}); };
   events.onerror = () => setStatus("Reconnecting…", "warn");
   events.onmessage = async e => {
-    let msg, reply;
-    try { msg = JSON.parse(e.data); reply = await decrypt(msg.message); } catch { return; }
+    let msg, data;
+    try { msg = JSON.parse(e.data); data = await openJson(msg.message); } catch { return; }
     lastEventId = msg.id;
-    const p = pending.get(reply.id);
+    if (data.kind === "state") { setModes(data.modes || []); return; }
+    const p = pending.get(data.id);
     if (!p) return;
+    if (data.kind === "image" && msg.attachment && p.shots) { addScreenshot(p, data, msg.attachment.url).catch(() => {}); return; }
     clearTimeout(p.timer);
-    if (!reply.done) {
-      p.meta.textContent = "Working on it…";
-      p.timer = setTimeout(() => { p.meta.textContent = "Still working…"; }, 45000);
+    if (!data.done) {
+      if (p.meta) p.meta.textContent = "Working on it…";
+      p.timer = setTimeout(() => { if (p.meta) p.meta.textContent = "Still working…"; }, 45000);
       return;
     }
-    pending.delete(reply.id);
+    pending.delete(data.id);
+    if (p.shots) { if (!p.images.length) p.shots.querySelector("header span").textContent = data.text; return; }
+    p.meta?.remove();
     p.el.classList.remove("error");
-    p.el.textContent = reply.text;
-    p.meta.remove();
-    chat.push({ who: "jarvis", text: reply.text, ts: Date.now() }); saveHistory();
-    speakText(reply.text);
+    p.el.textContent = data.text;
+    remember("jarvis", data.text);
+    speakText(data.text);
     scrollDown();
   };
 }
@@ -384,86 +529,101 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && cfg && (!events || events.readyState === EventSource.CLOSED || pending.size)) connect();
 });
 
-async function send(text) {
-  text = text.trim();
-  if (!text || !key) return;
-  const ts = Date.now();
-  bubble(text, "me", "", ts);
-  chat.push({ who: "me", text, ts }); saveHistory();
-  const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
-  const el = bubble(null, "jarvis");
-  const status = meta("Sending…", "left");
-  const fail = msg => {
-    pending.delete(id);
-    el.className = "bubble jarvis error"; el.textContent = msg; status.remove();
-    chat.push({ who: "jarvis", text: msg, ts: Date.now(), error: true }); saveHistory();
+// ---------- modes + shelf
+function setModes(list) {
+  modes = list; store(MODES_KEY, JSON.stringify(list));
+  renderShelf(); renderModeList();
+}
+
+function renderShelf() {
+  const shelf = $("shelf");
+  shelf.innerHTML = "";
+  const add = (html, cls, onclick, label) => {
+    const b = document.createElement("button");
+    b.className = `tile glass press ${cls}`; b.innerHTML = html; b.onclick = onclick;
+    if (label) b.setAttribute("aria-label", label);
+    shelf.append(b);
   };
-  const timer = setTimeout(() => fail("Your PC didn't answer. Is Jarvis running?"), 12000);
-  pending.set(id, { el, meta: status, timer });
-  try {
-    const body = await encrypt({ text, id, ts });
-    const r = await fetch(`${cfg.server}/${cfg.topic}?cache=no&firebase=no`, { method: "POST", body });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    if (pending.has(id)) status.textContent = "Delivered";
-  } catch (err) {
-    clearTimeout(timer);
-    fail("Couldn't reach the relay. Check your internet connection.");
+  for (const m of modes) {
+    const name = m.name[0].toUpperCase() + m.name.slice(1);
+    add(`<span class="ic" style="background:${TINTS[m.icon] || TINTS.sparkles}">${icon(m.icon)}</span>${name}`, "", () => send(`${m.name} mode`));
+  }
+  add(`<span class="ic" style="background:#8e8e93">${icon("display")}</span>Screens`, "", requestScreens);
+  for (const [ic, label, cmd] of QUICK) add(`<span class="ic" style="background:#30d158">${icon(ic)}</span>${label}`, "", () => send(cmd));
+  add(`${icon("plus")} New mode`, "plain", () => { text.value = "Create a mode called "; autosize(); text.focus(); });
+}
+
+function renderModeList() {
+  const list = $("modeList");
+  list.innerHTML = "";
+  if (!modes.length) { list.innerHTML = '<div class="row"><span class="grow sub">No modes yet</span></div>'; return; }
+  for (const m of modes) {
+    const row = document.createElement("button");
+    row.className = "row";
+    row.innerHTML = `<span class="mode-ic" style="background:${TINTS[m.icon] || TINTS.sparkles}">${icon(m.icon)}</span><span class="grow"></span>`;
+    const g = row.querySelector(".grow");
+    g.textContent = m.name[0].toUpperCase() + m.name.slice(1);
+    const sub = document.createElement("span"); sub.className = "sub"; sub.textContent = m.summary; g.append(sub);
+    row.onclick = () => { $("sheet").hidden = true; send(`${m.name} mode`); };
+    list.append(row);
   }
 }
 
-// ---- composer
+// ---------- composer
 const text = $("text");
-function autosize() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 110) + "px"; $("send").disabled = !text.value.trim(); }
+function autosize() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px"; $("send").disabled = !text.value.trim(); }
 text.addEventListener("input", autosize);
 text.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
 $("send").onclick = submit;
 function submit() { const v = text.value; text.value = ""; autosize(); send(v); }
+new ResizeObserver(() => document.documentElement.style.setProperty("--dock-h", $("dock").offsetHeight + 16 + "px")).observe($("dock"));
 
-for (const c of CHIPS) {
-  const b = document.createElement("button");
-  b.className = "chip"; b.textContent = c; b.onclick = () => send(c);
-  $("chips").append(b);
-}
-
-// ---- dictation (Safari on iOS, Chrome on Android). Falls back to the keyboard's own mic key.
+// ---------- dictation (Safari / Chrome). Falls back to the keyboard's own mic key.
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false;
-if (!Recognition) { $("mic").hidden = true; text.placeholder = "Tell Jarvis… (tap 🎤 on the keyboard)"; }
-
+if (!Recognition) $("mic").hidden = true;
 $("mic").onclick = () => {
   if (listening) { rec.stop(); return; }
   rec = new Recognition();
   rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = false;
   rec.onstart = () => { listening = true; $("mic").classList.add("on"); text.value = ""; text.placeholder = "Listening…"; autosize(); };
   rec.onresult = e => { text.value = [...e.results].map(r => r[0].transcript).join(""); autosize(); };
-  rec.onerror = e => {
-    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-      bubble("Dictation isn't allowed here. Use the mic key on your keyboard instead.", "jarvis", "error");
-    }
-  };
-  rec.onend = () => {
-    listening = false; $("mic").classList.remove("on"); text.placeholder = "Tell Jarvis…";
-    if ($("autoSendToggle").checked && text.value.trim()) submit();
-  };
+  rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") bubble("Dictation isn't available here. Use the mic key on your keyboard.", "jarvis", Date.now(), true); };
+  rec.onend = () => { listening = false; $("mic").classList.remove("on"); text.placeholder = "Ask Jarvis"; if ($("autoSendToggle").checked && text.value.trim()) submit(); };
   try { rec.start(); } catch {}
 };
 
-// ---- settings sheet
-const sheet = $("sheet");
-$("settingsBtn").onclick = () => { sheet.hidden = false; };
-$("doneBtn").onclick = () => { sheet.hidden = true; };
-sheet.onclick = e => { if (e.target === sheet) sheet.hidden = true; };
+// ---------- viewer
+function openViewer(images, start) {
+  const slides = $("slides");
+  slides.innerHTML = "";
+  for (const s of images) {
+    const d = document.createElement("div"); d.className = "slide";
+    const img = document.createElement("img"); img.src = s.url; img.alt = s.label;
+    d.append(img); slides.append(d);
+  }
+  const caption = () => { const i = Math.round(slides.scrollLeft / slides.clientWidth); $("viewerCaption").textContent = images[i]?.label || ""; };
+  slides.onscroll = caption;
+  $("viewer").hidden = false;
+  requestAnimationFrame(() => { slides.scrollLeft = start * slides.clientWidth; caption(); });
+}
+$("viewerClose").onclick = () => { $("viewer").hidden = true; };
+
+// ---------- settings
+$("settingsBtn").onclick = () => { $("sheet").hidden = false; };
+$("doneBtn").onclick = () => { $("sheet").hidden = true; };
+$("sheet").onclick = e => { if (e.target === $("sheet")) $("sheet").hidden = true; };
 for (const [id, k, def] of [["speakToggle", "jarvis.speak", "0"], ["autoSendToggle", "jarvis.autosend", "1"]]) {
   $(id).checked = (load(k) ?? def) === "1";
   $(id).onchange = e => store(k, e.target.checked ? "1" : "0");
 }
-$("clearBtn").onclick = () => { chat = []; saveHistory(); location.reload(); };
+$("clearBtn").onclick = () => { chat = []; saveChat(); location.reload(); };
 $("unpair").onclick = () => {
   if (!confirm("Unpair this phone? You'll need to scan the QR code on your PC again.")) return;
-  store("jarvis.pairing"); store(HISTORY_KEY); location.reload();
+  store("jarvis.pairing"); store(HISTORY_KEY); store(MODES_KEY); location.reload();
 };
 
-// ---- pairing
+// ---------- pairing + start
 $("pairBtn").onclick = async () => {
   const p = parsePairing($("pairLink").value);
   if (!p) { $("pairErr").textContent = "That doesn't look like a pairing link."; $("pairErr").hidden = false; return; }
@@ -474,17 +634,19 @@ $("pairBtn").onclick = async () => {
 async function start() {
   // The pairing link carries the secrets in the #fragment, which browsers never send to any server.
   const fromHash = parsePairing(location.hash.slice(1));
-  if (fromHash) { store("jarvis.pairing", JSON.stringify(fromHash)); chat.length = 0; saveHistory(); window.history.replaceState(null, "", location.pathname); }
+  if (fromHash) { store("jarvis.pairing", JSON.stringify(fromHash)); chat = []; saveChat(); window.history.replaceState(null, "", location.pathname); }
   try { cfg = JSON.parse(load("jarvis.pairing")); } catch { cfg = null; }
-  const paired = !!cfg;
-  if (paired) {
+  if (cfg) {
     try { key = await crypto.subtle.importKey("raw", b64d(cfg.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
     catch { store("jarvis.pairing"); cfg = null; }
   }
-  $("setup").hidden = !!cfg; $("log").hidden = !cfg; $("composer").hidden = !cfg; $("settingsBtn").hidden = !cfg;
+  $("setup").hidden = !!cfg; $("log").hidden = !cfg; $("dock").hidden = !cfg; $("settingsBtn").hidden = !cfg;
   if (!cfg) { setStatus("Not paired"); return; }
   $("relayName").textContent = new URL(cfg.server).host;
-  if (!$("log").querySelector(".bubble")) renderHistory();
+  greet();
+  try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
+  renderShelf(); renderModeList();
+  if (!$("log").querySelector(".bubble")) for (const m of chat) bubble(m.text, m.who, m.ts, m.error);
   setStatus("Connecting…");
   connect();
 }

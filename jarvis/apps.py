@@ -70,42 +70,53 @@ def _app_hints(name: str, app: dict | None) -> list[str]:
     return hints
 
 
-def open_app(name: str) -> str:
+def launch_app(name: str, skip: set[int] = frozenset()) -> tuple[str, win.Window | None]:
+    """Open an app (or reuse its open window). Returns a message and the window, if found."""
     app = find_app(name)
     if not app:
-        return f"Error: no installed app matches '{name}'."
+        return f"Error: no installed app matches '{name}'.", None
     hints = _app_hints(name, app)
 
     # Already running? Bring it back instead of starting a second copy.
     for hint in hints:
-        existing = win.find_windows(hint)
+        existing = [w for w in win.find_windows(hint) if w.hwnd not in skip]
         if existing and win.match_score(existing[0], hint) >= 60:
             win.focus(existing[0].hwnd)
-            return f"{app['Name']} was already open: window {existing[0].describe()}"
+            return f"{app['Name']} was already open: window {existing[0].describe()}", existing[0]
 
     before = {w.hwnd for w in win.list_windows()}
     subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{app['AppID']}"])
     w = _new_window(before, hints, timeout=15)
     if w:
-        return f"Opened {app['Name']}: window {w.describe()}"
-    return f"Launched {app['Name']}, but its window hasn't appeared yet (it may still be loading)."
+        return f"Opened {app['Name']}: window {w.describe()}", w
+    return f"Launched {app['Name']}, but its window hasn't appeared yet (it may still be loading).", None
+
+
+def launch_folder(path: str = "", reuse: bool = False, skip: set[int] = frozenset()) -> tuple[str, win.Window | None]:
+    """Open a folder in a new Explorer window, or with reuse=True an already-open one showing it."""
+    p = Path(os.path.expandvars(os.path.expanduser(path))) if path else None
+    if p and not p.exists():
+        return f"Error: folder '{path}' does not exist. Try find_folder first.", None
+    hints = [p.name or str(p)] if p else []
+    if reuse:
+        explorers = [w for w in win.list_windows() if w.cls == "CabinetWClass" and w.hwnd not in skip]
+        match = next((w for w in explorers if not hints or win.match_score(w, hints[0])), None)
+        if match:
+            return f"Reused File Explorer: window {match.describe()}", match
+    before = {w.hwnd for w in win.list_windows()}
+    subprocess.Popen(["explorer.exe", str(p)] if p else ["explorer.exe"])
+    w = _new_window(before, hints, timeout=8, cls="CabinetWClass")
+    if w:
+        return f"Opened File Explorer: window {w.describe()}", w
+    return "Opened File Explorer, but couldn't identify its window.", None
+
+
+def open_app(name: str) -> str:
+    return launch_app(name)[0]
 
 
 def open_folder(path: str = "") -> str:
-    before = {w.hwnd for w in win.list_windows()}
-    if path:
-        p = Path(os.path.expandvars(os.path.expanduser(path)))
-        if not p.exists():
-            return f"Error: folder '{path}' does not exist. Try find_folder first."
-        subprocess.Popen(["explorer.exe", str(p)])
-        hints = [p.name or str(p)]
-    else:
-        subprocess.Popen(["explorer.exe"])
-        hints = []
-    w = _new_window(before, hints, timeout=8, cls="CabinetWClass")
-    if w:
-        return f"Opened File Explorer: window {w.describe()}"
-    return "Opened File Explorer, but couldn't identify its window."
+    return launch_folder(path)[0]
 
 
 def open_target(target: str) -> str:

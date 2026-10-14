@@ -52,6 +52,26 @@ To start Jarvis automatically at login: press `Win+R`, type `shell:startup`, and
 - "Close File Explorer", "What's open on monitor 2?"
 - "Open YouTube"
 
+## Modes
+
+A mode is a saved layout you start with one phrase: **"Jarvis, work mode"**, or the mode's button on the phone.
+Modes run instantly and don't use Claude at all. The default `work` mode:
+
+| Monitor | Windows |
+|---|---|
+| Right vertical (1) | File Explorer (top), Claude (middle), Spotify (bottom) |
+| Left (3) | Opera (left half), File Explorer (right half) |
+| Main (2) | VS Code, full screen |
+
+Create or change modes by just asking, e.g. *"Jarvis, make a gaming mode with Discord on the vertical monitor and
+Steam full screen on the main one"* or *"In work mode, put Chrome instead of Opera"*. They're saved in `modes.json`,
+which you can also edit by hand.
+
+## Screens on your phone
+
+Tap **Screens** in the phone app to see all three monitors. Screenshots go straight from the PC to your phone,
+end-to-end encrypted. Claude never sees them, so they cost no tokens. They expire from the relay after 3 hours.
+
 ## Settings (`config.json`)
 
 | Key | What it does |
@@ -77,7 +97,9 @@ To start Jarvis automatically at login: press `Win+R`, type `shell:startup`, and
 | `jarvis/windows.py` | Win32: monitors, window lookup, moving and tiling |
 | `jarvis/apps.py` | Start-menu app launching, folders, folder search |
 | `jarvis/voice.py` | openWakeWord "hey jarvis" + recording + faster-whisper |
-| `jarvis/remote.py` | Encrypted phone channel over ntfy.sh |
+| `jarvis/remote.py` | Encrypted phone channel over ntfy.sh (commands, modes list, screenshots) |
+| `jarvis/modes.py` | Saved layouts ("work mode") that run without Claude |
+| `jarvis/screens.py` | Screenshots of each monitor for the phone |
 | `docs/` | The phone page served by GitHub Pages |
 
 ## Security notes

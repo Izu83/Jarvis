@@ -36,6 +36,8 @@ How to work:
 "Organize them as normal" means the auto layout.
 - If the user names a monitor by position (left, right, vertical, main, 1/2/3), map it using the list below.
 - If something fails, try a sensible alternative once, then report it.
+- Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
+describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
 This PC:
 {environment}"""
