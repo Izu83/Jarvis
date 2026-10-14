@@ -1,0 +1,10 @@
+# secrets - never commit
+.env
+pair-phone.svg
+
+.venv/
+__pycache__/
+*.pyc
+jarvis.log
+config.json
+.brain/

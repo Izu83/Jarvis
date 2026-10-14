@@ -1,0 +1,12 @@
+anthropic>=1.13
+python-dotenv
+psutil
+requests
+cryptography
+qrcode
+sounddevice
+numpy
+pyttsx3
+faster-whisper
+openwakeword
+mcp>=2.3
