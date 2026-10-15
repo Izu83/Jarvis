@@ -67,6 +67,16 @@ Create or change modes by just asking, e.g. *"Jarvis, make a gaming mode with Di
 Steam full screen on the main one"* or *"In work mode, put Chrome instead of Opera"*. They're saved in `modes.json`,
 which you can also edit by hand.
 
+## The phone app
+
+- **Chats and groups**: the sidebar button (top left) lists your chats. Each chat has its own memory, so Jarvis
+  doesn't mix up conversations. Tap the folder button to make a group; press and hold a chat or group to rename,
+  move or delete it. Search finds chats by title or message text.
+- **Control Center**: shown on every new chat, or tap the title at the top. Spotify now playing with play/pause,
+  skip and volume; live CPU and memory with the busiest app; send your phone's clipboard to the PC or see the PC's
+  clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
+- **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
+
 ## Screens on your phone
 
 Tap **Screens** in the phone app to see all three monitors. Screenshots go straight from the PC to your phone,
@@ -100,6 +110,7 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 | `jarvis/remote.py` | Encrypted phone channel over ntfy.sh (commands, modes list, screenshots) |
 | `jarvis/modes.py` | Saved layouts ("work mode") that run without Claude |
 | `jarvis/screens.py` | Screenshots of each monitor for the phone |
+| `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
 | `docs/` | The phone page served by GitHub Pages |
 
 ## Security notes

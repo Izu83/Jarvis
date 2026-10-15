@@ -47,6 +47,14 @@ IDLE_RESET_SECONDS = 300
 MAX_TOOL_ROUNDS = 12
 
 
+def thread_switch_note(recent: list | None) -> str:
+    """The phone has separate chats; when the user switches, tell Claude which earlier messages count."""
+    if not recent:
+        return "[New conversation. Earlier messages in this session are unrelated.]\n\n"
+    lines = [f"{'User' if m.get('who') == 'me' else 'Jarvis'}: {str(m.get('text', ''))[:300]}" for m in recent[-6:]]
+    return "[Switched conversation. Only these earlier messages belong to it:\n" + "\n".join(lines) + "]\n\n"
+
+
 def make_brain():
     return ApiBrain() if settings["brain"] == "api" else ClaudeCodeBrain()
 
@@ -103,6 +111,7 @@ class ClaudeCodeBrain:
         )
         self.events = queue.Queue()
         self.commands = 0
+        self.thread = None  # which chat the session's context belongs to
         threading.Thread(target=self._read, args=(self.proc, self.events), daemon=True).start()
         log.info("Claude Code session started (pid %s).", self.proc.pid)
 
@@ -131,10 +140,13 @@ class ClaudeCodeBrain:
                     log.info("Idle: starting a fresh Claude Code session.")
                     self._restart()
 
-    def handle(self, command: str) -> str:
+    def handle(self, command: str, chat: str | None = None, recent: list | None = None) -> str:
         with self.lock:
             if self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION:
                 self._restart()
+            if chat != self.thread:
+                command = thread_switch_note(recent) + command
+                self.thread = chat
             self.commands += 1
             started = time.time()
             try:
@@ -183,13 +195,17 @@ class ApiBrain:
         self.client = anthropic.Anthropic()
         self.system = SYSTEM_TEMPLATE.format(environment=tools.environment_description())
         self.history: list = []
+        self.thread = None
         self.last_used = 0.0
         self.lock = threading.Lock()
 
-    def handle(self, command: str) -> str:
+    def handle(self, command: str, chat: str | None = None, recent: list | None = None) -> str:
         with self.lock:
-            if time.time() - self.last_used > IDLE_RESET_SECONDS or len(self.history) > 60:
+            if time.time() - self.last_used > IDLE_RESET_SECONDS or len(self.history) > 60 or chat != self.thread:
                 self.history = []
+                if chat != self.thread:
+                    command = thread_switch_note(recent) + command
+                self.thread = chat
             self.last_used = time.time()
             anthropic = self.anthropic
             try:

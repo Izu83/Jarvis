@@ -16,7 +16,7 @@ import requests
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from . import modes, screens
+from . import modes, pc, screens, tools
 from .config import secret, set_secret, settings
 
 log = logging.getLogger("jarvis.remote")
@@ -24,6 +24,7 @@ log = logging.getLogger("jarvis.remote")
 CMD_AAD = b"jarvis-cmd"
 REPLY_AAD = b"jarvis-reply"
 IMAGE_AAD = b"jarvis-image"
+MAX_TEXT = 2400
 MAX_AGE_MS = 120_000
 
 
@@ -92,14 +93,25 @@ class PhoneChannel:
         except requests.RequestException:
             log.exception("Couldn't send to phone")
 
-    def reply(self, msg_id: str, text: str, done: bool = True) -> None:
-        self._publish({"kind": "reply", "id": msg_id, "text": text, "done": done})
+    def reply(self, msg_id: str, text: str, done: bool = True, kind: str = "reply") -> None:
+        # ntfy turns messages over 4 KB into attachments; encryption + base64 grows text by ~1.4x
+        if len(text) > MAX_TEXT:
+            text = text[:MAX_TEXT] + "…"
+        self._publish({"kind": kind, "id": msg_id, "text": text, "done": done})
         if done:
             self.send_state()
 
     def send_state(self) -> None:
-        """Tell the phone which modes exist (it shows them as buttons)."""
-        self._publish({"kind": "state", "id": "state", "modes": modes.overview()})
+        """Modes (shown as buttons) and live PC status (the phone's "Your PC" widget)."""
+        try:
+            status = pc.status()
+        except Exception:
+            log.exception("Couldn't read PC status")
+            status = None
+        self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status})
+
+    def _later(self, seconds: float, fn, *args) -> None:
+        threading.Timer(seconds, fn, args).start()
 
     def send_screens(self, msg_id: str) -> None:
         """Screenshots go straight to the phone as encrypted ntfy attachments; Claude never sees them."""
@@ -124,16 +136,30 @@ class PhoneChannel:
         self.reply(msg_id, "Here are your screens.")
 
     def _handle(self, data: dict) -> None:
-        kind = data.get("type", "cmd")
+        kind, msg_id = data.get("type", "cmd"), data.get("id", "")
         if kind == "sync":
             self.send_state()
         elif kind == "screens":
             log.info("Phone: screenshots")
-            threading.Thread(target=self.send_screens, args=(data["id"],), daemon=True).start()
+            threading.Thread(target=self.send_screens, args=(msg_id,), daemon=True).start()
+        elif kind == "media":  # widget buttons: instant, no Claude
+            tools.run("media_key", {"key": data["key"]})
+            self._later(0.8, self.send_state)  # Spotify needs a moment to update its title
+        elif kind == "lock":
+            log.info("Phone: lock PC")
+            self.reply(msg_id, "Locked your PC.")
+            pc.lock()
+        elif kind == "clip_set":
+            pc.set_clipboard(data.get("text", ""))
+            self.reply(msg_id, "Copied to your PC's clipboard.")
+        elif kind == "clip_get":
+            text = pc.get_clipboard()
+            self.reply(msg_id, text or "Your PC's clipboard has no text in it.", kind="clip" if text else "reply")
         elif data.get("text"):
             log.info("Phone: %r", data["text"])
-            self.reply(data["id"], "On it...", done=False)
-            self.on_command(data["text"], lambda text, i=data["id"]: self.reply(i, text))
+            self.reply(msg_id, "On it...", done=False)
+            self.on_command(data["text"], lambda text, i=msg_id: self.reply(i, text),
+                            chat=data.get("chat"), recent=data.get("recent"))
 
     def run(self) -> None:
         log.info("Phone channel listening (topic %s...).", self.topic[:14])

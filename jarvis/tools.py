@@ -138,6 +138,11 @@ TOOLS = [
         },
     },
     {
+        "name": "lock_pc",
+        "description": "Lock the PC (Windows lock screen). Only when the user asks to lock it.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "media_key",
         "description": "Press a media key (controls Spotify or whatever is playing) or change the system volume.",
         "input_schema": {
@@ -205,6 +210,9 @@ def run(name: str, args: dict) -> str:
         return modes.put(args["name"], args["screens"], args.get("say", ""), args.get("icon", "sparkles"))
     if name == "delete_mode":
         return modes.remove(args["name"])
+    if name == "lock_pc":
+        ctypes.windll.user32.LockWorkStation()
+        return "Locked the PC."
     if name == "media_key":
         vk = MEDIA_KEYS[args["key"]]
         for _ in range(max(1, min(int(args.get("times", 1)), 50))):

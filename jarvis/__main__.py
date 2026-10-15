@@ -61,16 +61,16 @@ def main() -> None:
     speak.start()
     jobs: queue.Queue = queue.Queue()
 
-    def submit(text: str, reply=None) -> None:
-        jobs.put((text, reply))
+    def submit(text: str, reply=None, chat=None, recent=None) -> None:
+        jobs.put((text, reply, chat, recent))
 
     def worker() -> None:
         while True:
-            text, reply = jobs.get()
+            text, reply, chat, recent = jobs.get()
             log.info("Command: %s", text)
             mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
             try:
-                answer = modes.run(mode) if mode else brain.handle(text)
+                answer = modes.run(mode) if mode else brain.handle(text, chat=chat, recent=recent)
             except Exception as e:
                 log.exception("Command failed")
                 answer = f"Something went wrong: {e}"
