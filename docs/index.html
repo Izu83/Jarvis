@@ -143,6 +143,13 @@
   .desk .hot span { position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 600; color: #fff; background: rgba(0,0,0,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding: 2px 7px; border-radius: 8px; letter-spacing: 0; }
   .desk.loading { aspect-ratio: 2.6; display: grid; place-items: center; }
   .expired { padding: 4px 4px 2px; font-size: 14px; color: var(--label2); }
+  .lost { position: fixed; z-index: 6; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 58px); max-width: 520px; margin: 0 auto; border-radius: 24px; padding: 16px; text-align: left; animation: drop .5s var(--ios) both; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
+  .lost b { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+  .lost b .dot { width: 9px; height: 9px; background: var(--orange); }
+  .lost p { margin: 6px 0 12px; font-size: 15px; line-height: 20px; color: var(--label2); letter-spacing: -.24px; }
+  .lost code { font: 14px ui-monospace, "SF Mono", Menlo, monospace; background: var(--fill); padding: 1px 6px; border-radius: 6px; color: var(--label); }
+  .lost button { width: 100%; height: 46px; border-radius: 14px; color: #fff; font-weight: 600; background: linear-gradient(180deg, #3d9cff, #0a7cff); box-shadow: 0 6px 16px -6px rgba(10,124,255,.6); }
 
   /* ---------- Control Center widget ---------- */
   .widget { border-radius: 28px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -551,6 +558,7 @@
       <div class="group-title">Connection</div>
       <div class="group">
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
+        <button class="row btn" id="relinkBtn">Connect with Pairing Link</button>
         <div class="row"><span class="grow">Encryption</span><span class="value">AES-256-GCM</span></div>
         <div class="row"><span class="grow">Version</span><span class="value" id="versionLabel"></span></div>
       </div>
@@ -626,7 +634,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-16.4";   // bump together with version.json
+const VERSION = "2026-10-16.5";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1081,6 +1089,7 @@ async function connect() {
   const candidates = [...new Set([load("jarvis.lastUrl"), await discover(), cfg.url].filter(Boolean))];
   for (const url of candidates) if (await openSocket(url)) { connecting = false; return; }
   connecting = false;
+  if (!pcSeen || !candidates.length) showLost();
   retryTimer = setTimeout(connect, retryDelay); retryDelay = Math.min(retryDelay * 1.6, 30000);
 }
 function openSocket(url) {
@@ -1090,7 +1099,7 @@ function openSocket(url) {
     const giveUp = setTimeout(() => { if (!opened) { sock.close(); resolve(false); } }, 8000);
     sock.onopen = () => {
       opened = true; clearTimeout(giveUp); ws = sock; retryDelay = 2000;
-      store("jarvis.lastUrl", url); renderStatus(true); sync();
+      store("jarvis.lastUrl", url); renderStatus(true); sync(); $("lostCard")?.remove();
       if (!$("sysSheet").hidden) watch();
       resolve(true);
     };
@@ -1520,6 +1529,34 @@ async function checkForUpdate() {
     await fetch(location.pathname, { cache: "reload" });
     location.reload();
   } catch {}
+}
+
+// ================= re-pairing inside the app =================
+// A Home Screen app has its own storage, separate from Safari, so opening a new pairing link in Safari doesn't
+// reach it. This lets you paste the link (from `run.bat --pair` on the PC) right here.
+async function relink() {
+  let text = "";
+  try { text = await navigator.clipboard.readText(); } catch {}
+  if (!parsePairing(text || "")) text = prompt("Paste the pairing link from your PC (run.bat --pair):") || "";
+  const p = parsePairing(text);
+  if (!p) { if (text.trim()) toast("That isn't a pairing link", "x", "var(--red)"); return; }
+  try { key = await crypto.subtle.importKey("raw", b64d(p.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
+  catch { toast("That link is damaged", "x", "var(--red)"); return; }
+  store("jarvis.pairing", JSON.stringify(p)); store("jarvis.lastUrl");
+  cfg = p; closeSheets(); $("lostCard")?.remove();
+  const old = ws; ws = null; old?.close();
+  connecting = false; retryDelay = 2000; clearTimeout(retryTimer);
+  toast("Connecting to your PC…", "sparkles", "var(--blue)");
+  connect();
+}
+$("relinkBtn").onclick = relink;
+function showLost() {
+  if ($("lostCard")) return;
+  const card = document.createElement("div");
+  card.className = "lost glass strong"; card.id = "lostCard";
+  card.innerHTML = '<b><span class="dot"></span>Can\'t find your PC</b><p>Make sure Jarvis is running on your PC. Then run <code>run.bat --pair</code> there, copy the link it shows, and tap below.</p><button class="press">Paste Pairing Link</button>';
+  card.querySelector("button").onclick = relink;
+  document.body.append(card);
 }
 
 // ================= pairing + start =================
