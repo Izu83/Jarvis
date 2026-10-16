@@ -188,10 +188,15 @@ class PhoneChannel:
 
     def run(self) -> None:
         log.info("Phone channel listening (topic %s...).", self.topic[:14])
+        failures = 0
         while True:
             try:
                 with requests.get(f"{self.server}/{self.topic}/json", stream=True, timeout=(10, 120)) as r:
-                    r.raise_for_status()
+                    if r.status_code != 200:
+                        raise requests.HTTPError(f"relay answered {r.status_code}")
+                    if failures:
+                        log.info("Phone channel reconnected after %d attempt(s).", failures)
+                    failures = 0
                     for line in r.iter_lines():
                         if not line:
                             continue
@@ -202,5 +207,7 @@ class PhoneChannel:
                         if data:
                             self._handle(data)
             except (requests.RequestException, json.JSONDecodeError) as e:
-                log.warning("Phone channel disconnected (%s); reconnecting in 5 s.", e.__class__.__name__)
+                failures += 1
+                if failures <= 3 or failures % 12 == 0:  # don't flood the log during a long relay outage
+                    log.warning("Phone channel disconnected (%s); reconnecting in 5 s.", e)
                 time.sleep(5)
