@@ -6,7 +6,14 @@ import sys
 import threading
 import time
 
-from .windows import enable_dpi_awareness
+try:
+    # Must load before the Windows media library (album covers): that library ships an older msvcp140.dll,
+    # and if it gets loaded first, onnxruntime (the wake word) crashes the whole process on import.
+    import onnxruntime  # noqa: F401
+except ImportError:
+    pass
+
+from .windows import enable_dpi_awareness  # noqa: E402
 
 enable_dpi_awareness()  # before anything touches windows
 

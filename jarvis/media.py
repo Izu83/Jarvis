@@ -7,8 +7,9 @@ import logging
 import time
 
 from PIL import Image
-from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as Manager
-from winrt.windows.storage.streams import Buffer, InputStreamOptions
+
+# winrt is imported inside the functions: it ships an older msvcp140.dll, and loading it before onnxruntime
+# (the wake word) crashes the process. See the top of __main__.py.
 
 log = logging.getLogger("jarvis.media")
 
@@ -25,6 +26,8 @@ def _app_name(aumid: str) -> str:
 
 
 async def _read_art(props) -> bytes | None:
+    from winrt.windows.storage.streams import Buffer, InputStreamOptions
+
     if not props.thumbnail:
         return None
     stream = await props.thumbnail.open_read_async()
@@ -41,6 +44,8 @@ async def _read_art(props) -> bytes | None:
 
 
 async def _now() -> dict | None:
+    from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as Manager
+
     mgr = await Manager.request_async()
     sessions = list(mgr.get_sessions())
     if not sessions:
