@@ -7,7 +7,7 @@ and it happens.
 ```
 PC mic ── "Hey Jarvis" wake word ─┐
                                   ├─► Jarvis (this PC) ──► Claude API decides the steps
-Phone page (GitHub Pages) ── encrypted via ntfy.sh ─┘            │
+Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─┘            │
                                                                  ▼
                                     open apps / folders / URLs, tile windows on monitors, media keys
 ```
@@ -90,6 +90,11 @@ Tap **System** in the dock or Control Center for live stats every few seconds: C
 GPU load/VRAM/temperature/fan (NVIDIA), memory, network speed, free space on every drive (red when nearly full),
 and the busiest apps. You can also ask "how much space is left on my disks?".
 
+## Now playing
+
+The Control Center shows what's playing in any app (Spotify, YouTube in your browser, ...) with its album cover,
+a live progress bar and controls, using Windows' own media information.
+
 ## Screens on your phone
 
 Tap **Screens** to get one picture of all three monitors, laid out like your desk. Tap a monitor (or use the
@@ -121,18 +126,31 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 | `jarvis/windows.py` | Win32: monitors, window lookup, moving and tiling |
 | `jarvis/apps.py` | Start-menu app launching, folders, folder search |
 | `jarvis/voice.py` | openWakeWord "hey jarvis" + recording + faster-whisper |
-| `jarvis/remote.py` | Encrypted phone channel over ntfy.sh (commands, modes list, screenshots) |
+| `jarvis/remote.py` | Encrypted WebSocket phone channel (commands, live status, screenshots, covers) |
 | `jarvis/modes.py` | Saved layouts ("work mode") that run without Claude |
 | `jarvis/screens.py` | Screenshots of each monitor for the phone |
 | `jarvis/ui.py` | Acting inside apps: list/click controls, type, press keys (UI Automation) |
 | `jarvis/sysinfo.py` | Detailed stats for the System page (CPU, GPU, RAM, disks, network, top apps) |
+| `jarvis/tunnel.py` | Cloudflare quick tunnel that gives the phone a public, encrypted way in |
+| `jarvis/media.py` | What's playing in any app, with album covers (Windows media session) |
 | `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
 | `docs/` | The phone page served by GitHub Pages |
 
+## How the phone connects
+
+Jarvis runs a small WebSocket server on your PC and makes it reachable with a free Cloudflare quick tunnel
+(`bin/cloudflared.exe`, no account needed). The tunnel's address changes each time Jarvis starts, so Jarvis announces
+it (encrypted) on an ntfy.sh topic; the phone reads the newest announcement and connects directly. That's only a few
+relay messages a day, well under ntfy's free limit of 250. If the phone can't find the PC, run `run.bat --pair`
+while Jarvis is running and scan the new QR code: it contains the current address.
+
+If `bin/cloudflared.exe` is missing, download it from
+https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe into `bin/`.
+
 ## Security notes
 
-- Phone commands are AES-256-GCM encrypted end to end; ntfy.sh only relays ciphertext. Messages older than
-  2 minutes, replays, and anything not encrypted with your key are ignored.
+- Everything between phone and PC is AES-256-GCM encrypted end to end; Cloudflare and ntfy.sh only see
+  ciphertext. Messages older than 2 minutes, replays, and anything not encrypted with your key are ignored.
 - Jarvis can only do what's in `tools.py` (open/arrange/close windows, media keys). It deliberately has no
   "run any command" tool, so even a leaked key can't do much more than open apps.
 - If your phone is lost, run `run.bat --pair` after deleting `JARVIS_TOPIC`/`JARVIS_KEY` from `.env` to rotate keys.

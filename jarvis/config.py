@@ -37,7 +37,8 @@ DEFAULTS = {
     "tts_voice": "",  # part of a Windows voice name, e.g. "David" or "Zira"; empty = default
     # Phone
     "phone_enabled": True,
-    "ntfy_server": "https://ntfy.sh",
+    "ntfy_server": "https://ntfy.sh",  # only used to tell the phone the tunnel address
+    "phone_port": 8787,  # local port the tunnel forwards to
     "phone_page_url": "",  # e.g. https://<you>.github.io/jarvis/
 }
 

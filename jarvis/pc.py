@@ -6,27 +6,27 @@ import time
 import psutil
 import win32clipboard
 
-from . import sysinfo
+from . import media, sysinfo
 from . import windows as win
 
-psutil.cpu_percent(None)  # the first reading is always 0, so take it now
-
-
 def now_playing() -> dict | None:
-    """Spotify's window title is "Artist - Song" while playing and "Spotify Premium/Free" while paused."""
+    """Any app via Windows' media session (with album art); falls back to reading Spotify's window title."""
+    info = media.now_playing()
+    if info:
+        return info
     for w in win.list_windows():
-        if w.app == "spotify":
+        if w.app == "spotify":  # "Artist - Song" while playing, "Spotify Premium/Free" while paused
             if w.title.lower().startswith("spotify"):
-                return {"playing": False}
+                return {"playing": False, "app": "Spotify"}
             artist, _, song = w.title.partition(" - ")
-            return {"playing": True, "artist": artist.strip(), "title": (song or artist).strip()}
+            return {"playing": True, "artist": artist.strip(), "title": (song or artist).strip(), "app": "Spotify"}
     return None
 
 
 def status() -> dict:
     return {
         "host": platform.node(),
-        "cpu": round(psutil.cpu_percent(None)),
+        "cpu": sysinfo.cpu_now(),
         "ram": round(psutil.virtual_memory().percent),
         "uptime": int(time.time() - psutil.boot_time()),
         "top": (sysinfo.apps(1) or [None])[0],

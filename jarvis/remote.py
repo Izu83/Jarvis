@@ -1,9 +1,11 @@
-"""Phone channel: end-to-end encrypted messages relayed through ntfy.sh.
+"""Phone channel: an end-to-end encrypted WebSocket straight from the phone to this PC.
 
-The phone page encrypts each command with a key only it and this PC know (AES-256-GCM),
-then publishes it to a random ntfy topic. We decrypt, check it's fresh, run it, and send
-an encrypted reply to "<topic>-r". ntfy only ever sees ciphertext.
+Jarvis runs a small WebSocket server on 127.0.0.1 and exposes it through a Cloudflare quick tunnel (tunnel.py).
+Every message, both ways, is AES-256-GCM encrypted with a key only the phone and this PC know, so the tunnel only
+sees ciphertext. The tunnel's address changes when it restarts, so we announce it (encrypted) on an ntfy.sh topic;
+that's the only thing the relay carries now, a handful of messages a day instead of thousands.
 """
+import asyncio
 import base64
 import collections
 import json
@@ -15,17 +17,19 @@ import time
 import requests
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from websockets.asyncio.server import serve
+from websockets.exceptions import ConnectionClosed
 
-from . import modes, pc, screens, sysinfo, tools
+from . import media, modes, pc, screens, sysinfo, tools
 from .config import secret, set_secret, settings
+from .tunnel import Tunnel, last_url
 
 log = logging.getLogger("jarvis.remote")
 
 CMD_AAD = b"jarvis-cmd"
 REPLY_AAD = b"jarvis-reply"
-IMAGE_AAD = b"jarvis-image"
-MAX_TEXT = 2400
-WATCH_INTERVAL = 4  # seconds between live stats while the System page is open
+WATCH_INTERVAL = 3          # seconds between live stats while the System page is open
+ANNOUNCE_EVERY = 4 * 3600   # re-announce the address before the relay forgets it (12 h)
 MAX_AGE_MS = 120_000
 
 
@@ -58,7 +62,9 @@ def ensure_keys() -> tuple[str, bytes]:
 def pairing_link() -> str:
     topic, key = ensure_keys()
     base = settings["phone_page_url"] or "https://<your-github-name>.github.io/jarvis/"
-    return f"{base}#t={topic}&k={b64e(key)}&s={settings['ntfy_server']}"
+    link = f"{base}#t={topic}&k={b64e(key)}&s={settings['ntfy_server']}"
+    url = last_url()   # lets the phone connect right away, even before it hears an announcement
+    return link + (f"&u={url}" if url else "")
 
 
 class PhoneChannel:
@@ -67,7 +73,15 @@ class PhoneChannel:
         self.topic, key = ensure_keys()
         self.aes = AESGCM(key)
         self.server = settings["ntfy_server"].rstrip("/")
+        self.port = int(settings.get("phone_port", 8787))
         self.seen = collections.deque(maxlen=500)
+        self.clients: set = set()
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.tunnel = Tunnel(self.port, self._announce)
+        self.watch_until = 0.0
+        self._watching = False
+
+    # ------------------------------------------------------------ crypto
 
     def _decrypt(self, message: str) -> dict | None:
         try:
@@ -82,28 +96,51 @@ class PhoneChannel:
         self.seen.append(data.get("id"))
         return data
 
-    def _seal(self, data: bytes, aad: bytes) -> bytes:
+    def _seal(self, payload: dict) -> str:
+        payload["ts"] = int(time.time() * 1000)
         iv = secrets.token_bytes(12)
-        return iv + self.aes.encrypt(iv, data, aad)
+        return b64e(iv + self.aes.encrypt(iv, json.dumps(payload).encode(), REPLY_AAD))
+
+    # ------------------------------------------------------------ sending
 
     def _publish(self, payload: dict) -> None:
-        payload["ts"] = int(time.time() * 1000)
-        body = b64e(self._seal(json.dumps(payload).encode(), REPLY_AAD))
+        """Send to every connected phone. Safe to call from any thread."""
+        if not self.clients or not self.loop:
+            return
+        text = self._seal(payload)
+        for ws in list(self.clients):
+            asyncio.run_coroutine_threadsafe(self._send(ws, text), self.loop)
+
+    async def _send(self, ws, text: str) -> None:
         try:
-            requests.post(f"{self.server}/{self.topic}-r", data=body, timeout=10)
-        except requests.RequestException:
-            log.exception("Couldn't send to phone")
+            await ws.send(text)
+        except ConnectionClosed:
+            self.clients.discard(ws)
+
+    def _announce(self, url: str) -> None:
+        """Tell the phone where to connect (encrypted, kept by the relay for 12 h)."""
+        body = self._seal({"kind": "hello", "id": "hello", "url": url})
+        try:
+            r = requests.post(f"{self.server}/{self.topic}-r", data=body, timeout=10)
+            if r.status_code != 200:
+                log.warning("Couldn't announce the address to the relay (HTTP %s). The phone will use the last "
+                            "address it knew, or re-pair with `run.bat --pair`.", r.status_code)
+        except requests.RequestException as e:
+            log.warning("Couldn't announce the address to the relay: %s", e)
+
+    def _re_announce(self) -> None:
+        while True:
+            time.sleep(ANNOUNCE_EVERY)
+            if self.tunnel.url:
+                self._announce(self.tunnel.url)
 
     def reply(self, msg_id: str, text: str, done: bool = True, kind: str = "reply") -> None:
-        # ntfy turns messages over 4 KB into attachments; encryption + base64 grows text by ~1.4x
-        if len(text) > MAX_TEXT:
-            text = text[:MAX_TEXT] + "…"
         self._publish({"kind": kind, "id": msg_id, "text": text, "done": done})
         if done:
             self.send_state()
 
     def send_state(self) -> None:
-        """Modes (shown as buttons) and live PC status (the phone's "Your PC" widget)."""
+        """Modes (shown as buttons) and live PC status (the phone's Control Center)."""
         try:
             status = pc.status()
         except Exception:
@@ -115,7 +152,7 @@ class PhoneChannel:
         threading.Timer(seconds, fn, args).start()
 
     def send_screens(self, msg_id: str) -> None:
-        """One picture of all monitors, sent straight to the phone as an encrypted attachment; Claude never sees it."""
+        """One picture of all monitors, straight to the phone; Claude never sees it."""
         try:
             jpeg, layout = screens.capture_desktop()
         except Exception as e:
@@ -124,28 +161,23 @@ class PhoneChannel:
             return
         for m in layout:
             m["label"] = _short_label(m["monitor"])
-        meta = {"kind": "image", "id": msg_id, "monitors": layout, "ts": int(time.time() * 1000)}
-        try:
-            requests.put(
-                f"{self.server}/{self.topic}-r", data=self._seal(jpeg, IMAGE_AAD), timeout=30,
-                headers={"Filename": "desktop.bin", "Message": b64e(self._seal(json.dumps(meta).encode(), REPLY_AAD))},
-            )
-        except requests.RequestException:
-            log.exception("Couldn't upload screenshot")
-            self.reply(msg_id, "I couldn't upload the screenshot.")
-            return
-        self.reply(msg_id, "Here are your screens.")
+        self._publish({"kind": "image", "id": msg_id, "monitors": layout, "data": base64.b64encode(jpeg).decode()})
+
+    def send_art(self, art_id: str) -> None:
+        jpeg = media.art(art_id)
+        if jpeg:
+            self._publish({"kind": "art", "id": "art", "art": art_id, "data": base64.b64encode(jpeg).decode()})
 
     def watch(self) -> None:
-        """The System page is open: stream detailed stats every few seconds until it stops asking (60 s)."""
+        """The System page is open: stream detailed stats until it stops asking (60 s)."""
         self.watch_until = time.time() + 60
-        if getattr(self, "_watching", False):
+        if self._watching:
             return
         self._watching = True
 
         def loop():
             try:
-                while time.time() < self.watch_until:
+                while time.time() < self.watch_until and self.clients:
                     started = time.time()
                     try:
                         self._publish({"kind": "sys", "id": "sys", "sys": sysinfo.snapshot()})
@@ -157,18 +189,22 @@ class PhoneChannel:
 
         threading.Thread(target=loop, daemon=True, name="sys-watch").start()
 
+    # ------------------------------------------------------------ receiving
+
     def _handle(self, data: dict) -> None:
         kind, msg_id = data.get("type", "cmd"), data.get("id", "")
         if kind == "sync":
             self.send_state()
         elif kind == "screens":
             log.info("Phone: screenshots")
-            threading.Thread(target=self.send_screens, args=(msg_id,), daemon=True).start()
+            self.send_screens(msg_id)
         elif kind == "watch":
             self.watch()
-        elif kind == "media":  # widget buttons: instant, no Claude
+        elif kind == "art":
+            self.send_art(data.get("art", ""))
+        elif kind == "media":  # Control Center buttons: instant, no Claude
             tools.run("media_key", {"key": data["key"]})
-            self._later(0.8, self.send_state)  # Spotify needs a moment to update its title
+            self._later(0.8, self.send_state)  # apps need a moment to update what's playing
         elif kind == "lock":
             log.info("Phone: lock PC")
             self.reply(msg_id, "Locked your PC.")
@@ -186,28 +222,35 @@ class PhoneChannel:
                             chat=data.get("chat"), recent=data.get("recent"),
                             progress=lambda text, i=msg_id: self.reply(i, text, done=False))
 
+    async def _client(self, ws) -> None:
+        self.clients.add(ws)
+        log.info("Phone connected (%d open).", len(self.clients))
+        try:
+            async for message in ws:
+                if isinstance(message, str):
+                    data = self._decrypt(message)
+                    if data:   # run off the event loop so slow work never blocks other messages
+                        self.loop.run_in_executor(None, self._safe_handle, data)
+        except ConnectionClosed:
+            pass
+        finally:
+            self.clients.discard(ws)
+            log.info("Phone disconnected (%d open).", len(self.clients))
+
+    def _safe_handle(self, data: dict) -> None:
+        try:
+            self._handle(data)
+        except Exception:
+            log.exception("Phone request failed")
+
+    async def _serve(self) -> None:
+        self.loop = asyncio.get_running_loop()
+        async with serve(self._client, "127.0.0.1", self.port, max_size=2**22, ping_interval=20, ping_timeout=20,
+                         compression=None):
+            log.info("Phone server on 127.0.0.1:%d; starting tunnel...", self.port)
+            self.tunnel.start()
+            threading.Thread(target=self._re_announce, daemon=True, name="announce").start()
+            await asyncio.Future()  # run forever
+
     def run(self) -> None:
-        log.info("Phone channel listening (topic %s...).", self.topic[:14])
-        failures = 0
-        while True:
-            try:
-                with requests.get(f"{self.server}/{self.topic}/json", stream=True, timeout=(10, 120)) as r:
-                    if r.status_code != 200:
-                        raise requests.HTTPError(f"relay answered {r.status_code}")
-                    if failures:
-                        log.info("Phone channel reconnected after %d attempt(s).", failures)
-                    failures = 0
-                    for line in r.iter_lines():
-                        if not line:
-                            continue
-                        event = json.loads(line)
-                        if event.get("event") != "message":
-                            continue
-                        data = self._decrypt(event.get("message", ""))
-                        if data:
-                            self._handle(data)
-            except (requests.RequestException, json.JSONDecodeError) as e:
-                failures += 1
-                if failures <= 3 or failures % 12 == 0:  # don't flood the log during a long relay outage
-                    log.warning("Phone channel disconnected (%s); reconnecting in 5 s.", e)
-                time.sleep(5)
+        asyncio.run(self._serve())

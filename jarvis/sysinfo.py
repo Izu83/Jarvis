@@ -2,6 +2,7 @@
 import ctypes
 import platform
 import subprocess
+import threading
 import time
 import winreg
 
@@ -26,8 +27,22 @@ def _cpu_name() -> str:
 
 CPU_NAME = _cpu_name()
 _net_last = (time.time(), psutil.net_io_counters())
-psutil.cpu_percent(None)
-psutil.cpu_percent(None, percpu=True)
+_cpu = {"pct": 0.0, "per_core": []}
+
+
+def _sample_cpu() -> None:
+    """CPU % is only meaningful over an interval, so measure it continuously in the background (1 s windows)."""
+    while True:
+        per_core = psutil.cpu_percent(interval=1, percpu=True)
+        _cpu["per_core"] = per_core
+        _cpu["pct"] = sum(per_core) / len(per_core) if per_core else 0.0
+
+
+threading.Thread(target=_sample_cpu, daemon=True, name="cpu-sampler").start()
+
+
+def cpu_now() -> int:
+    return round(_cpu["pct"])
 
 
 def apps(limit: int = 5) -> list[dict]:
@@ -110,9 +125,9 @@ def snapshot() -> dict:
         "host": platform.node(),
         "os": f"Windows {platform.release()}",
         "uptime": int(time.time() - psutil.boot_time()),
-        "cpu": {"name": CPU_NAME, "pct": round(psutil.cpu_percent(None)), "cores": psutil.cpu_count(logical=False),
+        "cpu": {"name": CPU_NAME, "pct": cpu_now(), "cores": psutil.cpu_count(logical=False),
                 "threads": psutil.cpu_count(), "ghz": round(freq.current / 1000, 2) if freq else None,
-                "per_core": [round(x) for x in psutil.cpu_percent(None, percpu=True)]},
+                "per_core": [round(x) for x in _cpu["per_core"]]},
         "ram": {"used": vm.used, "total": vm.total, "pct": round(vm.percent)},
         "gpus": gpus(),
         "disks": disks(),

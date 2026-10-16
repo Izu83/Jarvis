@@ -9,3 +9,4 @@ jarvis.log
 config.json
 .brain/
 modes.json
+bin/

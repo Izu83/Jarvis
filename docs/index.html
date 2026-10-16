@@ -153,6 +153,19 @@
   .art { width: 52px; height: 52px; border-radius: 13px; flex: none; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, #1ed760, #0a8f3c); box-shadow: 0 6px 16px -6px rgba(16,160,70,.6), inset 0 1px 0 rgba(255,255,255,.35); }
   .art.idle { background: linear-gradient(140deg, #8e8e93, #5a5a60); box-shadow: none; }
   .art svg.i { width: 24px; height: 24px; stroke-width: 2; }
+  .art.cover { background: #222; box-shadow: 0 10px 22px -8px rgba(0,0,0,.55); overflow: hidden; }
+  .art img { width: 100%; height: 100%; object-fit: cover; display: block; animation: fadeIn .5s var(--ease) both; }
+  @keyframes fadeIn { from { opacity: 0; transform: scale(1.06); } }
+  .np-wrap { position: relative; border-radius: 22px; padding: 12px 12px 6px; margin: 0 -4px; overflow: hidden; background: var(--fill); isolation: isolate; }
+  .np-bg { position: absolute; inset: -30%; width: 160%; height: 160%; object-fit: cover; filter: blur(34px) saturate(1.6); opacity: .55; z-index: -1; transition: opacity .6s; }
+  .np-bg[hidden] { display: block !important; opacity: 0; }
+  .np-wrap .np .art { width: 64px; height: 64px; border-radius: 14px; }
+  .np-text .src { display: block; font-size: 12px; color: var(--label2); margin-top: 3px; }
+  .prog { margin: 12px 2px 0; }
+  .prog .bar { height: 5px; border-radius: 3px; background: var(--sep); overflow: hidden; }
+  .prog .bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--label); opacity: .75; transition: width 1s linear; }
+  .prog .times { display: flex; justify-content: space-between; font-size: 11px; color: var(--label2); margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .np-wrap .controls { margin-top: 2px; }
   .np-text { flex: 1; min-width: 0; }
   .np-text b, .np-text span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .np-text b { font-size: 16px; font-weight: 600; } .np-text span { font-size: 14px; color: var(--label2); margin-top: 1px; }
@@ -447,7 +460,7 @@
     <button class="row btn" id="pairBtn">Pair</button>
   </div>
   <div class="err" id="pairErr" hidden></div>
-  <div class="group-foot">End-to-end encrypted. The relay only ever sees scrambled data.</div>
+  <div class="group-foot">End-to-end encrypted. Nothing in between can read your commands.</div>
 </section>
 
 <main id="log" hidden></main>
@@ -456,16 +469,20 @@
 <div id="park" hidden>
 <section class="widget surface" id="widget">
   <div class="w-head"><b>Control Center</b><small><span class="dot" id="pcDot"></span><span id="pcState">Checking…</span></small></div>
+  <div class="np-wrap">
+  <img class="np-bg" id="npBg" alt="" hidden>
   <div class="np">
     <div class="art idle" id="art"><svg class="i"><use href="#i-music"/></svg></div>
-    <div class="np-text"><b id="npTitle">Nothing playing</b><span id="npArtist">Spotify</span></div>
+    <div class="np-text"><b id="npTitle">Nothing playing</b><span id="npArtist">Spotify</span><span class="src" id="npSrc"></span></div>
   </div>
+  <div class="prog" id="prog" hidden><div class="bar"><i id="progBar"></i></div><div class="times"><span id="tPos">0:00</span><span id="tRem">-0:00</span></div></div>
   <div class="controls">
     <button class="ctl small press" data-key="volume_down" aria-label="Volume down"><svg class="i"><use href="#i-vol-down"/></svg></button>
     <button class="ctl press" data-key="previous" aria-label="Previous"><svg class="i fill"><use href="#i-back"/></svg></button>
     <button class="ctl big glass press" data-key="play_pause" aria-label="Play or pause"><svg class="i fill" id="playIcon"><use href="#i-play"/></svg></button>
     <button class="ctl press" data-key="next" aria-label="Next"><svg class="i fill"><use href="#i-fwd"/></svg></button>
     <button class="ctl small press" data-key="volume_up" aria-label="Volume up"><svg class="i"><use href="#i-vol-up"/></svg></button>
+  </div>
   </div>
   <div class="stats">
     <button class="gauge press" data-open="system"><svg viewBox="0 0 40 40"><circle class="track" cx="20" cy="20" r="16"/><circle class="val" id="cpuRing" cx="20" cy="20" r="16"/></svg><div><b id="cpuVal">–</b><span>CPU</span></div></button>
@@ -533,7 +550,7 @@
       </div>
       <div class="group-title">Connection</div>
       <div class="group">
-        <div class="row"><span class="grow">Relay</span><span class="value" id="relayName"></span></div>
+        <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
         <div class="row"><span class="grow">Encryption</span><span class="value">AES-256-GCM</span></div>
         <div class="row"><span class="grow">Version</span><span class="value" id="versionLabel"></span></div>
       </div>
@@ -609,7 +626,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-16.2";   // bump together with version.json
+const VERSION = "2026-10-16.4";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -620,7 +637,7 @@ const SUGGESTIONS = [
   ["Music", "Play something and turn the volume up"],
 ];
 const DB_KEY = "jarvis.db", MODES_KEY = "jarvis.modes";
-let cfg = null, key = null, events = null, lastEventId = null, modes = [], pc = null, pcSeen = 0, host = "";
+let cfg = null, key = null, ws = null, modes = [], pc = null, pcSeen = 0, host = "";
 const pending = new Map();       // message id -> { chatId, kind, el, step, tile, ... }
 const shotsCache = new Map();    // screenshot message id -> { url, monitors } (this session only)
 
@@ -670,7 +687,7 @@ function parsePairing(text) {
   const hash = text.includes("#") ? text.slice(text.indexOf("#") + 1) : text;
   const p = new URLSearchParams(hash.trim());
   if (!p.get("t") || !p.get("k")) return null;
-  return { topic: p.get("t"), key: p.get("k"), server: (p.get("s") || "https://ntfy.sh").replace(/\/$/, "") };
+  return { topic: p.get("t"), key: p.get("k"), server: (p.get("s") || "https://ntfy.sh").replace(/\/$/, ""), url: p.get("u") || null };
 }
 async function seal(bytes, aad) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -681,9 +698,8 @@ async function seal(bytes, aad) {
 const unseal = (raw, aad) => crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: enc.encode(aad) }, key, raw.slice(12));
 const openJson = async text => JSON.parse(dec.decode(await unseal(b64d(text.trim()), "jarvis-reply")));
 async function post(payload) {
-  const body = b64e(await seal(enc.encode(JSON.stringify({ ...payload, ts: Date.now() })), "jarvis-cmd"));
-  const r = await fetch(`${cfg.server}/${cfg.topic}?cache=no&firebase=no`, { method: "POST", body });
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  if (!ws || ws.readyState !== WebSocket.OPEN) { connect(); throw new Error("not connected"); }
+  ws.send(b64e(await seal(enc.encode(JSON.stringify({ ...payload, ts: Date.now() })), "jarvis-cmd")));
 }
 
 // ================= conversation =================
@@ -1010,12 +1026,12 @@ async function send(text, tile = null) {
   if (tile) tileState(tile, "busy");
   scrollDown();
   try { await post({ type: "cmd", text, id, chat: chat.id, recent }); const p = pending.get(id); if (p && p.status === "Sending…") setStep(p, "Delivered"); }
-  catch { fail(id, "Couldn't reach the relay. Check your connection."); }
+  catch { fail(id, "Can't reach your PC right now. Is Jarvis running?"); }
 }
 async function quick(type, extra = {}) {   // Control Center buttons: answered with a toast, not a chat bubble
   const id = newId();
   track(id, { kind: "quick", timeout: 10000 });
-  try { await post({ type, id, ...extra }); } catch { fail(id, "Couldn't reach the relay."); }
+  try { await post({ type, id, ...extra }); } catch { fail(id, "Can't reach your PC right now."); }
 }
 async function requestScreens(tile = null) {
   if (!key) return;
@@ -1025,13 +1041,13 @@ async function requestScreens(tile = null) {
   if (tile) tileState(tile, "busy");
   pending.get(id).card = shotsCard(id, Date.now());
   scrollDown();
-  try { await post({ type: "screens", id }); } catch { fail(id, "Couldn't reach the relay."); }
+  try { await post({ type: "screens", id }); } catch { fail(id, "Can't reach your PC right now."); }
 }
-async function addScreenshot(id, info, url) {
+const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+async function addScreenshot(id, info) {
   const p = pending.get(id);
   if (!p) return;
-  const raw = new Uint8Array(await (await fetch(url)).arrayBuffer());
-  const blobUrl = URL.createObjectURL(new Blob([await unseal(raw, "jarvis-image")], { type: "image/jpeg" }));
+  const blobUrl = URL.createObjectURL(new Blob([b64bytes(info.data)], { type: "image/jpeg" }));
   shotsCache.set(id, { url: blobUrl, monitors: info.monitors || [], ts: Date.now() });
   clearTimeout(p.timer); pending.delete(id);
   if (p.tile) tileState(p.tile, "done");
@@ -1046,19 +1062,53 @@ function tileState(tile, state) {
 }
 
 // ================= receiving =================
-function connect() {
-  events?.close();
-  const since = lastEventId || Math.floor(Date.now() / 1000) - 300;
-  events = new EventSource(`${cfg.server}/${cfg.topic}-r/sse?since=${since}`);
-  events.onopen = () => { renderStatus(true); sync(); if (!$("sysSheet").hidden) watch(); };
-  events.onerror = () => renderStatus(false);
-  events.onmessage = async e => {
-    let msg, data;
-    try { msg = JSON.parse(e.data); data = await openJson(msg.message); } catch { return; }
-    lastEventId = msg.id;
+// The PC announces its current tunnel address (encrypted) on the relay; the relay keeps it for 12 hours.
+async function discover() {
+  try {
+    const r = await fetch(`${cfg.server}/${cfg.topic}-r/json?poll=1&since=12h`, { cache: "no-store" });
+    const lines = (await r.text()).trim().split("\n").filter(Boolean).reverse();   // newest first
+    for (const line of lines) {
+      try { const m = JSON.parse(line); if (m.event !== "message") continue; const d = await openJson(m.message); if (d.kind === "hello" && d.url) return d.url; } catch {}
+    }
+  } catch {}
+  return null;
+}
+let connecting = false, retryTimer = null, retryDelay = 2000;
+async function connect() {
+  if (connecting || (ws && ws.readyState <= WebSocket.OPEN)) return;
+  connecting = true; clearTimeout(retryTimer);
+  renderStatus(false);
+  const candidates = [...new Set([load("jarvis.lastUrl"), await discover(), cfg.url].filter(Boolean))];
+  for (const url of candidates) if (await openSocket(url)) { connecting = false; return; }
+  connecting = false;
+  retryTimer = setTimeout(connect, retryDelay); retryDelay = Math.min(retryDelay * 1.6, 30000);
+}
+function openSocket(url) {
+  return new Promise(resolve => {
+    let opened = false;
+    const sock = new WebSocket(url.replace(/^http/, "ws") + "/ws");
+    const giveUp = setTimeout(() => { if (!opened) { sock.close(); resolve(false); } }, 8000);
+    sock.onopen = () => {
+      opened = true; clearTimeout(giveUp); ws = sock; retryDelay = 2000;
+      store("jarvis.lastUrl", url); renderStatus(true); sync();
+      if (!$("sysSheet").hidden) watch();
+      resolve(true);
+    };
+    sock.onerror = () => { if (!opened) { clearTimeout(giveUp); resolve(false); } };
+    sock.onclose = () => {
+      if (!opened) { clearTimeout(giveUp); resolve(false); return; }
+      if (ws === sock) { ws = null; renderStatus(false); if (document.visibilityState === "visible") retryTimer = setTimeout(connect, 1500); }
+    };
+    sock.onmessage = e => onMessage(e.data);
+  });
+}
+async function onMessage(text) {
+    let data;
+    try { data = await openJson(text); } catch { return; }
     if (data.kind === "state") { onState(data); return; }
     if (data.kind === "sys") { onSys(data.sys); return; }
-    if (data.kind === "image" && msg.attachment) { addScreenshot(data.id, data, msg.attachment.url).catch(() => {}); return; }
+    if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
+    if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
     const p = pending.get(data.id);
     if (!p) return;
     clearTimeout(p.timer);
@@ -1083,14 +1133,13 @@ function connect() {
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
     if (!$("drawer").hidden) renderSidebar();
-  };
 }
 function sync() { post({ type: "sync", id: newId() }).catch(() => {}); }
 
 // ================= live PC status =================
 function renderStatus(relayOk = true) {
   const pcOnline = Date.now() - pcSeen < 45000;
-  const [text, cls] = !relayOk ? ["Reconnecting…", "warn"] : pcOnline ? ["PC online", "ok"] : pcSeen ? ["PC offline", "bad"] : ["Connecting…", "warn"];
+  const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : "Finding your PC…", "warn"] : pcOnline ? ["PC online", "ok"] : pcSeen ? ["PC offline", "bad"] : ["Connecting…", "warn"];
   $("status").textContent = text;
   for (const id of ["dot", "pcDot", "meDot", "profDot"]) $(id).className = "dot " + cls;
   $("pcState").textContent = pcOnline && pc ? "Up " + uptime(pc.uptime) : text;
@@ -1111,14 +1160,57 @@ function onState(data) {
   ring($("cpuRing"), pc.cpu); $("cpuVal").textContent = pc.cpu + "%";
   ring($("ramRing"), pc.ram); $("ramVal").textContent = pc.ram + "%";
   $("topApp").innerHTML = pc.top ? `Busiest app: <b>${esc(pc.top.name)}</b> · ${Math.round(pc.top.cpu)}% CPU` : "";
-  const m = pc.music;
-  $("art").className = "art" + (m?.playing ? "" : " idle");
-  $("npTitle").innerHTML = m?.playing ? esc(m.title) + '<span class="eq"><i></i><i></i><i></i></span>' : m ? "Paused" : "Spotify isn't open";
-  $("npArtist").textContent = m?.playing ? m.artist : m ? "Spotify" : "Tap play to start music";
-  $("playIcon").innerHTML = `<use href="#i-${m?.playing ? "pause" : "play"}"/>`;
+  renderMusic(pc.music);
   renderStatus(true);
 }
-setInterval(() => { if (cfg && document.visibilityState === "visible") { sync(); renderStatus(events?.readyState !== EventSource.CLOSED); } }, 20000);
+
+// ================= now playing: album covers + progress =================
+const ART_KEY = "jarvis.art";
+const artCache = new Map(), artAsked = new Map();
+try { for (const [id, url] of JSON.parse(load(ART_KEY)) || []) artCache.set(id, url); } catch {}
+let music = null, musicAt = 0;
+const mmss = s => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function renderMusic(m) {
+  music = m; musicAt = Date.now();
+  const title = m?.title || (m ? "Paused" : "Nothing playing");
+  $("npTitle").innerHTML = esc(title) + (m?.playing ? '<span class="eq"><i></i><i></i><i></i></span>' : "");
+  $("npArtist").textContent = m?.artist || (m ? "" : "Start music on your PC");
+  $("npSrc").textContent = m?.app ? (m.playing ? "Playing on " : "Paused on ") + m.app : "";
+  $("playIcon").innerHTML = `<use href="#i-${m?.playing ? "pause" : "play"}"/>`;
+  const url = m?.art && artCache.get(m.art);
+  if (m?.art && !url && Date.now() - (artAsked.get(m.art) || 0) > 30000) {   // ask the PC for this cover once
+    artAsked.set(m.art, Date.now());
+    post({ type: "art", art: m.art, id: newId() }).catch(() => {});
+  }
+  const art = $("art");
+  if (url) {
+    if (art.dataset.art !== m.art) {
+      art.dataset.art = m.art; art.className = "art cover"; art.innerHTML = "";
+      const img = new Image(); img.src = url; img.alt = ""; art.append(img);
+    }
+    $("npBg").src = url; $("npBg").hidden = false;
+  } else {
+    delete art.dataset.art; art.className = "art" + (m?.playing ? "" : " idle"); art.innerHTML = icon("music");
+    $("npBg").hidden = true;
+  }
+  $("prog").hidden = !(m?.duration > 0);
+  tickMusic();
+}
+function tickMusic() {
+  if (!music?.duration) return;
+  const pos = Math.min(music.duration, music.position + (music.playing ? (Date.now() - musicAt) / 1000 : 0));
+  $("progBar").style.width = (pos / music.duration * 100).toFixed(2) + "%";
+  $("tPos").textContent = mmss(pos); $("tRem").textContent = "-" + mmss(music.duration - pos);
+  if (music.playing && pos >= music.duration - 1 && !music.ended) { music.ended = true; setTimeout(sync, 1500); }  // song over: ask what's next
+}
+setInterval(() => { if (music?.playing && document.visibilityState === "visible" && $("widget").offsetParent) tickMusic(); }, 1000);
+async function addArt(info) {
+  artCache.set(info.art, "data:image/jpeg;base64," + info.data);
+  while (artCache.size > 12) artCache.delete(artCache.keys().next().value);
+  store(ART_KEY, JSON.stringify([...artCache]));
+  if (music?.art === info.art) { delete $("art").dataset.art; renderMusic(music); }
+}
+setInterval(() => { if (cfg && document.visibilityState === "visible") { if (ws?.readyState === WebSocket.OPEN) sync(); else connect(); renderStatus(ws?.readyState === WebSocket.OPEN); } }, 20000);
 
 // ================= System page (live stats) =================
 const hist = { cpu: [], ram: [], net: [] };
@@ -1217,11 +1309,12 @@ function renderModeList() {
 
 // ================= Control Center =================
 document.querySelectorAll("#widget [data-key]").forEach(b => b.onclick = () => {
-  if (b.dataset.key === "play_pause" && pc?.music) {   // flip the icon right away; the PC confirms a moment later
-    pc.music.playing = !pc.music.playing;
-    $("playIcon").innerHTML = `<use href="#i-${pc.music.playing ? "pause" : "play"}"/>`;
+  if (b.dataset.key === "play_pause" && music) {   // flip right away; the PC confirms a moment later
+    music.position = Math.min(music.duration || 1e9, music.position + (music.playing ? (Date.now() - musicAt) / 1000 : 0));
+    music.playing = !music.playing;
+    renderMusic(music);
   }
-  post({ type: "media", key: b.dataset.key, id: newId() }).catch(() => toast("Couldn't reach the relay.", "x", "var(--red)"));
+  post({ type: "media", key: b.dataset.key, id: newId() }).catch(() => toast("Can't reach your PC right now.", "x", "var(--red)"));
 });
 document.querySelectorAll("[data-open=system]").forEach(b => b.onclick = openSystem);
 $("lockBtn").onclick = () => { if (confirm("Lock your PC?")) quick("lock"); };
@@ -1412,7 +1505,7 @@ document.addEventListener("visibilitychange", () => {
   checkForUpdate();
   if (chatById(db.current)?.unread) renderChat();
   updateBadges();
-  if (!events || events.readyState === EventSource.CLOSED || pending.size) connect(); else sync();
+  if (!ws || ws.readyState > WebSocket.OPEN) connect(); else sync();
   if (!$("sysSheet").hidden) watch();
 });
 
@@ -1448,7 +1541,7 @@ async function start() {
   for (const id of ["top", "log", "dock"]) $(id).hidden = !cfg;
   $("setup").hidden = !!cfg;
   if (!cfg) return;
-  $("relayName").textContent = new URL(cfg.server).host;
+  $("relayName").textContent = "Direct, encrypted";
   loadDb();
   try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
   renderShelf(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
