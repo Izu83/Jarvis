@@ -1,10 +1,12 @@
 """Small PC actions and live status for the phone: now playing, CPU/RAM, clipboard, lock."""
 import ctypes
+import platform
 import time
 
 import psutil
 import win32clipboard
 
+from . import sysinfo
 from . import windows as win
 
 psutil.cpu_percent(None)  # the first reading is always 0, so take it now
@@ -21,43 +23,13 @@ def now_playing() -> dict | None:
     return None
 
 
-IDLE_PROCESSES = {"system idle process", "idle", "system", "registry", "memory compression"}
-FRIENDLY = {
-    "msedgewebview2": "Web apps (WebView2)", "dwm": "Windows graphics", "explorer": "File Explorer",
-    "code": "VS Code", "msedge": "Edge", "chrome": "Chrome", "opera": "Opera", "claude": "Claude",
-    "spotify": "Spotify", "discord": "Discord", "steam": "Steam", "steamwebhelper": "Steam",
-    "python": "Python", "node": "Node.js", "antimalware service executable": "Windows Defender",
-    "msmpeng": "Windows Defender", "searchhost": "Windows Search",
-}
-
-
-def busiest_app() -> dict | None:
-    """The app using the most CPU since the last call (psutil reuses Process objects between calls)."""
-    usage: dict[str, float] = {}
-    for p in psutil.process_iter(["name"]):
-        try:
-            name = (p.info["name"] or "").removesuffix(".exe")
-            if name.lower() in IDLE_PROCESSES:
-                continue
-            name = FRIENDLY.get(name.lower(), name)
-            usage[name] = usage.get(name, 0.0) + p.cpu_percent(None)  # an app's processes add up
-        except psutil.Error:
-            continue
-    if not usage:
-        return None
-    name, pct = max(usage.items(), key=lambda kv: kv[1])
-    return {"name": name.title() if name.islower() else name, "cpu": round(pct / psutil.cpu_count())}
-
-
-busiest_app()  # prime the per-process counters
-
-
 def status() -> dict:
     return {
+        "host": platform.node(),
         "cpu": round(psutil.cpu_percent(None)),
         "ram": round(psutil.virtual_memory().percent),
         "uptime": int(time.time() - psutil.boot_time()),
-        "top": busiest_app(),
+        "top": (sysinfo.apps(1) or [None])[0],
         "music": now_playing(),
     }
 

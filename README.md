@@ -77,9 +77,23 @@ which you can also edit by hand.
   clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
 
+## Smarter: acting inside apps
+
+Jarvis can read and click the buttons, lists and tabs *inside* apps through Windows UI Automation (the
+accessibility tree screen readers use). So "open Claude's Jarvis project", "go to the settings tab" or "open my chat
+with X" work: it opens the app, finds the control by name and clicks it. It's text-only (no screenshots), so it stays
+cheap. It won't click anything that sends, deletes, buys or changes settings unless you explicitly ask.
+
+## System page
+
+Tap **System** in the dock or Control Center for live stats every few seconds: CPU (with a graph and per-core bars),
+GPU load/VRAM/temperature/fan (NVIDIA), memory, network speed, free space on every drive (red when nearly full),
+and the busiest apps. You can also ask "how much space is left on my disks?".
+
 ## Screens on your phone
 
-Tap **Screens** in the phone app to see all three monitors. Screenshots go straight from the PC to your phone,
+Tap **Screens** to get one picture of all three monitors, laid out like your desk. Tap a monitor (or use the
+All / Left / Main / Right switch) to zoom in; pinch, drag and double-tap work too. Screenshots go straight from the PC to your phone,
 end-to-end encrypted. Claude never sees them, so they cost no tokens. They expire from the relay after 3 hours.
 
 ## Settings (`config.json`)
@@ -110,6 +124,8 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 | `jarvis/remote.py` | Encrypted phone channel over ntfy.sh (commands, modes list, screenshots) |
 | `jarvis/modes.py` | Saved layouts ("work mode") that run without Claude |
 | `jarvis/screens.py` | Screenshots of each monitor for the phone |
+| `jarvis/ui.py` | Acting inside apps: list/click controls, type, press keys (UI Automation) |
+| `jarvis/sysinfo.py` | Detailed stats for the System page (CPU, GPU, RAM, disks, network, top apps) |
 | `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
 | `docs/` | The phone page served by GitHub Pages |
 

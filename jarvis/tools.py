@@ -2,7 +2,7 @@
 import ctypes
 import json
 
-from . import apps, modes
+from . import apps, modes, sysinfo, ui
 from . import windows as win
 from .config import settings
 
@@ -138,6 +138,63 @@ TOOLS = [
         },
     },
     {
+        "name": "ui_list",
+        "description": "See the buttons, list items, links, tabs and text fields inside an app window (its "
+                       "accessibility tree). Use it to find what to click when the user wants something INSIDE an "
+                       "app, e.g. a project, chat, tab or menu. Use filter to search, e.g. filter='jarvis'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "window": {"type": "string", "description": "Window id like '#123456' or app name, e.g. 'claude'"},
+                "filter": {"type": "string", "description": "Only controls whose name contains this text"},
+            },
+            "required": ["window"],
+        },
+    },
+    {
+        "name": "ui_click",
+        "description": "Click a control inside an app window by its name (as shown by ui_list). Exact name "
+                       "matches win over partial ones; use index to pick among several matches.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "window": {"type": "string"},
+                "name": {"type": "string", "description": "Control name, e.g. 'Jarvis voice command assistant'"},
+                "index": {"type": "integer", "description": "Which match to click when several share the name (0 = first)"},
+            },
+            "required": ["window", "name"],
+        },
+    },
+    {
+        "name": "type_text",
+        "description": "Type text into the focused field of a window (click the field with ui_click first).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "window": {"type": "string", "description": "Window to focus first (optional)"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "press_keys",
+        "description": "Press a key or shortcut in a window, e.g. 'enter', 'ctrl+k', 'ctrl+shift+t', 'esc'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keys": {"type": "string"},
+                "window": {"type": "string", "description": "Window to focus first (optional)"},
+            },
+            "required": ["keys"],
+        },
+    },
+    {
+        "name": "system_info",
+        "description": "Current CPU, GPU, memory, disk space, network speed and the apps using the most CPU.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "lock_pc",
         "description": "Lock the PC (Windows lock screen). Only when the user asks to lock it.",
         "input_schema": {"type": "object", "properties": {}},
@@ -210,6 +267,16 @@ def run(name: str, args: dict) -> str:
         return modes.put(args["name"], args["screens"], args.get("say", ""), args.get("icon", "sparkles"))
     if name == "delete_mode":
         return modes.remove(args["name"])
+    if name == "ui_list":
+        return ui.list_controls(args["window"], args.get("filter", ""))
+    if name == "ui_click":
+        return ui.click(args["window"], args["name"], int(args.get("index", 0)))
+    if name == "type_text":
+        return ui.type_text(args["text"], args.get("window", ""))
+    if name == "press_keys":
+        return ui.press_keys(args["keys"], args.get("window", ""))
+    if name == "system_info":
+        return _system_summary()
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
@@ -220,6 +287,22 @@ def run(name: str, args: dict) -> str:
             ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
         return f"Pressed {args['key']}."
     raise ValueError(f"Unknown tool {name}")
+
+
+def _gb(n: float) -> str:
+    return f"{n / 1024**3:.0f} GB"
+
+
+def _system_summary() -> str:
+    s = sysinfo.snapshot()
+    lines = [f"CPU {s['cpu']['pct']}% ({s['cpu']['name']}), memory {s['ram']['pct']}% "
+             f"({_gb(s['ram']['used'])} of {_gb(s['ram']['total'])})"]
+    for g in s["gpus"]:
+        lines.append(f"GPU {g['name']}: {g['load']:.0f}% load, {g['vram_used']:.0f}/{g['vram_total']:.0f} MB VRAM, {g['temp']:.0f}°C")
+    for d in s["disks"]:
+        lines.append(f"Disk {d['name']}: {_gb(d['free'])} free of {_gb(d['total'])} ({d['pct']}% used)")
+    lines.append("Busiest apps: " + ", ".join(f"{a['name']} {a['cpu']}% CPU" for a in s["apps"]))
+    return "\n".join(lines)
 
 
 def environment_description() -> str:

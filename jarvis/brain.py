@@ -36,6 +36,12 @@ How to work:
 "Organize them as normal" means the auto layout.
 - If the user names a monitor by position (left, right, vertical, main, 1/2/3), map it using the list below.
 - If something fails, try a sensible alternative once, then report it.
+- Requests about something INSIDE an app ("open Claude's Jarvis project", "open my chat with X", "go to the \
+settings tab") mean: open/focus the app, then ui_list with a short filter to find the control, then ui_click it. \
+Possessives like "Claude's Jarvis project" name the app (Claude) and the thing inside it (Jarvis). If a filter finds \
+nothing, try a shorter one or no filter. Report what you clicked.
+- Never click or press anything that sends messages, deletes, buys, posts or changes accounts/settings unless the \
+user explicitly asked for exactly that.
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
@@ -53,6 +59,37 @@ def thread_switch_note(recent: list | None) -> str:
         return "[New conversation. Earlier messages in this session are unrelated.]\n\n"
     lines = [f"{'User' if m.get('who') == 'me' else 'Jarvis'}: {str(m.get('text', ''))[:300]}" for m in recent[-6:]]
     return "[Switched conversation. Only these earlier messages belong to it:\n" + "\n".join(lines) + "]\n\n"
+
+
+STEP_LABELS = {
+    "open_app": lambda a: f"Opening {a.get('name', 'the app')}…",
+    "open_folder": lambda a: "Opening File Explorer…",
+    "find_folder": lambda a: f"Looking for “{a.get('name', '')}”…",
+    "open_target": lambda a: "Opening it…",
+    "list_windows": lambda a: "Checking what's open…",
+    "arrange_windows": lambda a: f"Arranging windows on monitor {a.get('monitor', '')}…",
+    "window_action": lambda a: f"{str(a.get('action', '')).title()} {a.get('window', '')}…",
+    "ui_list": lambda a: f"Looking inside {a.get('window', 'the app')}…",
+    "ui_click": lambda a: f"Clicking “{a.get('name', '')}”…",
+    "type_text": lambda a: "Typing…",
+    "press_keys": lambda a: f"Pressing {a.get('keys', '')}…",
+    "list_modes": lambda a: "Checking your modes…",
+    "run_mode": lambda a: f"Starting {a.get('name', '')} mode…",
+    "save_mode": lambda a: f"Saving {a.get('name', '')} mode…",
+    "delete_mode": lambda a: f"Deleting {a.get('name', '')} mode…",
+    "media_key": lambda a: "Controlling music…",
+    "lock_pc": lambda a: "Locking your PC…",
+    "system_info": lambda a: "Checking your PC…",
+}
+
+
+def describe_step(tool: str, args: dict) -> str:
+    """'mcp__jarvis__open_app' + {'name': 'Claude'} -> 'Opening Claude…' for the phone's live status."""
+    label = STEP_LABELS.get(tool.removeprefix("mcp__jarvis__"))
+    try:
+        return label(args) if label else "Working…"
+    except Exception:
+        return "Working…"
 
 
 def make_brain():
@@ -140,7 +177,7 @@ class ClaudeCodeBrain:
                     log.info("Idle: starting a fresh Claude Code session.")
                     self._restart()
 
-    def handle(self, command: str, chat: str | None = None, recent: list | None = None) -> str:
+    def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
         with self.lock:
             if self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION:
                 self._restart()
@@ -150,13 +187,13 @@ class ClaudeCodeBrain:
             self.commands += 1
             started = time.time()
             try:
-                answer = self._ask(command)
+                answer = self._ask(command, progress)
             finally:
                 self.last_used = time.time()
             log.info("answered in %.1fs", time.time() - started)
             return answer
 
-    def _ask(self, command: str) -> str:
+    def _ask(self, command: str, progress=None) -> str:
         message = {"type": "user", "message": {"role": "user", "content": command}}
         try:
             self.proc.stdin.write(json.dumps(message) + "\n")
@@ -175,6 +212,10 @@ class ClaudeCodeBrain:
                 self._spawn()
                 return ("Claude Code stopped unexpectedly. If this keeps happening, run 'claude' in a "
                         "terminal and check you're logged in.")
+            if event.get("type") == "assistant" and progress:
+                for block in event.get("message", {}).get("content", []):
+                    if block.get("type") == "tool_use":
+                        progress(describe_step(block.get("name", ""), block.get("input") or {}))
             if event.get("type") != "result":
                 continue
             usage = event.get("usage") or {}
@@ -196,11 +237,13 @@ class ApiBrain:
         self.system = SYSTEM_TEMPLATE.format(environment=tools.environment_description())
         self.history: list = []
         self.thread = None
+        self.progress = None
         self.last_used = 0.0
         self.lock = threading.Lock()
 
-    def handle(self, command: str, chat: str | None = None, recent: list | None = None) -> str:
+    def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
         with self.lock:
+            self.progress = progress
             if time.time() - self.last_used > IDLE_RESET_SECONDS or len(self.history) > 60 or chat != self.thread:
                 self.history = []
                 if chat != self.thread:
@@ -254,6 +297,8 @@ class ApiBrain:
             results = []
             for call in tool_uses:  # sequential on purpose: launches are detected by watching new windows
                 log.info("tool %s %s", call.name, json.dumps(call.input))
+                if self.progress:
+                    self.progress(describe_step(call.name, call.input))
                 try:
                     output, is_error = tools.run(call.name, call.input), False
                 except Exception as e:  # report failures to Claude so it can recover

@@ -12,3 +12,4 @@ openwakeword
 mcp>=2.3
 pillow
 pywin32
+uiautomation

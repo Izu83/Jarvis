@@ -16,7 +16,7 @@ import requests
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from . import modes, pc, screens, tools
+from . import modes, pc, screens, sysinfo, tools
 from .config import secret, set_secret, settings
 
 log = logging.getLogger("jarvis.remote")
@@ -25,6 +25,7 @@ CMD_AAD = b"jarvis-cmd"
 REPLY_AAD = b"jarvis-reply"
 IMAGE_AAD = b"jarvis-image"
 MAX_TEXT = 2400
+WATCH_INTERVAL = 4  # seconds between live stats while the System page is open
 MAX_AGE_MS = 120_000
 
 
@@ -114,26 +115,47 @@ class PhoneChannel:
         threading.Timer(seconds, fn, args).start()
 
     def send_screens(self, msg_id: str) -> None:
-        """Screenshots go straight to the phone as encrypted ntfy attachments; Claude never sees them."""
+        """One picture of all monitors, sent straight to the phone as an encrypted attachment; Claude never sees it."""
         try:
-            shots = screens.capture()
+            jpeg, layout = screens.capture_desktop()
         except Exception as e:
             log.exception("Screenshot failed")
-            self.reply(msg_id, f"I couldn't take screenshots: {e}")
+            self.reply(msg_id, f"I couldn't take a screenshot: {e}")
             return
-        for index, (mon, jpeg) in enumerate(shots):
-            label = _short_label(mon.number)
-            meta = {"kind": "image", "id": msg_id, "index": index, "count": len(shots),
-                    "monitor": mon.number, "label": label, "ts": int(time.time() * 1000)}
-            try:
-                requests.put(
-                    f"{self.server}/{self.topic}-r", data=self._seal(jpeg, IMAGE_AAD), timeout=30,
-                    headers={"Filename": f"screen-{mon.number}.bin",
-                             "Message": b64e(self._seal(json.dumps(meta).encode(), REPLY_AAD))},
-                )
-            except requests.RequestException:
-                log.exception("Couldn't upload screenshot")
+        for m in layout:
+            m["label"] = _short_label(m["monitor"])
+        meta = {"kind": "image", "id": msg_id, "monitors": layout, "ts": int(time.time() * 1000)}
+        try:
+            requests.put(
+                f"{self.server}/{self.topic}-r", data=self._seal(jpeg, IMAGE_AAD), timeout=30,
+                headers={"Filename": "desktop.bin", "Message": b64e(self._seal(json.dumps(meta).encode(), REPLY_AAD))},
+            )
+        except requests.RequestException:
+            log.exception("Couldn't upload screenshot")
+            self.reply(msg_id, "I couldn't upload the screenshot.")
+            return
         self.reply(msg_id, "Here are your screens.")
+
+    def watch(self) -> None:
+        """The System page is open: stream detailed stats every few seconds until it stops asking (60 s)."""
+        self.watch_until = time.time() + 60
+        if getattr(self, "_watching", False):
+            return
+        self._watching = True
+
+        def loop():
+            try:
+                while time.time() < self.watch_until:
+                    started = time.time()
+                    try:
+                        self._publish({"kind": "sys", "id": "sys", "sys": sysinfo.snapshot()})
+                    except Exception:
+                        log.exception("Couldn't read system stats")
+                    time.sleep(max(0.5, WATCH_INTERVAL - (time.time() - started)))
+            finally:
+                self._watching = False
+
+        threading.Thread(target=loop, daemon=True, name="sys-watch").start()
 
     def _handle(self, data: dict) -> None:
         kind, msg_id = data.get("type", "cmd"), data.get("id", "")
@@ -142,6 +164,8 @@ class PhoneChannel:
         elif kind == "screens":
             log.info("Phone: screenshots")
             threading.Thread(target=self.send_screens, args=(msg_id,), daemon=True).start()
+        elif kind == "watch":
+            self.watch()
         elif kind == "media":  # widget buttons: instant, no Claude
             tools.run("media_key", {"key": data["key"]})
             self._later(0.8, self.send_state)  # Spotify needs a moment to update its title
@@ -159,7 +183,8 @@ class PhoneChannel:
             log.info("Phone: %r", data["text"])
             self.reply(msg_id, "On it...", done=False)
             self.on_command(data["text"], lambda text, i=msg_id: self.reply(i, text),
-                            chat=data.get("chat"), recent=data.get("recent"))
+                            chat=data.get("chat"), recent=data.get("recent"),
+                            progress=lambda text, i=msg_id: self.reply(i, text, done=False))
 
     def run(self) -> None:
         log.info("Phone channel listening (topic %s...).", self.topic[:14])
