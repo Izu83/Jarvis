@@ -122,9 +122,14 @@ class PhoneChannel:
         body = self._seal({"kind": "hello", "id": "hello", "url": url})
         try:
             r = requests.post(f"{self.server}/{self.topic}-r", data=body, timeout=10)
-            if r.status_code != 200:
-                log.warning("Couldn't announce the address to the relay (HTTP %s). The phone will use the last "
-                            "address it knew, or re-pair with `run.bat --pair`.", r.status_code)
+            if r.status_code == 429:
+                log.warning("The relay's free daily limit is used up, so your phone can't look up this new address "
+                            "by itself until it resets. To connect now, run `run.bat --pair` and scan the QR code.")
+            elif r.status_code != 200:
+                log.warning("Couldn't tell the phone the new address (relay answered %s). To connect now, run "
+                            "`run.bat --pair` and scan the QR code.", r.status_code)
+            else:
+                log.info("Told your phone the new address.")
         except requests.RequestException as e:
             log.warning("Couldn't announce the address to the relay: %s", e)
 

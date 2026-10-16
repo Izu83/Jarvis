@@ -53,7 +53,7 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(ROOT / "jarvis.log", encoding="utf-8")],
     )
-    for noisy in ("httpx", "httpx2", "anthropic", "faster_whisper"):
+    for noisy in ("httpx", "httpx2", "anthropic", "faster_whisper", "comtypes", "websockets", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     if args.pair:
