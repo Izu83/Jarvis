@@ -1094,6 +1094,24 @@ async function start() {
   renderShelf(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
   connect();
 }
+// ================= self-update =================
+// iPhone home-screen apps keep the old page around, so check for a newer version whenever the app opens.
+// Bump VERSION here and in version.json together on every change.
+const VERSION = "2026-10-16.1";
+async function checkForUpdate() {
+  try {
+    const r = await fetch(`version.json?t=${Date.now()}`, { cache: "no-store" });
+    const latest = (await r.json()).version;
+    if (!latest || latest === VERSION) { if (load("jarvis.updated") === VERSION) { store("jarvis.updated"); toast("Jarvis updated", "sparkles", "var(--blue)"); } return; }
+    if (load("jarvis.updateTried") === latest) return;   // already tried once; don't loop if a cache serves the old page
+    store("jarvis.updateTried", latest); store("jarvis.updated", latest);
+    await fetch(location.pathname, { cache: "reload" });  // refresh the cached page before reloading it
+    location.reload();
+  } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+checkForUpdate();
+
 window.addEventListener("hashchange", start);
 start();
 </script>
