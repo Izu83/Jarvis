@@ -113,7 +113,14 @@
   .suggest button small { display: block; font-size: 12px; color: var(--label2); margin-bottom: 2px; }
   .stamp { align-self: center; font-size: 12px; font-weight: 600; color: var(--label2); margin: 16px 0 6px; letter-spacing: 0; }
   .bubble { max-width: 80%; padding: 9px 14px 10px; border-radius: 21px; font-size: 17px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; animation: rise .45s var(--spring) both; transition: transform .3s var(--spring); }
-  .bubble:active { transform: scale(.97); }
+  .bubble { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; cursor: text; }
+  .bubble *::selection, .bubble::selection { background: rgba(10,132,255,.35); }
+  .me::selection, .me *::selection { background: rgba(255,255,255,.4); }
+  .msg-actions { display: flex; gap: 2px; margin: 3px 4px 2px; align-self: flex-start; animation: rise .35s var(--ease) both; }
+  .msg-actions button { width: 34px; height: 30px; border-radius: 10px; display: grid; place-items: center; color: var(--label2); }
+  .msg-actions button:active, .msg-actions button.on { background: var(--fill); color: var(--blue); }
+  .msg-actions svg.i { width: 18px; height: 18px; stroke-width: 1.9; }
+  .msg-actions + .me { margin-top: 10px; }
   .bubble code { font: 15px ui-monospace, "SF Mono", Menlo, monospace; background: var(--fill); padding: 1px 5px; border-radius: 6px; }
   .me { align-self: flex-end; color: #fff; background: linear-gradient(180deg, #3d9cff, #0a7cff); box-shadow: 0 6px 18px -6px rgba(10,124,255,.55), inset 0 1px 0 rgba(255,255,255,.35); }
   .me code { background: rgba(255,255,255,.2); }
@@ -453,6 +460,8 @@
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.2" r=".9"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 16v-4M11 16V8M15.5 16v-6M20 16V5"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2a1.5 1.5 0 0 0 1.5 1.3h6.2a1.5 1.5 0 0 0 1.5-1.3L17.5 7"/></symbol>
+  <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.5h3l4.5-4v13L7 14.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"/></symbol>
 </svg>
 
@@ -652,7 +661,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-16.6";   // bump together with version.json
+const VERSION = "2026-10-16.7";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -747,16 +756,53 @@ function bubble(text, who, ts = Date.now(), error = false) {
   el.className = `bubble ${who}` + (error ? " error" : "");
   if (text === null) el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
   else el.innerHTML = rich(text);
-  onLongPress(el, () => bubbleMenu(el, who));
   $("log").append(el);
+  if (who === "jarvis" && text) addActions(el);
   return el;
 }
-function bubbleMenu(el, who) {
-  const text = el.textContent;
-  if (!text.trim()) return;
-  const items = [{ label: "Copy", run: () => navigator.clipboard.writeText(text).then(() => toast("Copied", "copy")).catch(() => {}) }];
-  if (who === "me") items.push({ label: "Send Again", run: () => send(text) });
-  actionSheet(text.length > 60 ? text.slice(0, 58) + "…" : text, items);
+// Copy / Read aloud under each of Jarvis's replies
+function addActions(el) {
+  if (el.nextElementSibling?.classList.contains("msg-actions")) return;
+  const row = document.createElement("div");
+  row.className = "msg-actions";
+  row.innerHTML = `<button aria-label="Copy">${icon("copy")}</button><button aria-label="Read aloud">${icon("speaker")}</button>`;
+  const [copyBtn, speakBtn] = row.children;
+  copyBtn.onclick = () => copyText(el.innerText, copyBtn);
+  speakBtn.onclick = () => readAloud(el.innerText, speakBtn);
+  el.after(row);
+}
+async function copyText(text, btn) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch {
+    const ta = document.createElement("textarea");   // fallback for browsers without the clipboard API
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;opacity:0";
+    document.body.append(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
+  }
+  if (!ok) { toast("Couldn't copy", "x", "var(--red)"); return; }
+  btn.innerHTML = icon("check"); btn.classList.add("on");
+  setTimeout(() => { btn.innerHTML = icon("copy"); btn.classList.remove("on"); }, 1500);
+}
+let speakingBtn = null;
+function setSpeaking(btn) {
+  if (speakingBtn) { speakingBtn.innerHTML = icon("speaker"); speakingBtn.classList.remove("on"); }
+  speakingBtn = btn;
+  if (btn) { btn.innerHTML = icon("stop"); btn.classList.add("on"); }
+}
+function pickVoice() {
+  const voices = window.speechSynthesis?.getVoices() || [], lang = (navigator.language || "en").slice(0, 2);
+  return voices.find(v => v.lang.startsWith(lang) && /premium|enhanced|siri|samantha|daniel|natural/i.test(v.name))
+    || voices.find(v => v.lang.startsWith(lang)) || null;
+}
+function readAloud(text, btn) {
+  if (!window.speechSynthesis) { toast("Reading aloud isn't available here", "x", "var(--orange)"); return; }
+  const again = speakingBtn === btn;
+  speechSynthesis.cancel(); setSpeaking(null);
+  if (again) return;   // second tap stops it
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
+  u.onend = u.onerror = () => { if (speakingBtn === btn) setSpeaking(null); };
+  setSpeaking(btn);
+  speechSynthesis.speak(u);
 }
 function stepRow(text) {
   const el = document.createElement("div");
@@ -1158,7 +1204,7 @@ async function onMessage(text) {
     const chat = chatById(p.chatId);
     if (!chat) return;
     addMessage(chat, { who: "jarvis", text: data.text });
-    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); scrollDown(); }
+    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addActions(p.el); scrollDown(); }
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
     if (!$("drawer").hidden) renderSidebar();
@@ -1412,9 +1458,10 @@ $("mic").onclick = () => {
   rec.onend = () => { listening = false; $("mic").classList.remove("on"); text.placeholder = "Ask Jarvis"; if ($("autoSendToggle").checked && text.value.trim()) submit(); };
   try { rec.start(); } catch {}
 };
-function speakText(t) {
+function speakText(t) {   // "Read replies aloud" setting
   if (!$("speakToggle").checked || !window.speechSynthesis) return;
-  speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(t));
+  speechSynthesis.cancel(); setSpeaking(null);
+  const u = new SpeechSynthesisUtterance(t); u.voice = pickVoice(); speechSynthesis.speak(u);
 }
 
 // ================= screenshot viewer: pinch, drag, double-tap, tap a monitor =================
