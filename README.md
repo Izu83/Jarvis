@@ -90,6 +90,18 @@ Tap **System** in the dock or Control Center for live stats every few seconds: C
 GPU load/VRAM/temperature/fan (NVIDIA), memory, network speed, free space on every drive (red when nearly full),
 and the busiest apps. You can also ask "how much space is left on my disks?".
 
+## Files and permissions
+
+Jarvis can look through your files (list folders with sizes, search by name, read text files, show what's using
+disk space, suggest what's safe to clean) and organise them (create, write, move, rename, copy). For anything else
+it can run a PowerShell command.
+
+**Deleting, clearing, emptying the Recycle Bin, overwriting a file and running commands always ask you first.**
+If the command came from the phone, an Allow / Don't Allow alert appears in the app (keep it open); otherwise a
+Windows dialog pops up and Jarvis says so out loud. No answer within 2 minutes counts as no. Normal deletes go to the
+Recycle Bin; "permanently" (or clearing temp/cache folders) frees the space for real. Windows, Program Files,
+ProgramData, drive roots and your main user folders themselves can't be deleted at all.
+
 ## Now playing
 
 The Control Center shows what's playing in any app (Spotify, YouTube in your browser, ...) with its album cover,
@@ -133,6 +145,8 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 | `jarvis/sysinfo.py` | Detailed stats for the System page (CPU, GPU, RAM, disks, network, top apps) |
 | `jarvis/tunnel.py` | Cloudflare quick tunnel that gives the phone a public, encrypted way in |
 | `jarvis/media.py` | What's playing in any app, with album covers (Windows media session) |
+| `jarvis/files.py` | Scanning, searching, reading, organising and deleting files (with safety checks) |
+| `jarvis/approval.py` | Asking you before anything destructive (phone alert or Windows dialog) |
 | `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
 | `docs/` | The phone page served by GitHub Pages |
 

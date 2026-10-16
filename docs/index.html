@@ -361,6 +361,23 @@
   .as-btn:active { background: var(--fill); }
   .as-btn.cancel { font-weight: 600; }
 
+  /* permission alert (iOS UIAlertController look) */
+  .alert-wrap { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.38); display: grid; place-items: center; padding: 24px; animation: fade .2s both; }
+  .alert { width: 100%; max-width: 300px; border-radius: 22px; overflow: hidden; background: var(--glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 20px 60px -20px rgba(0,0,0,.6); animation: alertIn .35s var(--spring) both; }
+  @keyframes alertIn { from { opacity: 0; transform: scale(1.12); } }
+  .alert-ic { width: 46px; height: 46px; border-radius: 50%; margin: 20px auto 8px; display: grid; place-items: center; color: #fff; background: linear-gradient(180deg, #ff9f0a, #ff6b00); }
+  .alert-ic svg.i { width: 24px; height: 24px; stroke-width: 2.2; }
+  .alert h3 { margin: 0 18px 6px; font-size: 17px; font-weight: 600; text-align: center; letter-spacing: -.41px; }
+  .alert .msg { margin: 0 18px 16px; font-size: 13px; line-height: 18px; color: var(--label2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 38vh; overflow-y: auto; letter-spacing: -.08px; -webkit-user-select: text; user-select: text; }
+  .alert .msg code { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--fill); color: var(--label); font: 12px/17px ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; }
+  .alert .btns { display: flex; border-top: .5px solid var(--sep); }
+  .alert .btns button { flex: 1; height: 48px; font-size: 17px; color: var(--blue); letter-spacing: -.41px; }
+  .alert .btns button + button { border-left: .5px solid var(--sep); }
+  .alert .btns button:active { background: var(--fill); }
+  .alert .btns .destructive { color: var(--red); font-weight: 600; }
+  .alert .timer { height: 3px; background: var(--orange); transform-origin: left; animation: countdown var(--secs, 120s) linear both; }
+  @keyframes countdown { to { transform: scaleX(0); } }
+
   /* Dynamic Island-style toast */
   .toast { position: fixed; z-index: 50; left: 50%; top: calc(env(safe-area-inset-top) + 10px); transform: translateX(-50%); height: 44px; border-radius: 22px; padding: 0 18px 0 12px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; background: rgba(10,10,14,.9); color: #fff; box-shadow: 0 10px 30px -8px rgba(0,0,0,.5); white-space: nowrap; max-width: calc(100vw - 32px); animation: island .55s var(--spring) both; }
   .toast .ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--green); flex: none; }
@@ -427,6 +444,7 @@
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
   <symbol id="i-clip-up" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16" rx="2.5"/><path d="M9 4.5V3.8A.8.8 0 0 1 9.8 3h4.4a.8.8 0 0 1 .8.8v.7M12 16.5v-6M9.5 13l2.5-2.5 2.5 2.5"/></symbol>
   <symbol id="i-clip-down" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16" rx="2.5"/><path d="M9 4.5V3.8A.8.8 0 0 1 9.8 3h4.4a.8.8 0 0 1 .8.8v.7M12 10.5v6M9.5 14l2.5 2.5 2.5-2.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M12 8.5v4.5M12 16.2v.3"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/></symbol>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
@@ -634,7 +652,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-16.5";   // bump together with version.json
+const VERSION = "2026-10-16.6";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1118,6 +1136,8 @@ async function onMessage(text) {
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
+    if (data.kind === "ask") { showAsk(data); return; }
+    if (data.kind === "ask_done") { if ($("ask-" + data.id)) { $("ask-" + data.id).remove(); toast("Permission request expired", "x", "var(--label2)"); } return; }
     const p = pending.get(data.id);
     if (!p) return;
     clearTimeout(p.timer);
@@ -1529,6 +1549,34 @@ async function checkForUpdate() {
     await fetch(location.pathname, { cache: "reload" });
     location.reload();
   } catch {}
+}
+
+// ================= permission prompts =================
+// Deleting, clearing and running commands on the PC wait for an explicit Allow here. No answer = not allowed.
+function showAsk(data) {
+  $("ask-" + data.id)?.remove();
+  const wrap = document.createElement("div");
+  wrap.className = "alert-wrap"; wrap.id = "ask-" + data.id;
+  wrap.innerHTML = `<div class="alert" role="alertdialog" aria-modal="true"><div class="timer"></div><div class="alert-ic">${icon("shield")}</div>`
+    + `<h3></h3><div class="msg"></div><div class="btns"><button class="deny">Don't Allow</button><button class="destructive"></button></div></div>`;
+  wrap.querySelector("h3").textContent = data.title;
+  const [why, ...rest] = String(data.detail || "").split("\n\n");
+  const msg = wrap.querySelector(".msg");
+  if (data.confirm === "Run") {   // commands: show the exact command in a code box
+    msg.textContent = why;
+    const code = document.createElement("code"); code.textContent = rest.join("\n\n"); msg.append(code);
+  } else msg.textContent = data.detail || "";
+  wrap.querySelector(".destructive").textContent = data.confirm || "Allow";
+  const answer = allow => {
+    wrap.remove();
+    post({ type: "answer", ask: data.id, allow, id: newId() }).then(
+      () => toast(allow ? "Allowed" : "Not allowed", allow ? "check" : "x", allow ? "var(--green)" : "#8e8e93"),
+      () => toast("Couldn't reach your PC", "x", "var(--red)"));
+  };
+  wrap.querySelector(".deny").onclick = () => answer(false);
+  wrap.querySelector(".destructive").onclick = () => answer(true);
+  document.body.append(wrap);
+  if (document.visibilityState !== "visible") { try { navigator.setAppBadge?.(1); } catch {} }
 }
 
 // ================= re-pairing inside the app =================

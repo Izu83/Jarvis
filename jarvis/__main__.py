@@ -1,6 +1,7 @@
 """Run Jarvis:  python -m jarvis [--text] [--no-voice] [--no-phone] [--pair]"""
 import argparse
 import logging
+import os
 import queue
 import sys
 import threading
@@ -62,18 +63,35 @@ def main() -> None:
     if settings["brain"] == "api" and not secret("ANTHROPIC_API_KEY"):
         log.warning("ANTHROPIC_API_KEY isn't set in .env; falling back to any `ant auth login` profile.")
 
+    from . import approval
     from .brain import make_brain
 
+    phone = None
+    current = {"via": "pc"}   # where the command being worked on came from, so we ask there
+
+    def ask_user(title: str, detail: str, confirm: str) -> bool:
+        if current["via"] == "phone" and phone and phone.clients:
+            log.info("Asking on the phone: %s", title)
+            ok = phone.ask(title, detail, confirm)
+        else:
+            log.info("Asking on the PC: %s", title)
+            speak.say("I need your permission. " + title)
+            ok = approval.desktop_confirm(title, detail, confirm)
+        log.info("Permission %s: %s", "granted" if ok else "refused", title)
+        return ok
+
+    os.environ.update(approval.serve(ask_user))   # before the brain starts its tool process
     brain = make_brain()
     speak.start()
     jobs: queue.Queue = queue.Queue()
 
-    def submit(text: str, reply=None, chat=None, recent=None, progress=None) -> None:
-        jobs.put((text, reply, chat, recent, progress))
+    def submit(text: str, reply=None, chat=None, recent=None, progress=None, via: str = "pc") -> None:
+        jobs.put((text, reply, chat, recent, progress, via))
 
     def worker() -> None:
         while True:
-            text, reply, chat, recent, progress = jobs.get()
+            text, reply, chat, recent, progress, via = jobs.get()
+            current["via"] = via
             log.info("Command: %s", text)
             mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
             try:
@@ -91,7 +109,8 @@ def main() -> None:
 
     if settings["phone_enabled"] and not args.no_phone:
         from .remote import PhoneChannel
-        threading.Thread(target=PhoneChannel(submit).run, daemon=True, name="phone").start()
+        phone = PhoneChannel(submit)
+        threading.Thread(target=phone.run, daemon=True, name="phone").start()
 
     if settings["voice_enabled"] and not args.no_voice:
         from .voice import VoiceListener

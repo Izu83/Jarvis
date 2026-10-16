@@ -7,6 +7,7 @@ Two interchangeable brains:
 """
 import atexit
 import json
+import os
 import logging
 import queue
 import sys
@@ -42,6 +43,8 @@ Possessives like "Claude's Jarvis project" name the app (Claude) and the thing i
 nothing, try a shorter one or no filter. Report what you clicked.
 - Never click or press anything that sends messages, deletes, buys, posts or changes accounts/settings unless the \
 user explicitly asked for exactly that.
+- Files: scan_folder / find_files / read_file / disk_usage / cleanup_suggestions to look; create_folder, write_file, move_path, copy_path to organise. To delete or clear, use delete_paths / clear_folder / empty_recycle_bin: they ask the user for permission themselves, so just call them (don't ask in chat first). Deleting goes to the Recycle Bin unless the user says "permanently" or it's temp/cache junk; remember the Recycle Bin doesn't free disk space. If the user declines, stop and say so; never work around a "no".
+- For anything else on the PC use run_powershell (the user approves each command). Keep commands short and explain them in `why`.
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
@@ -80,6 +83,19 @@ STEP_LABELS = {
     "media_key": lambda a: "Controlling music…",
     "lock_pc": lambda a: "Locking your PC…",
     "system_info": lambda a: "Checking your PC…",
+    "scan_folder": lambda a: f"Looking in {a.get('path', 'the folder')}…",
+    "find_files": lambda a: f"Searching for “{a.get('pattern', '')}”…",
+    "read_file": lambda a: "Reading the file…",
+    "disk_usage": lambda a: "Measuring what uses space…",
+    "cleanup_suggestions": lambda a: "Looking for things to clean up…",
+    "create_folder": lambda a: "Creating the folder…",
+    "write_file": lambda a: "Writing the file…",
+    "move_path": lambda a: "Moving it…",
+    "copy_path": lambda a: "Copying it…",
+    "delete_paths": lambda a: "Waiting for your permission to delete…",
+    "clear_folder": lambda a: "Waiting for your permission to clear it…",
+    "empty_recycle_bin": lambda a: "Waiting for your permission…",
+    "run_powershell": lambda a: "Waiting for your permission to run a command…",
 }
 
 
@@ -119,6 +135,8 @@ class ClaudeCodeBrain:
         self.mcp_config.write_text(json.dumps({"mcpServers": {"jarvis": {
             "command": sys.executable,
             "args": [str(ROOT / "jarvis" / "mcp_server.py")],
+            # lets the tools ask the user for permission through this Jarvis process (approval.py)
+            "env": {k: v for k, v in os.environ.items() if k.startswith("JARVIS_APPROVAL_")},
         }}}), encoding="utf-8")
         self.lock = threading.Lock()
         self.proc: subprocess.Popen | None = None
@@ -144,6 +162,7 @@ class ClaudeCodeBrain:
             cmd += ["--model", settings["claude_code_model"]]
         self.proc = subprocess.Popen(
             cmd, cwd=self.workdir, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            env={**os.environ, "MCP_TOOL_TIMEOUT": "300000"},   # tools may wait up to 2 min for permission
             text=True, encoding="utf-8", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW,
         )
         self.events = queue.Queue()

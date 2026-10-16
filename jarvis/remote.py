@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import media, modes, pc, screens, sysinfo, tools
+from . import approval, media, modes, pc, screens, sysinfo, tools
 from .config import secret, set_secret, settings
 from .tunnel import Tunnel, last_url
 
@@ -80,6 +80,7 @@ class PhoneChannel:
         self.tunnel = Tunnel(self.port, self._announce)
         self.watch_until = 0.0
         self._watching = False
+        self.asks: dict[str, dict] = {}   # permission prompts waiting for an answer
 
     # ------------------------------------------------------------ crypto
 
@@ -123,8 +124,8 @@ class PhoneChannel:
         try:
             r = requests.post(f"{self.server}/{self.topic}-r", data=body, timeout=10)
             if r.status_code == 429:
-                log.warning("The relay's free daily limit is used up, so your phone can't look up this new address "
-                            "by itself until it resets. To connect now, run `run.bat --pair` and scan the QR code.")
+                log.warning("Couldn't post the address to the relay (its free daily limit is used up). A phone that "
+                            "already knows this address connects fine; otherwise paste the link from `run.bat --pair`.")
             elif r.status_code != 200:
                 log.warning("Couldn't tell the phone the new address (relay answered %s). To connect now, run "
                             "`run.bat --pair` and scan the QR code.", r.status_code)
@@ -173,6 +174,19 @@ class PhoneChannel:
         if jpeg:
             self._publish({"kind": "art", "id": "art", "art": art_id, "data": base64.b64encode(jpeg).decode()})
 
+    def ask(self, title: str, detail: str, confirm: str) -> bool:
+        """Show an Allow / Don't Allow prompt on the phone and wait for the answer (no answer = no)."""
+        ask_id = secrets.token_hex(6)
+        payload = {"kind": "ask", "id": ask_id, "title": title, "detail": detail, "confirm": confirm}
+        entry = {"event": threading.Event(), "ok": False, "payload": payload}
+        self.asks[ask_id] = entry
+        self._publish(dict(payload))
+        answered = entry["event"].wait(approval.TIMEOUT)
+        self.asks.pop(ask_id, None)
+        if not answered:
+            self._publish({"kind": "ask_done", "id": ask_id})   # take the stale prompt off the screen
+        return entry["ok"]
+
     def watch(self) -> None:
         """The System page is open: stream detailed stats until it stops asking (60 s)."""
         self.watch_until = time.time() + 60
@@ -205,6 +219,11 @@ class PhoneChannel:
             self.send_screens(msg_id)
         elif kind == "watch":
             self.watch()
+        elif kind == "answer":
+            entry = self.asks.get(data.get("ask", ""))
+            if entry:
+                entry["ok"] = data.get("allow") is True
+                entry["event"].set()
         elif kind == "art":
             self.send_art(data.get("art", ""))
         elif kind == "media":  # Control Center buttons: instant, no Claude
@@ -225,11 +244,13 @@ class PhoneChannel:
             self.reply(msg_id, "On it...", done=False)
             self.on_command(data["text"], lambda text, i=msg_id: self.reply(i, text),
                             chat=data.get("chat"), recent=data.get("recent"),
-                            progress=lambda text, i=msg_id: self.reply(i, text, done=False))
+                            progress=lambda text, i=msg_id: self.reply(i, text, done=False), via="phone")
 
     async def _client(self, ws) -> None:
         self.clients.add(ws)
         log.info("Phone connected (%d open).", len(self.clients))
+        for entry in list(self.asks.values()):   # a question still waiting? ask again on the new connection
+            await ws.send(self._seal(dict(entry["payload"])))
         try:
             async for message in ws:
                 if isinstance(message, str):

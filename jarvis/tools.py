@@ -1,8 +1,10 @@
 """The actions Claude can take on this PC: JSON schemas + the Python that runs them."""
 import ctypes
 import json
+import subprocess
+import time
 
-from . import apps, modes, sysinfo, ui
+from . import apps, approval, files, modes, sysinfo, ui
 from . import windows as win
 from .config import settings
 
@@ -189,6 +191,119 @@ TOOLS = [
             "required": ["keys"],
         },
     },
+    # ---- files: looking (no permission needed)
+    {
+        "name": "scan_folder",
+        "description": "List a folder's files and subfolders with sizes and dates, largest first. Accepts paths "
+                       "like 'D:\\Projects', '~/Downloads' or names like 'downloads', 'desktop', 'temp'.",
+        "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+    },
+    {
+        "name": "find_files",
+        "description": "Search for files/folders by name ('*.pdf', '*invoice*', or a plain word). Optional: root "
+                       "folder (default all drives), min_mb size, days (modified within the last N days).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string"}, "root": {"type": "string"},
+                "min_mb": {"type": "number"}, "days": {"type": "number"},
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "read_file",
+        "description": "Read a text file (code, notes, logs, CSV, JSON, ...).",
+        "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+    },
+    {
+        "name": "disk_usage",
+        "description": "Free space on a drive and the biggest folders/files in a folder, to find what uses space.",
+        "input_schema": {"type": "object", "properties": {"path": {"type": "string", "description": "e.g. 'C:\\' or a folder"}}},
+    },
+    {
+        "name": "cleanup_suggestions",
+        "description": "Sizes of places that are usually safe to clear: Recycle Bin, temp files, browser/app caches, Downloads.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    # ---- files: changing (no permission needed, nothing is lost)
+    {
+        "name": "create_folder",
+        "description": "Create a folder (and any missing parent folders).",
+        "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+    },
+    {
+        "name": "write_file",
+        "description": "Create a text file, or append to one. Overwriting an existing file asks the user first.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "text": {"type": "string"}, "append": {"type": "boolean"}},
+            "required": ["path", "text"],
+        },
+    },
+    {
+        "name": "move_path",
+        "description": "Move or rename a file/folder. dest may be a folder (keeps the name) or a full new path.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"src": {"type": "string"}, "dest": {"type": "string"}},
+            "required": ["src", "dest"],
+        },
+    },
+    {
+        "name": "copy_path",
+        "description": "Copy a file/folder. dest may be a folder (keeps the name) or a full new path.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"src": {"type": "string"}, "dest": {"type": "string"}},
+            "required": ["src", "dest"],
+        },
+    },
+    # ---- destructive: these ask the user for permission themselves; never try to bypass that
+    {
+        "name": "delete_paths",
+        "description": "Delete files/folders. Goes to the Recycle Bin unless permanent=true (only when the user "
+                       "says 'permanently' or it's junk like temp/cache files). The user is asked for permission "
+                       "with the exact list and sizes; if they decline, stop and tell them.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "paths": {"type": "array", "items": {"type": "string"}},
+                "permanent": {"type": "boolean"},
+            },
+            "required": ["paths"],
+        },
+    },
+    {
+        "name": "clear_folder",
+        "description": "Delete everything inside a folder but keep the folder (e.g. temp, a cache, Downloads). "
+                       "permanent=true frees the space now (right for temp/caches); otherwise items go to the "
+                       "Recycle Bin. Asks the user for permission first.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "permanent": {"type": "boolean"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "empty_recycle_bin",
+        "description": "Permanently empty the Recycle Bin. Asks the user for permission first.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "run_powershell",
+        "description": "Run a PowerShell command on the PC for anything the other tools can't do (settings, "
+                       "installing, shutdown/restart, network info, ...). The user sees the exact command and "
+                       "must allow it every time. Prefer the dedicated tools; never use this to delete files.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "why": {"type": "string", "description": "One plain sentence for the user: what this does"},
+            },
+            "required": ["command", "why"],
+        },
+    },
     {
         "name": "system_info",
         "description": "Current CPU, GPU, memory, disk space, network speed and the apps using the most CPU.",
@@ -277,6 +392,8 @@ def run(name: str, args: dict) -> str:
         return ui.press_keys(args["keys"], args.get("window", ""))
     if name == "system_info":
         return _system_summary()
+    if name in FILE_TOOLS:
+        return FILE_TOOLS[name](args)
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
@@ -287,6 +404,87 @@ def run(name: str, args: dict) -> str:
             ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
         return f"Pressed {args['key']}."
     raise ValueError(f"Unknown tool {name}")
+
+
+# ---------------------------------------------------------------- files
+
+DECLINED = "The user did NOT allow this, so nothing was changed. Tell them so; don't retry it another way."
+
+
+def _delete_paths(args: dict) -> str:
+    permanent = bool(args.get("permanent"))
+    targets, listing, total = files.describe_targets(args["paths"])
+    title = (f"Permanently delete {len(targets)} item(s)?" if permanent
+             else f"Move {len(targets)} item(s) to the Recycle Bin?")
+    detail = listing + f"\n\nTotal: {files.fmt_size(total)}" + ("\nThis can't be undone." if permanent else "")
+    if not approval.ask(title, detail, "Delete" if permanent else "Move to Bin"):
+        return DECLINED
+    return files.delete(targets, permanent)
+
+
+def _clear_folder(args: dict) -> str:
+    permanent = bool(args.get("permanent"))
+    folder = files.resolve(args["path"])
+    items = files.folder_contents(args["path"])
+    if not items:
+        return f"{folder} is already empty."
+    size = files.tree_size(folder, time.time() + 10)[0]
+    title = f"{'Permanently clear' if permanent else 'Clear'} {folder.name or folder}?"
+    detail = (f"{folder}\n{len(items)} item(s), {files.fmt_size(size)}\n\n"
+              + ("They'll be deleted permanently to free the space." if permanent
+                 else "They'll go to the Recycle Bin."))
+    if not approval.ask(title, detail, "Clear"):
+        return DECLINED
+    return files.clear(items, permanent)
+
+
+def _empty_bin(args: dict) -> str:
+    summary = files.recycle_bin_summary()
+    if summary.startswith("0 item"):
+        return "The Recycle Bin is already empty."
+    if not approval.ask("Empty the Recycle Bin?", f"{summary} will be deleted permanently.\nThis can't be undone.", "Empty"):
+        return DECLINED
+    return files.empty_recycle_bin()
+
+
+def _write_file(args: dict) -> str:
+    p = files.resolve(args["path"])
+    if p.exists() and not args.get("append"):
+        if not approval.ask(f"Overwrite {p.name}?", f"{p}\nalready exists ({files.fmt_size(p.stat().st_size)}) "
+                                                    f"and will be replaced.", "Overwrite"):
+            return DECLINED
+    return files.write_file(args["path"], args["text"], bool(args.get("append")))
+
+
+def _run_powershell(args: dict) -> str:
+    command = args["command"].strip()
+    if not approval.ask("Run this command on your PC?", f"{args.get('why', '')}\n\n{command}", "Run"):
+        return DECLINED
+    try:
+        proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        return "The command was still running after 2 minutes, so I stopped waiting."
+    out = (proc.stdout + ("\n" + proc.stderr if proc.stderr.strip() else "")).strip()
+    return f"Exit code {proc.returncode}.\n{out[:4000] or '(no output)'}"
+
+
+FILE_TOOLS = {
+    "scan_folder": lambda a: files.scan_folder(a["path"]),
+    "find_files": lambda a: files.find_files(a["pattern"], a.get("root", ""), float(a.get("min_mb", 0)), float(a.get("days", 0))),
+    "read_file": lambda a: files.read_file(a["path"]),
+    "disk_usage": lambda a: files.disk_usage(a.get("path") or "C:\\"),
+    "cleanup_suggestions": lambda a: files.cleanup_suggestions(),
+    "create_folder": lambda a: files.create_folder(a["path"]),
+    "write_file": _write_file,
+    "move_path": lambda a: files.move(a["src"], a["dest"]),
+    "copy_path": lambda a: files.copy(a["src"], a["dest"]),
+    "delete_paths": _delete_paths,
+    "clear_folder": _clear_folder,
+    "empty_recycle_bin": _empty_bin,
+    "run_powershell": _run_powershell,
+}
 
 
 def _gb(n: float) -> str:
