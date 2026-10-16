@@ -80,7 +80,8 @@ def main() -> None:
         log.info("Permission %s: %s", "granted" if ok else "refused", title)
         return ok
 
-    os.environ.update(approval.serve(ask_user))   # before the brain starts its tool process
+    _bridge = {"phone": None}
+    os.environ.update(approval.serve(ask_user, lambda payload: _bridge["phone"] and _bridge["phone"].push(payload)))
     brain = make_brain()
     speak.start()
     jobs: queue.Queue = queue.Queue()
@@ -110,6 +111,7 @@ def main() -> None:
     if settings["phone_enabled"] and not args.no_phone:
         from .remote import PhoneChannel
         phone = PhoneChannel(submit)
+        _bridge["phone"] = phone   # let tools push files to the phone via the approval bridge
         threading.Thread(target=phone.run, daemon=True, name="phone").start()
 
     if settings["voice_enabled"] and not args.no_voice:

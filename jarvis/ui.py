@@ -81,8 +81,8 @@ def _activate(ctrl) -> bool:
     return False
 
 
-def _mouse_click(ctrl) -> bool:
-    """Fallback: a real left click in the middle of the control, then put the cursor back."""
+def _mouse_click(ctrl, double: bool = False) -> bool:
+    """Fallback: a real left click (or double-click) in the middle of the control, then put the cursor back."""
     try:
         r = ctrl.BoundingRectangle
         if r.width() <= 0 or r.height() <= 0:
@@ -91,16 +91,17 @@ def _mouse_click(ctrl) -> bool:
         user32 = ctypes.windll.user32
         user32.GetCursorPos(ctypes.byref(old))
         user32.SetCursorPos((r.left + r.right) // 2, (r.top + r.bottom) // 2)
-        user32.mouse_event(0x0002, 0, 0, 0, 0)  # left down
-        user32.mouse_event(0x0004, 0, 0, 0, 0)  # left up
-        time.sleep(0.05)
+        for _ in range(2 if double else 1):
+            user32.mouse_event(0x0002, 0, 0, 0, 0)  # left down
+            user32.mouse_event(0x0004, 0, 0, 0, 0)  # left up
+            time.sleep(0.05)
         user32.SetCursorPos(old.x, old.y)
         return True
     except Exception:
         return False
 
 
-def click(window: str, name: str, index: int = 0) -> str:
+def click(window: str, name: str, index: int = 0, double: bool = False) -> str:
     with auto.UIAutomationInitializerInThread():
         w = _window(window)
         win.focus(w.hwnd)
@@ -113,7 +114,10 @@ def click(window: str, name: str, index: int = 0) -> str:
                 continue
             target = matches[min(index, len(matches) - 1)]
             label = f"[{target.ControlTypeName.removesuffix('Control')}] " + " ".join(target.Name.split())[:80]
-            if _activate(target) or _mouse_click(target):
+            if double:   # e.g. double-click a Spotify track to play it
+                if _mouse_click(target, double=True):
+                    return f"Double-clicked {label}"
+            elif _activate(target) or _mouse_click(target):
                 extra = f" ({len(matches)} matches, used #{matches.index(target)})" if len(matches) > 1 else ""
                 return f"Clicked {label}{extra}"
             time.sleep(0.8)

@@ -1,9 +1,11 @@
-"""Asking the user before anything destructive (deleting, clearing, running commands).
+"""Bridge between the tools (which run in the MCP subprocess) and the Jarvis process.
 
-The Jarvis process registers a handler with serve(): it asks on the phone if the command came from there,
-otherwise with a Windows dialog. Tools usually run in a separate process (the MCP server that Claude Code starts),
-so serve() also opens a small token-protected HTTP endpoint on 127.0.0.1 that ask() calls from there.
-If there's no way to ask, the answer is no.
+Two things cross the bridge:
+- ask(): request the user's permission (shown on the phone if the command came from there, else a Windows dialog).
+- push(): hand a payload (e.g. a file to download) to the phone over the live connection.
+
+The Jarvis process calls serve() with handlers and gets env vars; the subprocess uses those env vars to reach it
+over a tiny token-protected HTTP endpoint on 127.0.0.1. If there's no way to ask, the answer is no.
 """
 import ctypes
 import json
@@ -17,29 +19,48 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 log = logging.getLogger("jarvis.approval")
 
 TIMEOUT = 120   # seconds to answer before it counts as "no"
-_handler = None
+_ask_handler = None
+_push_handler = None
+
+
+def _call(payload: dict, timeout: float):
+    url, token = os.environ.get("JARVIS_APPROVAL_URL"), os.environ.get("JARVIS_APPROVAL_TOKEN")
+    if not url or not token:
+        return None
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "X-Token": token})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.load(r)
+    except OSError:
+        return None
 
 
 def ask(title: str, detail: str, confirm: str = "Allow") -> bool:
     """True only if the user explicitly allowed it."""
-    if _handler:
-        return bool(_handler(title, detail, confirm))
-    url, token = os.environ.get("JARVIS_APPROVAL_URL"), os.environ.get("JARVIS_APPROVAL_TOKEN")
-    if not url or not token:
-        return False
-    body = json.dumps({"title": title, "detail": detail, "confirm": confirm}).encode()
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "X-Token": token})
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT + 30) as r:
-            return json.load(r).get("approved") is True
-    except OSError:
-        return False
+    if _ask_handler:
+        return bool(_ask_handler(title, detail, confirm))
+    res = _call({"action": "ask", "title": title, "detail": detail, "confirm": confirm}, TIMEOUT + 30)
+    return bool(res and res.get("approved") is True)
 
 
-def serve(handler) -> dict:
-    """Register how to ask (in the Jarvis process) and return env vars that let other processes ask too."""
-    global _handler
-    _handler = handler
+def push(payload: dict) -> bool:
+    """Send a payload to the phone (fire-and-forget). True if it was handed off."""
+    if _push_handler:
+        try:
+            _push_handler(payload)
+            return True
+        except Exception:
+            log.exception("push failed")
+            return False
+    res = _call({"action": "push", "payload": payload}, 30)
+    return bool(res and res.get("ok"))
+
+
+def serve(ask_handler, push_handler=None) -> dict:
+    """Register handlers (in the Jarvis process) and return env vars that let the subprocess reach them."""
+    global _ask_handler, _push_handler
+    _ask_handler, _push_handler = ask_handler, push_handler
     token = secrets.token_hex(16)
 
     class Handler(BaseHTTPRequestHandler):
@@ -49,17 +70,22 @@ def serve(handler) -> dict:
                 self.end_headers()
                 return
             data = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            out = {"ok": False}
             try:
-                ok = bool(handler(data.get("title", ""), data.get("detail", ""), data.get("confirm", "Allow")))
+                if data.get("action") == "push" and push_handler:
+                    push_handler(data.get("payload") or {})
+                    out = {"ok": True}
+                else:
+                    out = {"approved": bool(ask_handler(data.get("title", ""), data.get("detail", ""),
+                                                        data.get("confirm", "Allow")))}
             except Exception:
-                log.exception("Asking for permission failed")
-                ok = False
-            out = json.dumps({"approved": ok}).encode()
+                log.exception("bridge request failed")
+            blob = json.dumps(out).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(out)))
+            self.send_header("Content-Length", str(len(blob)))
             self.end_headers()
-            self.wfile.write(out)
+            self.wfile.write(blob)
 
         def log_message(self, *args):
             pass

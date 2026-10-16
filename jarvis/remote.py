@@ -5,6 +5,7 @@ Every message, both ways, is AES-256-GCM encrypted with a key only the phone and
 sees ciphertext. The tunnel's address changes when it restarts, so we announce it (encrypted) on an ntfy.sh topic;
 that's the only thing the relay carries now, a handful of messages a day instead of thousands.
 """
+import os
 import asyncio
 import base64
 import collections
@@ -174,6 +175,10 @@ class PhoneChannel:
         if jpeg:
             self._publish({"kind": "art", "id": "art", "art": art_id, "data": base64.b64encode(jpeg).decode()})
 
+    def push(self, payload: dict) -> None:
+        """Send a payload straight to the phone (used by tools via the approval bridge, e.g. file downloads)."""
+        self._publish(payload)
+
     def ask(self, title: str, detail: str, confirm: str) -> bool:
         """Show an Allow / Don't Allow prompt on the phone and wait for the answer (no answer = no)."""
         ask_id = secrets.token_hex(6)
@@ -239,6 +244,8 @@ class PhoneChannel:
         elif kind == "clip_get":
             text = pc.get_clipboard()
             self.reply(msg_id, text or "Your PC's clipboard has no text in it.", kind="clip" if text else "reply")
+        elif kind == "upload":   # a file sent from the phone -> save it on the PC
+            self._save_upload(data)
         elif data.get("text"):
             log.info("Phone: %r", data["text"])
             self.reply(msg_id, "On it...", done=False)
@@ -269,13 +276,64 @@ class PhoneChannel:
         except Exception:
             log.exception("Phone request failed")
 
+    def _save_upload(self, data: dict) -> None:
+        import base64
+        from pathlib import Path
+        name = os.path.basename(data.get("name", "file")) or "file"
+        folder = Path(os.path.expanduser("~/Downloads")) / "From Phone"
+        folder.mkdir(parents=True, exist_ok=True)
+        dest = folder / name
+        i = 1
+        while dest.exists():   # don't overwrite
+            dest = folder / f"{Path(name).stem} ({i}){Path(name).suffix}"
+            i += 1
+        try:
+            dest.write_bytes(base64.b64decode(data.get("data", "")))
+        except Exception:
+            log.exception("Couldn't save the uploaded file")
+            self.reply(data.get("id", ""), "I couldn't save that file.")
+            return
+        log.info("Saved a file from the phone: %s", dest)
+        self.reply(data.get("id", ""), f"Saved {dest.name} to Downloads\\From Phone.")
+
+    def _monitor(self) -> None:
+        """Warn the phone when the disk gets low or the GPU runs hot (once per episode, re-armed on recovery)."""
+        warned: set[str] = set()
+        while True:
+            time.sleep(60)
+            if not self.clients:
+                continue
+            try:
+                import shutil
+                free_gb = shutil.disk_usage("C:\\").free / 1024**3
+                limit = float(settings.get("warn_disk_gb", 10))
+                if free_gb < limit and "disk" not in warned:
+                    warned.add("disk")
+                    self._publish({"kind": "warn", "id": "warn-disk", "level": "warning", "icon": "disk",
+                                   "title": "Low disk space",
+                                   "text": f"Only {free_gb:.1f} GB free on C:. Windows may slow down. Ask me to clean up."})
+                elif free_gb >= limit + 2:
+                    warned.discard("disk")
+                gpus = sysinfo.gpus()
+                temp = gpus[0]["temp"] if gpus and gpus[0].get("temp") is not None else 0
+                hot = float(settings.get("warn_gpu_temp", 85))
+                if temp >= hot and "gpu" not in warned:
+                    warned.add("gpu")
+                    self._publish({"kind": "warn", "id": "warn-gpu", "level": "danger", "icon": "cpu",
+                                   "title": "GPU running hot", "text": f"Your GPU is at {temp:.0f}\u00b0C."})
+                elif temp and temp < hot - 8:
+                    warned.discard("gpu")
+            except Exception:
+                log.debug("monitor check failed", exc_info=True)
+
     async def _serve(self) -> None:
         self.loop = asyncio.get_running_loop()
-        async with serve(self._client, "127.0.0.1", self.port, max_size=2**22, ping_interval=20, ping_timeout=20,
+        async with serve(self._client, "127.0.0.1", self.port, max_size=2**26, ping_interval=20, ping_timeout=20,
                          compression=None):
             log.info("Phone server on 127.0.0.1:%d; starting tunnel...", self.port)
             self.tunnel.start()
             threading.Thread(target=self._re_announce, daemon=True, name="announce").start()
+            threading.Thread(target=self._monitor, daemon=True, name="monitor").start()
             await asyncio.Future()  # run forever
 
     def run(self) -> None:

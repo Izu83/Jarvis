@@ -4,7 +4,7 @@ import json
 import subprocess
 import time
 
-from . import apps, approval, files, modes, sysinfo, ui
+from . import apps, approval, files, modes, power, spotify, sysinfo, ui
 from . import windows as win
 from .config import settings
 
@@ -315,6 +315,53 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "power_action",
+        "description": "Sleep, restart, shut down or sign out of the PC. Asks the user's permission first "
+                       "(except 'cancel', which calls off a pending restart/shutdown).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"action": {"type": "string", "enum": ["sleep", "restart", "shutdown", "sign_out", "cancel"]}},
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "play_music",
+        "description": "Play something specific on Spotify by name: a song, artist, album, or a built-in list like "
+                       "'liked songs'. Opens Spotify if it's closed. For simple pause/skip/volume use media_key.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "e.g. 'Theo', 'bohemian rhapsody', 'liked songs'"}},
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "send_message",
+        "description": "Send a message in a chat app (Instagram, Discord, WhatsApp, ...). First open the app and the "
+                       "right conversation (open_app, ui_list, ui_click), then call this with the message text. It "
+                       "types the message, shows the user exactly what will be sent and to whom, and sends ONLY if "
+                       "they allow it. Set send_control to the name of the Send button if pressing Enter won't send.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "window": {"type": "string", "description": "The chat app window, e.g. 'opera' or '#123456'"},
+                "to": {"type": "string", "description": "Who the message is for (person/chat name), for the prompt"},
+                "message": {"type": "string"},
+                "send_control": {"type": "string", "description": "Name of the Send control; omit to press Enter"},
+            },
+            "required": ["window", "to", "message"],
+        },
+    },
+    {
+        "name": "send_file_to_phone",
+        "description": "Send a file from the PC to the user's phone, where they get a download button. For "
+                       "'send me the file X' type requests. Files up to ~40 MB.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+    },
+    {
         "name": "media_key",
         "description": "Press a media key (controls Spotify or whatever is playing) or change the system volume.",
         "input_schema": {
@@ -397,6 +444,14 @@ def run(name: str, args: dict) -> str:
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
+    if name == "power_action":
+        return _power_action(args["action"])
+    if name == "play_music":
+        return spotify.play(args["query"])
+    if name == "send_message":
+        return _send_message(args)
+    if name == "send_file_to_phone":
+        return _send_file_to_phone(args["path"])
     if name == "media_key":
         vk = MEDIA_KEYS[args["key"]]
         for _ in range(max(1, min(int(args.get("times", 1)), 50))):
@@ -406,9 +461,52 @@ def run(name: str, args: dict) -> str:
     raise ValueError(f"Unknown tool {name}")
 
 
-# ---------------------------------------------------------------- files
+# ---------------------------------------------------------------- power, music, messaging, file send
 
 DECLINED = "The user did NOT allow this, so nothing was changed. Tell them so; don't retry it another way."
+
+_POWER = {
+    "sleep": ("Put the PC to sleep?", "The PC will sleep. It wakes on a key press or the power button.", "Sleep", power.sleep),
+    "restart": ("Restart the PC?", "Windows will restart in a few seconds.", "Restart", power.restart),
+    "shutdown": ("Shut down the PC?", "Windows will shut down in a few seconds.", "Shut Down", power.shutdown),
+    "sign_out": ("Sign out?", "You'll be signed out and unsaved work may be lost.", "Sign Out", power.sign_out),
+}
+
+
+def _power_action(action: str) -> str:
+    if action == "cancel":
+        return power.cancel()
+    title, detail, confirm, fn = _POWER[action]
+    if not approval.ask(title, detail, confirm):
+        return DECLINED
+    return fn()
+
+
+def _send_message(args: dict) -> str:
+    window, to, message = args["window"], args["to"], args["message"]
+    ui.type_text(message, window)   # type into the chat box the user has open
+    time.sleep(0.2)
+    if not approval.ask(f"Send this message to {to}?", f"{message}", "Send"):
+        return DECLINED + " The message was typed but not sent; the user can delete it."
+    if args.get("send_control"):
+        ui.click(window, args["send_control"])
+    else:
+        ui.press_keys("enter", window)
+    return f"Sent to {to}."
+
+
+def _send_file_to_phone(path: str) -> str:
+    import base64
+    p = files.resolve(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"{p} isn't a file.")
+    size = p.stat().st_size
+    if size > 40 * 1024 * 1024:
+        return f"{p.name} is {files.fmt_size(size)}; that's too big to send to the phone (limit 40 MB)."
+    data = base64.b64encode(p.read_bytes()).decode()
+    if not approval.push({"kind": "file", "id": "file", "name": p.name, "size": size, "data": data}):
+        return "I couldn't send it: your phone isn't connected right now."
+    return f"Sent {p.name} ({files.fmt_size(size)}) to your phone."
 
 
 def _delete_paths(args: dict) -> str:

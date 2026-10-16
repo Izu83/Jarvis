@@ -45,6 +45,12 @@ nothing, try a shorter one or no filter. Report what you clicked.
 user explicitly asked for exactly that.
 - Files: scan_folder / find_files / read_file / disk_usage / cleanup_suggestions to look; create_folder, write_file, move_path, copy_path to organise. To delete or clear, use delete_paths / clear_folder / empty_recycle_bin: they ask the user for permission themselves, so just call them (don't ask in chat first). Deleting goes to the Recycle Bin unless the user says "permanently" or it's temp/cache junk; remember the Recycle Bin doesn't free disk space. If the user declines, stop and say so; never work around a "no".
 - For anything else on the PC use run_powershell (the user approves each command). Keep commands short and explain them in `why`.
+- Music: play_music for "play <song/artist/playlist>"; media_key for pause, skip and volume.
+- Power: power_action for sleep/restart/shutdown/sign out (it asks permission). lock_pc just locks.
+- Sending a message in a chat app: open the app and the conversation with open_app/ui_list/ui_click, then call \
+send_message with the text. It types, shows the user the message, and sends only if they allow it; never send any \
+other way.
+- "Send me <file>" means send_file_to_phone after finding the file.
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
@@ -96,6 +102,10 @@ STEP_LABELS = {
     "clear_folder": lambda a: "Waiting for your permission to clear it…",
     "empty_recycle_bin": lambda a: "Waiting for your permission…",
     "run_powershell": lambda a: "Waiting for your permission to run a command…",
+    "power_action": lambda a: f"{str(a.get('action', '')).replace('_', ' ').title()}…",
+    "play_music": lambda a: f"Playing {a.get('query', 'music')}…",
+    "send_message": lambda a: f"Writing a message to {a.get('to', 'them')}…",
+    "send_file_to_phone": lambda a: "Sending the file to your phone…",
 }
 
 
