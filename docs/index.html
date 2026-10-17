@@ -121,6 +121,25 @@
   .msg-actions button:active, .msg-actions button.on { background: var(--fill); color: var(--blue); }
   .msg-actions svg.i { width: 18px; height: 18px; stroke-width: 1.9; }
   .msg-actions + .me { margin-top: 10px; }
+  .time { font-size: 11px; color: var(--label2); margin: 1px 6px 0; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  .time.right { align-self: flex-end; } .time.left { align-self: flex-start; }
+  .msg-actions .t { font-size: 11px; color: var(--label2); margin-left: 4px; align-self: center; font-variant-numeric: tabular-nums; }
+  .filecard { align-self: flex-start; display: flex; align-items: center; gap: 12px; max-width: 80%; border-radius: 20px; padding: 12px 14px; margin-top: 8px; animation: rise .45s var(--spring) both; }
+  .filecard .fic { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, #3d9cff, #0a7cff); flex: none; }
+  .filecard .fic svg.i { width: 22px; height: 22px; }
+  .filecard .ft { flex: 1; min-width: 0; }
+  .filecard .ft b { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filecard .ft span { font-size: 13px; color: var(--label2); }
+  .filecard .dl { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); background: var(--fill); flex: none; }
+  .warn-banner { position: fixed; z-index: 7; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 58px); max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; animation: drop .5s var(--ios) both; }
+  .warn-banner .wic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
+  .warn-banner.warning .wic { background: var(--orange); } .warn-banner.danger .wic { background: var(--red); }
+  .warn-banner .wt { flex: 1; min-width: 0; }
+  .warn-banner .wt b { display: block; font-size: 15px; font-weight: 600; }
+  .warn-banner .wt span { font-size: 13px; color: var(--label2); line-height: 17px; }
+  .warn-banner .wx { color: var(--label2); padding: 6px; }
+  #clipPlus { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--label); }
+  .power-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
   .bubble code { font: 15px ui-monospace, "SF Mono", Menlo, monospace; background: var(--fill); padding: 1px 5px; border-radius: 6px; }
   .me { align-self: flex-end; color: #fff; background: linear-gradient(180deg, #3d9cff, #0a7cff); box-shadow: 0 6px 18px -6px rgba(10,124,255,.55), inset 0 1px 0 rgba(255,255,255,.35); }
   .me code { background: rgba(255,255,255,.2); }
@@ -456,6 +475,11 @@
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/></symbol>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
   <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4M6 17v2.5M18 17v2.5"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7.5 6.3a7.5 7.5 0 1 0 9 0"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 1 2.5 6"/><path d="M3.5 20v-4.5H8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19.5h14"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3.5h7l5 5V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z"/><path d="M13 3.5V9h5"/></symbol>
+  <symbol id="i-paperclip" viewBox="0 0 24 24"><path d="M19 11l-7.5 7.5a4 4 0 0 1-5.7-5.7L13 5.6a2.6 2.6 0 0 1 3.7 3.7l-7.1 7.1a1.2 1.2 0 0 1-1.7-1.7l6.4-6.4"/></symbol>
   <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 13.5h18"/><circle cx="17" cy="16.3" r=".9"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.2" r=".9"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 16v-4M11 16V8M15.5 16v-6M20 16V5"/></symbol>
@@ -529,12 +553,19 @@
     <button class="action press" data-open="system"><span class="ic" style="background:#30b0c7"><svg class="i"><use href="#i-chart"/></svg></span>System</button>
     <button class="action press" id="lockBtn"><span class="ic" style="background:#ff9f0a"><svg class="i"><use href="#i-lock"/></svg></span>Lock</button>
   </div>
+  <div class="power-row">
+    <button class="action press" data-power="sleep"><span class="ic" style="background:#5856d6"><svg class="i"><use href="#i-moon"/></svg></span>Sleep</button>
+    <button class="action press" data-power="restart"><span class="ic" style="background:#30b0c7"><svg class="i"><use href="#i-restart"/></svg></span>Restart</button>
+    <button class="action press" data-power="shutdown"><span class="ic" style="background:#ff3b30"><svg class="i"><use href="#i-power"/></svg></span>Shut Down</button>
+    <button class="action press" id="sendFileBtn"><span class="ic" style="background:#34c759"><svg class="i"><use href="#i-clip-up"/></svg></span>Send File</button>
+  </div>
 </section>
 </div>
 
 <footer class="dock" id="dock" hidden>
   <div class="shelf" id="shelf"></div>
   <div class="bar">
+    <button class="glass press" id="clipPlus" aria-label="Send a file"><svg class="i"><use href="#i-paperclip"/></svg></button>
     <button class="glass press" id="mic" aria-label="Dictate"><svg class="i"><use href="#i-mic"/></svg></button>
     <div class="field glass">
       <textarea id="text" rows="1" placeholder="Ask Jarvis" enterkeyhint="send"></textarea>
@@ -661,7 +692,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-16.7";   // bump together with version.json
+const VERSION = "2026-10-17.1";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -757,16 +788,18 @@ function bubble(text, who, ts = Date.now(), error = false) {
   if (text === null) el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
   else el.innerHTML = rich(text);
   $("log").append(el);
-  if (who === "jarvis" && text) addActions(el);
+  if (who === "jarvis" && text) addActions(el, ts);
+  else if (who === "me") { const t = document.createElement("div"); t.className = "time right"; t.textContent = timeLabel(ts); $("log").append(t); }
   return el;
 }
 // Copy / Read aloud under each of Jarvis's replies
-function addActions(el) {
+function addActions(el, ts = Date.now()) {
   if (el.nextElementSibling?.classList.contains("msg-actions")) return;
   const row = document.createElement("div");
   row.className = "msg-actions";
-  row.innerHTML = `<button aria-label="Copy">${icon("copy")}</button><button aria-label="Read aloud">${icon("speaker")}</button>`;
-  const [copyBtn, speakBtn] = row.children;
+  row.innerHTML = `<button aria-label="Copy">${icon("copy")}</button><button aria-label="Read aloud">${icon("speaker")}</button><span class="t"></span>`;
+  const copyBtn = row.children[0], speakBtn = row.children[1];
+  row.querySelector(".t").textContent = timeLabel(ts);
   copyBtn.onclick = () => copyText(el.innerText, copyBtn);
   speakBtn.onclick = () => readAloud(el.innerText, speakBtn);
   el.after(row);
@@ -1182,6 +1215,8 @@ async function onMessage(text) {
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
+    if (data.kind === "file" && data.data) { addFileCard(data); return; }
+    if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "ask") { showAsk(data); return; }
     if (data.kind === "ask_done") { if ($("ask-" + data.id)) { $("ask-" + data.id).remove(); toast("Permission request expired", "x", "var(--label2)"); } return; }
     const p = pending.get(data.id);
@@ -1204,7 +1239,7 @@ async function onMessage(text) {
     const chat = chatById(p.chatId);
     if (!chat) return;
     addMessage(chat, { who: "jarvis", text: data.text });
-    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addActions(p.el); scrollDown(); }
+    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addActions(p.el, Date.now()); scrollDown(); }
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
     if (!$("drawer").hidden) renderSidebar();
@@ -1212,9 +1247,18 @@ async function onMessage(text) {
 function sync() { post({ type: "sync", id: newId() }).catch(() => {}); }
 
 // ================= live PC status =================
+function lastSeenText() {
+  const t = Number(load("jarvis.lastSeen")) || 0;
+  if (!t) return "";
+  const mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1) return ""; if (mins < 60) return `last seen ${mins}m ago`;
+  const d = new Date(t), today = new Date().toDateString() === d.toDateString();
+  return "last seen " + (today ? "" : d.toLocaleDateString([], { day: "numeric", month: "short" }) + " ") + timeLabel(t);
+}
 function renderStatus(relayOk = true) {
   const pcOnline = Date.now() - pcSeen < 45000;
-  const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : "Finding your PC…", "warn"] : pcOnline ? ["PC online", "ok"] : pcSeen ? ["PC offline", "bad"] : ["Connecting…", "warn"];
+  const seen = lastSeenText();
+  const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : (seen ? "PC offline · " + seen : "Finding your PC…"), "warn"] : pcOnline ? ["PC online", "ok"] : [seen ? "PC offline · " + seen : "PC offline", "bad"];
   $("status").textContent = text;
   for (const id of ["dot", "pcDot", "meDot", "profDot"]) $(id).className = "dot " + cls;
   $("pcState").textContent = pcOnline && pc ? "Up " + uptime(pc.uptime) : text;
@@ -1231,7 +1275,7 @@ function ring(el, pct) {
 function onState(data) {
   setModes(data.modes || []);
   if (!data.pc) return;
-  pc = data.pc; pcSeen = Date.now(); host = pc.host || host;
+  pc = data.pc; pcSeen = Date.now(); host = pc.host || host; store("jarvis.lastSeen", String(pcSeen));
   ring($("cpuRing"), pc.cpu); $("cpuVal").textContent = pc.cpu + "%";
   ring($("ramRing"), pc.ram); $("ramVal").textContent = pc.ram + "%";
   $("topApp").innerHTML = pc.top ? `Busiest app: <b>${esc(pc.top.name)}</b> · ${Math.round(pc.top.cpu)}% CPU` : "";
@@ -1625,6 +1669,63 @@ function showAsk(data) {
   document.body.append(wrap);
   if (document.visibilityState !== "visible") { try { navigator.setAppBadge?.(1); } catch {} }
 }
+
+// ================= files, warnings, upload, power =================
+function addFileCard(data) {
+  clearHome(); stamp(Date.now());
+  const bytes = b64bytes(data.data);
+  const url = URL.createObjectURL(new Blob([bytes]));
+  const card = document.createElement("div");
+  card.className = "filecard surface";
+  card.innerHTML = `<div class="fic">${icon("doc")}</div><div class="ft"><b></b><span></span></div><a class="dl press" download>${icon("download")}</a>`;
+  card.querySelector("b").textContent = data.name;
+  card.querySelector(".ft span").textContent = fmtBytes(data.size || bytes.length);
+  const a = card.querySelector("a"); a.href = url; a.download = data.name;
+  $("log").append(card);
+  const t = document.createElement("div"); t.className = "time left"; t.textContent = timeLabel(Date.now()); $("log").append(t);
+  scrollDown();
+  if (document.visibilityState !== "visible") toast("File from your PC: " + data.name, "doc", "var(--blue)");
+}
+
+function showWarning(data) {
+  $("warn-" + data.id)?.remove();
+  const b = document.createElement("div");
+  b.className = "warn-banner glass strong " + (data.level || "warning"); b.id = "warn-" + data.id;
+  b.innerHTML = `<div class="wic">${icon(data.icon || "sparkles")}</div><div class="wt"><b></b><span></span></div><button class="wx" aria-label="Dismiss">${icon("x")}</button>`;
+  b.querySelector("b").textContent = data.title || "Heads up";
+  b.querySelector(".wt span").textContent = data.text || "";
+  b.querySelector(".wx").onclick = () => b.remove();
+  document.body.append(b);
+  if (document.visibilityState !== "visible") { try { navigator.setAppBadge?.(1); } catch {} toast(data.title || "Heads up", data.icon || "sparkles", "var(--orange)"); }
+  setTimeout(() => b.remove(), 30000);
+}
+
+// Pick a file on the phone and send it to the PC (saved to Downloads\From Phone)
+function pickAndUpload() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 40 * 1024 * 1024) { toast("That file is over 40 MB", "x", "var(--orange)"); return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { toast("Can't reach your PC right now", "x", "var(--red)"); return; }
+    toast("Sending " + file.name + "…", "clip-up", "var(--blue)");
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    const id = newId();
+    track(id, { kind: "quick", timeout: 20000 });
+    try { await post({ type: "upload", id, name: file.name, data: btoa(bin) }); } catch { fail(id, "Couldn't send the file."); }
+  };
+  input.click();
+}
+$("clipPlus").onclick = pickAndUpload;
+$("sendFileBtn")?.addEventListener("click", () => { closeSheets(); pickAndUpload(); });
+document.querySelectorAll("[data-power]").forEach(btn => btn.onclick = () => {
+  const action = btn.dataset.power, label = { sleep: "sleep", restart: "restart", shutdown: "shut down" }[action];
+  if (!confirm(`Ask your PC to ${label}?`)) return;
+  closeSheets();
+  send(`${action === "shutdown" ? "Shut down" : action.charAt(0).toUpperCase() + action.slice(1)} the PC`);
+});
 
 // ================= re-pairing inside the app =================
 // A Home Screen app has its own storage, separate from Safari, so opening a new pairing link in Safari doesn't

@@ -48,12 +48,20 @@ def main() -> None:
     parser.add_argument("--no-voice", action="store_true", help="don't use the microphone")
     parser.add_argument("--no-phone", action="store_true", help="don't listen for phone commands")
     parser.add_argument("--pair", action="store_true", help="show the link/QR code that connects your phone")
+    parser.add_argument("--startup", action="store_true", help="start Jarvis hidden at login from now on")
+    parser.add_argument("--startup-off", action="store_true", help="stop starting Jarvis at login")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(ROOT / "jarvis.log", encoding="utf-8")],
-    )
+    if args.startup or args.startup_off:
+        from . import autostart
+        print(autostart.install() if args.startup else autostart.uninstall())
+        return
+
+    handlers = [logging.FileHandler(ROOT / "jarvis.log", encoding="utf-8")]
+    if sys.stdout is not None:   # pythonw (hidden autostart) has no console
+        handlers.insert(0, logging.StreamHandler(sys.stdout))
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S",
+                        handlers=handlers)
     for noisy in ("httpx", "httpx2", "anthropic", "faster_whisper", "comtypes", "websockets", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
