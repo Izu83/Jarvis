@@ -22,7 +22,7 @@ from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
 from . import approval, media, modes, pc, screens, sysinfo, tools
-from .config import secret, set_secret, settings
+from .config import secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
 log = logging.getLogger("jarvis.remote")
@@ -153,7 +153,8 @@ class PhoneChannel:
         except Exception:
             log.exception("Couldn't read PC status")
             status = None
-        self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status})
+        self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status,
+                       "use_claude": settings["use_claude"]})
 
     def _later(self, seconds: float, fn, *args) -> None:
         threading.Timer(seconds, fn, args).start()
@@ -241,6 +242,11 @@ class PhoneChannel:
         elif kind == "clip_set":
             pc.set_clipboard(data.get("text", ""))
             self.reply(msg_id, "Copied to your PC's clipboard.")
+        elif kind == "set":   # a settings toggle from the phone
+            if data.get("key") == "use_claude":
+                set_setting("use_claude", bool(data.get("value")))
+                log.info("Claude turned %s from the phone.", "on" if data.get("value") else "off")
+            self.send_state()
         elif kind == "clip_get":
             text = pc.get_clipboard()
             self.reply(msg_id, text or "Your PC's clipboard has no text in it.", kind="clip" if text else "reply")

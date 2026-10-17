@@ -13,6 +13,9 @@ DEFAULTS = {
     # Brain: "claude-code" uses your Claude Pro/Max subscription through the Claude Code CLI;
     # "api" uses a paid API key (ANTHROPIC_API_KEY) and is a bit faster.
     "brain": "claude-code",
+    # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
+    # anything it doesn't understand, it says so instead of asking Claude.
+    "use_claude": True,
     "claude_code_model": "sonnet",  # "sonnet", "haiku" (fastest) or "opus"; empty = your Claude Code default
     "claude_code_effort": "low",  # low = fastest replies; "medium" if it makes mistakes
     # Only for "brain": "api"
@@ -56,6 +59,12 @@ def _load_json() -> dict:
 
 load_dotenv(ENV_PATH)
 settings = _load_json()
+
+
+def set_setting(key: str, value) -> None:
+    """Change a preference and save it to config.json so it sticks across restarts."""
+    settings[key] = value
+    CONFIG_PATH.write_text(json.dumps(settings, indent=2), encoding="utf-8")
 
 
 def secret(name: str) -> str:

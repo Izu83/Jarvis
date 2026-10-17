@@ -108,10 +108,13 @@ def main() -> None:
                     answer = modes.run(mode)
                 else:
                     answer = nlu.try_handle(text, progress=progress)  # common commands, no Claude, no tokens
-                    if answer is None:                                 # not understood locally -> Claude
-                        answer = brain.handle(text, chat=chat, recent=recent, progress=progress)
-                    else:
+                    if answer is not None:
                         log.info("(handled locally, no tokens used)")
+                    elif settings["use_claude"]:                       # not understood locally -> Claude
+                        answer = brain.handle(text, chat=chat, recent=recent, progress=progress)
+                    else:                                              # Claude is switched off: stay free
+                        answer = ("I didn't catch that one, and Claude is switched off to save tokens. "
+                                  "Try a simpler command, or turn Claude back on in Settings.")
             except Exception as e:
                 log.exception("Command failed")
                 answer = f"Something went wrong: {e}"
