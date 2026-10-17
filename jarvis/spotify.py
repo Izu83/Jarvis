@@ -35,7 +35,7 @@ def play(query: str) -> str:
     if not q:
         _press_play()
         return "Resumed playback."
-    view = VIEWS.get(q.lower())
+    view = VIEWS.get(q.lower()) or VIEWS.get(q.lower().removeprefix("my ").strip())
     _ensure_open()
     if view:
         os.startfile(view)

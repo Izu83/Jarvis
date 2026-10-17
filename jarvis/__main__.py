@@ -18,7 +18,7 @@ from .windows import enable_dpi_awareness  # noqa: E402
 
 enable_dpi_awareness()  # before anything touches windows
 
-from . import modes, speak  # noqa: E402
+from . import modes, nlu, speak  # noqa: E402
 from .config import ROOT, secret, settings  # noqa: E402
 
 log = logging.getLogger("jarvis")
@@ -104,7 +104,14 @@ def main() -> None:
             log.info("Command: %s", text)
             mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
             try:
-                answer = modes.run(mode) if mode else brain.handle(text, chat=chat, recent=recent, progress=progress)
+                if mode:
+                    answer = modes.run(mode)
+                else:
+                    answer = nlu.try_handle(text, progress=progress)  # common commands, no Claude, no tokens
+                    if answer is None:                                 # not understood locally -> Claude
+                        answer = brain.handle(text, chat=chat, recent=recent, progress=progress)
+                    else:
+                        log.info("(handled locally, no tokens used)")
             except Exception as e:
                 log.exception("Command failed")
                 answer = f"Something went wrong: {e}"
