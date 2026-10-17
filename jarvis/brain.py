@@ -51,6 +51,7 @@ user explicitly asked for exactly that.
 send_message with the text. It types, shows the user the message, and sends only if they allow it; never send any \
 other way.
 - "Send me <file>" means send_file_to_phone after finding the file.
+- "start/stop gesture control" (or "gestures"/"hand control") means gesture_control.
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
@@ -104,6 +105,7 @@ STEP_LABELS = {
     "run_powershell": lambda a: "Waiting for your permission to run a command…",
     "power_action": lambda a: f"{str(a.get('action', '')).replace('_', ' ').title()}…",
     "play_music": lambda a: f"Playing {a.get('query', 'music')}…",
+    "gesture_control": lambda a: f"{'Starting' if a.get('action') != 'stop' else 'Stopping'} gesture control…",
     "send_message": lambda a: f"Writing a message to {a.get('to', 'them')}…",
     "send_file_to_phone": lambda a: "Sending the file to your phone…",
 }

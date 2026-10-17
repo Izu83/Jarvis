@@ -246,6 +246,10 @@ class PhoneChannel:
             self.reply(msg_id, text or "Your PC's clipboard has no text in it.", kind="clip" if text else "reply")
         elif kind == "upload":   # a file sent from the phone -> save it on the PC
             self._save_upload(data)
+        elif kind == "gesture":   # the Gesture button: start/stop the webcam hand controller, no Claude
+            from . import gesture
+            action = data.get("action", "toggle")
+            self.reply(msg_id, {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[action]())
         elif data.get("text"):
             log.info("Phone: %r", data["text"])
             self.reply(msg_id, "On it...", done=False)

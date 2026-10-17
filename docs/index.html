@@ -247,6 +247,8 @@
   #send svg.i { width: 18px; height: 18px; stroke-width: 2.6; }
   #mic { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; }
   #mic.on { color: #fff; background: var(--red); animation: halo 1.5s ease-out infinite; }
+  #gestureBtn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--label); }
+  #gestureBtn.on { color: #fff; background: var(--purple); }
   @keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(255,59,48,.5); } 100% { box-shadow: 0 0 0 16px rgba(255,59,48,0); } }
 
   /* ---------- sidebar ---------- */
@@ -475,6 +477,7 @@
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/></symbol>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
   <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4M6 17v2.5M18 17v2.5"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5.4a1.4 1.4 0 0 1 2.8 0V11m0-.6V4.4a1.4 1.4 0 0 1 2.8 0V11m0-.4V5.4a1.4 1.4 0 0 1 2.8 0V13c0 3.6-2.2 6.5-5.8 6.5-2.2 0-3.4-1-4.6-2.8l-2.3-3.4a1.5 1.5 0 0 1 2.4-1.8l1 1.3V7.4a1.4 1.4 0 0 1 2.8 0V11"/></symbol>
   <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7.5 6.3a7.5 7.5 0 1 0 9 0"/></symbol>
   <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 1 2.5 6"/><path d="M3.5 20v-4.5H8"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19.5h14"/></symbol>
@@ -567,6 +570,7 @@
   <div class="bar">
     <button class="glass press" id="clipPlus" aria-label="Send a file"><svg class="i"><use href="#i-paperclip"/></svg></button>
     <button class="glass press" id="mic" aria-label="Dictate"><svg class="i"><use href="#i-mic"/></svg></button>
+    <button class="glass press" id="gestureBtn" aria-label="Gesture control"><svg class="i"><use href="#i-hand"/></svg></button>
     <div class="field glass">
       <textarea id="text" rows="1" placeholder="Ask Jarvis" enterkeyhint="send"></textarea>
       <button id="send" aria-label="Send" disabled><svg class="i"><use href="#i-up"/></svg></button>
@@ -692,7 +696,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-17.1";   // bump together with version.json
+const VERSION = "2026-10-17.2";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1232,7 +1236,8 @@ async function onMessage(text) {
     pending.delete(data.id);
     if (p.tile) tileState(p.tile, "done");
     if (p.kind === "quick") {
-      if (data.kind === "clip") { $("clipText").textContent = data.text; openSheet("clipSheet"); }
+      if (p.onReply) p.onReply(data.text);
+      else if (data.kind === "clip") { $("clipText").textContent = data.text; openSheet("clipSheet"); }
       else toast(data.text);
       return;
     }
@@ -1719,6 +1724,16 @@ function pickAndUpload() {
   input.click();
 }
 $("clipPlus").onclick = pickAndUpload;
+let gestureOn = false;
+$("gestureBtn").onclick = () => {
+  const id = newId();
+  track(id, { kind: "quick", timeout: 25000, onReply: text => {
+    gestureOn = /\bis on\b|already running/i.test(text);
+    $("gestureBtn").classList.toggle("on", gestureOn);
+    toast(text.length > 42 ? text.slice(0, 40) + "\u2026" : text, gestureOn ? "hand" : "check", gestureOn ? "var(--purple)" : "#8e8e93");
+  } });
+  post({ type: "gesture", action: "toggle", id }).catch(() => fail(id, "Can't reach your PC right now."));
+};
 $("sendFileBtn")?.addEventListener("click", () => { closeSheets(); pickAndUpload(); });
 document.querySelectorAll("[data-power]").forEach(btn => btn.onclick = () => {
   const action = btn.dataset.power, label = { sleep: "sleep", restart: "restart", shutdown: "shut down" }[action];

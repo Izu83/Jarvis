@@ -39,6 +39,9 @@ DEFAULTS = {
     "phone_enabled": True,
     "ntfy_server": "https://ntfy.sh",  # only used to tell the phone the tunnel address
     "phone_port": 8787,  # local port the tunnel forwards to
+    # Gesture-App (webcam hand control); gesture_python auto-detects if empty
+    "gesture_app": "D:\\Projects\\Gesture-App",
+    "gesture_python": "",
     "phone_page_url": "",  # e.g. https://<you>.github.io/jarvis/
 }
 

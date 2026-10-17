@@ -4,7 +4,7 @@ import json
 import subprocess
 import time
 
-from . import apps, approval, files, modes, power, spotify, sysinfo, ui
+from . import apps, approval, files, gesture, modes, power, spotify, sysinfo, ui
 from . import windows as win
 from .config import settings
 
@@ -315,6 +315,16 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "gesture_control",
+        "description": "Turn the webcam hand-gesture controller (Gesture-App) on or off on the PC. 'start' opens a "
+                       "camera window; 'stop' closes it. Use for 'start/stop gesture control'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"action": {"type": "string", "enum": ["start", "stop", "toggle"]}},
+            "required": ["action"],
+        },
+    },
+    {
         "name": "power_action",
         "description": "Sleep, restart, shut down or sign out of the PC. Asks the user's permission first "
                        "(except 'cancel', which calls off a pending restart/shutdown).",
@@ -444,6 +454,8 @@ def run(name: str, args: dict) -> str:
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
+    if name == "gesture_control":
+        return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[args["action"]]()
     if name == "power_action":
         return _power_action(args["action"])
     if name == "play_music":
