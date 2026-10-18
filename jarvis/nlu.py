@@ -248,6 +248,27 @@ def _join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+# ---------------------------------------------------------------- make a folder / project
+
+@simple(r"^(make|create|new|add)\s+(a\s+)?(new\s+)?(folder|project|directory|dir)\s+(?:called|named)\s+"
+        r"[\"'\u201c]?([\w .\-]+?)[\"'\u201d]?(?:\s+(?:in|inside|under|into)\s+(?:the\s+)?(.+?)(?:\s+folder)?)?$")
+def _make_folder(m, text):
+    from . import files
+    if re.search(r"\b(and|then|also)\b|,", text, re.I):   # compound command -> let Claude do all the steps
+        return None
+    name = m.group(5).strip()
+    parent_raw = (m.group(6) or "").strip().lower()
+    projects = settings["known_folders"].get("projects", r"D:\Projects")
+    if not parent_raw or parent_raw in ("project", "projects", "project folder", "projects folder", "the project"):
+        parent = projects
+    else:
+        try:
+            parent = str(files.resolve(parent_raw))
+        except Exception:
+            parent = projects
+    return tools.run("create_folder", {"path": f"{parent}\\{name}"})
+
+
 # ---------------------------------------------------------------- window actions
 
 @simple(r"^(close|minimi[sz]e|maximi[sz]e)\s+(.+)$")
@@ -272,7 +293,7 @@ def try_handle(text: str, progress=None) -> str | None:
     low = cmd.lower()
     try:
         for pattern, fn in SIMPLE:
-            m = pattern.search(low)
+            m = pattern.search(cmd)   # match on original case so captured names keep their capitals
             if m:
                 return fn(m, cmd)
         if low.startswith("play "):

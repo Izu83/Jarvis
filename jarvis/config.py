@@ -17,7 +17,7 @@ DEFAULTS = {
     # anything it doesn't understand, it says so instead of asking Claude.
     "use_claude": True,
     "claude_code_model": "sonnet",  # "sonnet", "haiku" (fastest) or "opus"; empty = your Claude Code default
-    "claude_code_effort": "low",  # low = fastest replies; "medium" if it makes mistakes
+    "claude_code_effort": "medium",  # medium = smarter multi-step; "low" = fastest, "high" = smartest (more tokens)
     # Only for "brain": "api"
     "model": "claude-opus-5-5",
     "effort": "low",  # low keeps voice commands snappy; raise to "medium" if it gets things wrong

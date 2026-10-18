@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import approval, media, modes, pc, screens, sysinfo, tools
+from . import approval, media, modes, pc, push, screens, sysinfo, tools
 from .config import secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -154,7 +154,8 @@ class PhoneChannel:
             log.exception("Couldn't read PC status")
             status = None
         self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status,
-                       "use_claude": settings["use_claude"]})
+                       "use_claude": settings["use_claude"],
+                       "vapid": push.public_key(), "notify": push.have_subs()})
 
     def _later(self, seconds: float, fn, *args) -> None:
         threading.Timer(seconds, fn, args).start()
@@ -242,6 +243,14 @@ class PhoneChannel:
         elif kind == "clip_set":
             pc.set_clipboard(data.get("text", ""))
             self.reply(msg_id, "Copied to your PC's clipboard.")
+        elif kind == "push_sub":   # the phone registered for notifications
+            push.add_sub(data.get("sub") or {})
+            self.reply(msg_id, "Notifications are on. You'll hear from me even when the app is closed.")
+        elif kind == "push_off":
+            push.remove_sub(data.get("endpoint", ""))
+            self.send_state()
+        elif kind == "push_test":
+            push.send_async("Jarvis", "Notifications are working \U0001f44d", "test")
         elif kind == "set":   # a settings toggle from the phone
             if data.get("key") == "use_claude":
                 set_setting("use_claude", bool(data.get("value")))
@@ -259,9 +268,15 @@ class PhoneChannel:
         elif data.get("text"):
             log.info("Phone: %r", data["text"])
             self.reply(msg_id, "On it...", done=False)
-            self.on_command(data["text"], lambda text, i=msg_id: self.reply(i, text),
+            self.on_command(data["text"], lambda text, i=msg_id: self._reply_or_push(i, text),
                             chat=data.get("chat"), recent=data.get("recent"),
                             progress=lambda text, i=msg_id: self.reply(i, text, done=False), via="phone")
+
+    def _reply_or_push(self, msg_id: str, text: str) -> None:
+        """Final reply to a phone command: if the app has since closed, send it as a notification instead."""
+        self.reply(msg_id, text)
+        if not self.clients and push.have_subs():
+            push.send_async("Jarvis", text[:160], "reply", "./")
 
     async def _client(self, ws) -> None:
         self.clients.add(ws)
@@ -311,7 +326,7 @@ class PhoneChannel:
         warned: set[str] = set()
         while True:
             time.sleep(60)
-            if not self.clients:
+            if not self.clients and not push.have_subs():
                 continue
             try:
                 import shutil
@@ -319,9 +334,8 @@ class PhoneChannel:
                 limit = float(settings.get("warn_disk_gb", 10))
                 if free_gb < limit and "disk" not in warned:
                     warned.add("disk")
-                    self._publish({"kind": "warn", "id": "warn-disk", "level": "warning", "icon": "disk",
-                                   "title": "Low disk space",
-                                   "text": f"Only {free_gb:.1f} GB free on C:. Windows may slow down. Ask me to clean up."})
+                    self._alert("warn-disk", "warning", "disk", "Low disk space",
+                                f"Only {free_gb:.1f} GB free on C:. Windows may slow down. Ask me to clean up.")
                 elif free_gb >= limit + 2:
                     warned.discard("disk")
                 gpus = sysinfo.gpus()
@@ -329,12 +343,18 @@ class PhoneChannel:
                 hot = float(settings.get("warn_gpu_temp", 85))
                 if temp >= hot and "gpu" not in warned:
                     warned.add("gpu")
-                    self._publish({"kind": "warn", "id": "warn-gpu", "level": "danger", "icon": "cpu",
-                                   "title": "GPU running hot", "text": f"Your GPU is at {temp:.0f}\u00b0C."})
+                    self._alert("warn-gpu", "danger", "cpu", "GPU running hot", f"Your GPU is at {temp:.0f}\u00b0C.")
                 elif temp and temp < hot - 8:
                     warned.discard("gpu")
             except Exception:
                 log.debug("monitor check failed", exc_info=True)
+
+    def _alert(self, tag: str, level: str, icon: str, title: str, text: str) -> None:
+        """Show a banner if the app is open, otherwise send it as a phone notification."""
+        if self.clients:
+            self._publish({"kind": "warn", "id": tag, "level": level, "icon": icon, "title": title, "text": text})
+        elif push.have_subs():
+            push.send_async(title, text, tag, "./")
 
     async def _serve(self) -> None:
         self.loop = asyncio.get_running_loop()

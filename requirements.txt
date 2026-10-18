@@ -20,3 +20,5 @@ winrt-Windows.Media.Control
 winrt-Windows.Storage.Streams
 websockets
 send2trash
+pywebpush
+py-vapid

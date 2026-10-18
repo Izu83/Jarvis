@@ -477,6 +477,7 @@
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/></symbol>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
   <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4M6 17v2.5M18 17v2.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
   <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5.4a1.4 1.4 0 0 1 2.8 0V11m0-.6V4.4a1.4 1.4 0 0 1 2.8 0V11m0-.4V5.4a1.4 1.4 0 0 1 2.8 0V13c0 3.6-2.2 6.5-5.8 6.5-2.2 0-3.4-1-4.6-2.8l-2.3-3.4a1.5 1.5 0 0 1 2.4-1.8l1 1.3V7.4a1.4 1.4 0 0 1 2.8 0V11"/></symbol>
   <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7.5 6.3a7.5 7.5 0 1 0 9 0"/></symbol>
   <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 1 2.5 6"/><path d="M3.5 20v-4.5H8"/></symbol>
@@ -621,6 +622,11 @@
         <label class="row"><span class="grow">Read replies aloud</span><span class="switch"><input type="checkbox" id="speakToggle"><span></span></span></label>
         <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle"><span></span></span></label>
       </div>
+      <div class="group-title">Notifications</div>
+      <div class="group">
+        <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed (add to Home Screen first)</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
+        <button class="row btn" id="notifyTest">Send a Test Notification</button>
+      </div>
       <div class="group-title">Connection</div>
       <div class="group">
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
@@ -700,7 +706,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-17.3";   // bump together with version.json
+const VERSION = "2026-10-19.1";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -919,7 +925,7 @@ function renderChat() {
   $("chatTitle").textContent = chat.title || "New chat";
   if (!chat.messages.length && ![...pending.values()].some(p => p.chatId === chat.id)) renderHome();
   for (const m of chat.messages) {
-    if (m.who === "shots") { const p = pending.get(m.id); const card = shotsCard(m.id, m.ts); if (p) p.card = card; }
+    if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts); if (p) p.card = card; }
     else bubble(m.text, m.who, m.ts, m.error);
   }
   for (const p of pending.values()) {
@@ -1284,6 +1290,8 @@ function ring(el, pct) {
 function onState(data) {
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
+  if (data.vapid) vapidKey = data.vapid;
+  if (typeof data.notify === "boolean") refreshNotifyToggle(data.notify);
   if (!data.pc) return;
   pc = data.pc; pcSeen = Date.now(); host = pc.host || host; store("jarvis.lastSeen", String(pcSeen));
   ring($("cpuRing"), pc.cpu); $("cpuVal").textContent = pc.cpu + "%";
@@ -1625,6 +1633,51 @@ for (const [id, k, def] of [["speakToggle", "jarvis.speak", "0"], ["autoSendTogg
   $(id).checked = (load(k) ?? def) === "1";
   $(id).onchange = e => store(k, e.target.checked ? "1" : "0");
 }
+// ================= push notifications =================
+let vapidKey = null, swReg = null;
+const urlB64 = b64 => { const pad = "=".repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(raw, c => c.charCodeAt(0)); };
+async function ensureSW() {
+  if (swReg || !("serviceWorker" in navigator)) return swReg;
+  try { swReg = await navigator.serviceWorker.register("sw.js"); } catch { swReg = null; }
+  return swReg;
+}
+async function refreshNotifyToggle(pcHasSub) {
+  const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  $("notifyToggle").disabled = !supported;
+  let on = false;
+  if (supported) { await ensureSW(); const sub = await swReg?.pushManager.getSubscription().catch(() => null); on = !!sub && Notification.permission === "granted"; }
+  if (document.activeElement !== $("notifyToggle")) $("notifyToggle").checked = on;
+}
+async function enableNotify() {
+  if (!("Notification" in window)) { toast("Notifications aren't supported here", "x", "var(--orange)"); return false; }
+  if (!window.matchMedia("(display-mode: standalone)").matches && /iphone|ipad/i.test(navigator.userAgent)) {
+    toast("Add Jarvis to your Home Screen first", "x", "var(--orange)"); return false;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { toast("Notifications not allowed", "x", "var(--orange)"); return false; }
+  await ensureSW();
+  if (!swReg || !vapidKey) { toast("Can't set up notifications right now", "x", "var(--red)"); return false; }
+  let sub = await swReg.pushManager.getSubscription();
+  if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(vapidKey) });
+  await post({ type: "push_sub", sub: sub.toJSON(), id: newId() });
+  toast("Notifications on", "check", "var(--green)");
+  return true;
+}
+async function disableNotify() {
+  await ensureSW();
+  const sub = await swReg?.pushManager.getSubscription().catch(() => null);
+  if (sub) { const ep = sub.endpoint; await sub.unsubscribe().catch(() => {}); post({ type: "push_off", endpoint: ep, id: newId() }).catch(() => {}); }
+  toast("Notifications off", "check", "#8e8e93");
+}
+$("notifyToggle").onchange = async e => {
+  const ok = e.target.checked ? await enableNotify() : (await disableNotify(), false);
+  e.target.checked = e.target.checked && ok;
+};
+$("notifyTest").onclick = async () => {
+  if (Notification?.permission !== "granted") { if (!await enableNotify()) return; $("notifyToggle").checked = true; }
+  await post({ type: "push_test", id: newId() }).catch(() => toast("Can't reach your PC", "x", "var(--red)"));
+  toast("Test sent", "bell", "var(--blue)");
+};
 $("claudeToggle").onchange = e => { post({ type: "set", key: "use_claude", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Claude on" : "Claude off \u2014 free commands only", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("deleteAllBtn").onclick = () => { if (!confirm("Delete all chats and groups?")) return; db = { chats: [], groups: [], current: null }; saveDb(); closeSheets(); renderChat(); updateBadges(); };
 $("unpair").onclick = () => {
@@ -1802,6 +1855,7 @@ async function start() {
   connect();
 }
 checkForUpdate();
+ensureSW();
 window.addEventListener("hashchange", start);
 start();
 </script>
