@@ -54,27 +54,11 @@ def _procs(name: str) -> list[psutil.Process]:
 def _check(w: dict) -> bool:
     kind = w["kind"]
     if kind == "download":
-        folder = _downloads()
-        partials = _partials(folder)
-        if partials:
+        # Fire only when a download that was in progress (a .crdownload/.part/… file) has finished.
+        if _partials(_downloads()):
             w["saw_partial"] = True
             return False
-        if w.get("saw_partial"):
-            return True   # a partial download existed and is now gone
-        # nothing was mid-download at the start: watch the newest file settle
-        try:
-            files = [p for p in folder.iterdir() if p.is_file()]
-        except OSError:
-            return False
-        if not files:
-            return False
-        newest = max(files, key=lambda p: p.stat().st_mtime)
-        size = newest.stat().st_size
-        if w.get("last_file") == str(newest) and w.get("last_size") == size and time.time() - w.get("since", 0) > 16:
-            return True
-        if w.get("last_file") != str(newest) or w.get("last_size") != size:
-            w["last_file"], w["last_size"], w["since"] = str(newest), size, time.time()
-        return False
+        return bool(w.get("saw_partial"))
     if kind == "process_exits":
         running = bool(_procs(w["name"]))
         if running:
