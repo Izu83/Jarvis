@@ -133,7 +133,7 @@
   .filecard .dl { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); background: var(--fill); flex: none; }
   .warn-banner { position: fixed; z-index: 7; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 58px); max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; animation: drop .5s var(--ios) both; }
   .warn-banner .wic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
-  .warn-banner.warning .wic { background: var(--orange); } .warn-banner.danger .wic { background: var(--red); }
+  .warn-banner.warning .wic { background: var(--orange); } .warn-banner.danger .wic { background: var(--red); } .warn-banner.success .wic { background: var(--green); }
   .warn-banner .wt { flex: 1; min-width: 0; }
   .warn-banner .wt b { display: block; font-size: 15px; font-weight: 600; }
   .warn-banner .wt span { font-size: 13px; color: var(--label2); line-height: 17px; }
@@ -706,7 +706,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.1";   // bump together with version.json
+const VERSION = "2026-10-19.2";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];

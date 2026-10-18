@@ -89,7 +89,27 @@ def main() -> None:
         return ok
 
     _bridge = {"phone": None}
-    os.environ.update(approval.serve(ask_user, lambda payload: _bridge["phone"] and _bridge["phone"].push(payload)))
+
+    def notify(title: str, body: str) -> None:   # a watch finished: banner if the app is open, else push
+        from . import push
+        ph = _bridge["phone"]
+        if ph and ph.clients:
+            ph._alert("watch", "success", "check", title, body)
+        else:
+            push.send_async(title, body, "watch", "./")
+
+    from . import watchers
+    watchers.set_notifier(notify)
+
+    def main_tool(name: str, args: dict) -> str:   # tools that must live in this process
+        if name == "notify_when":
+            return watchers.add(args["kind"], args["label"], args.get("name", ""), args.get("path", ""))
+        if name == "cancel_watches":
+            return watchers.clear()
+        return "Unknown action."
+
+    os.environ.update(approval.serve(
+        ask_user, lambda payload: _bridge["phone"] and _bridge["phone"].push(payload), main_tool))
     brain = make_brain()
     speak.start()
     jobs: queue.Queue = queue.Queue()

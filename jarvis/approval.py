@@ -21,6 +21,7 @@ log = logging.getLogger("jarvis.approval")
 TIMEOUT = 120   # seconds to answer before it counts as "no"
 _ask_handler = None
 _push_handler = None
+_tool_handler = None
 
 
 def _call(payload: dict, timeout: float):
@@ -57,10 +58,18 @@ def push(payload: dict) -> bool:
     return bool(res and res.get("ok"))
 
 
-def serve(ask_handler, push_handler=None) -> dict:
+def run_tool(name: str, args: dict) -> str:
+    """Run a tool that must live in the main Jarvis process (e.g. background watches)."""
+    if _tool_handler:
+        return _tool_handler(name, args)
+    res = _call({"action": "tool", "name": name, "args": args}, TIMEOUT + 30)
+    return (res or {}).get("result", "Couldn't reach Jarvis to set that up.")
+
+
+def serve(ask_handler, push_handler=None, tool_handler=None) -> dict:
     """Register handlers (in the Jarvis process) and return env vars that let the subprocess reach them."""
-    global _ask_handler, _push_handler
-    _ask_handler, _push_handler = ask_handler, push_handler
+    global _ask_handler, _push_handler, _tool_handler
+    _ask_handler, _push_handler, _tool_handler = ask_handler, push_handler, tool_handler
     token = secrets.token_hex(16)
 
     class Handler(BaseHTTPRequestHandler):
@@ -75,6 +84,8 @@ def serve(ask_handler, push_handler=None) -> dict:
                 if data.get("action") == "push" and push_handler:
                     push_handler(data.get("payload") or {})
                     out = {"ok": True}
+                elif data.get("action") == "tool" and tool_handler:
+                    out = {"result": tool_handler(data.get("name", ""), data.get("args") or {})}
                 else:
                     out = {"approved": bool(ask_handler(data.get("title", ""), data.get("detail", ""),
                                                         data.get("confirm", "Allow")))}

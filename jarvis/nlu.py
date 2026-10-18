@@ -248,6 +248,27 @@ def _join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+# ---------------------------------------------------------------- notify me when …
+
+@simple(r"\b(notify|tell|let)\s+me\s+(know\s+)?when\s+(the\s+|my\s+)?(downloads?)\s+(is|are|'?s|has|have)?\s*"
+        r"(done|finished|complete|completed|ready|over)\b")
+def _watch_download(m, text):
+    return tools.run("notify_when", {"kind": "download", "label": "your download finished"})
+
+
+@simple(r"\b(notify|tell|let)\s+me\s+(know\s+)?when\s+(.+?)\s+(closes|is closed|is done|finishes|is finished|exits|quits|ends)\b")
+def _watch_app(m, text):
+    app = re.sub(r"^(the\s+)?", "", m.group(3).strip()).strip()
+    if app.lower() in ("download", "downloads", "the download", "it"):
+        return tools.run("notify_when", {"kind": "download", "label": "your download finished"})
+    return tools.run("notify_when", {"kind": "process_exits", "name": app, "label": f"{app} closed"})
+
+
+@simple(r"^(stop watching|cancel (the )?(watch|watches|notifications?|reminders?)|forget (the )?watch(es)?)$")
+def _watch_cancel(m, text):
+    return tools.run("cancel_watches", {})
+
+
 # ---------------------------------------------------------------- make a folder / project
 
 @simple(r"^(make|create|new|add)\s+(a\s+)?(new\s+)?(folder|project|directory|dir)\s+(?:called|named)\s+"

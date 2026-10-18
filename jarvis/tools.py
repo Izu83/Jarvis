@@ -4,7 +4,7 @@ import json
 import subprocess
 import time
 
-from . import apps, approval, files, gesture, modes, power, spotify, sysinfo, ui
+from . import apps, approval, files, gesture, modes, power, spotify, sysinfo, ui, watchers
 from . import windows as win
 from .config import settings
 
@@ -315,6 +315,30 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "notify_when",
+        "description": "Watch for something to finish/happen on the PC and notify the user when it does, in the "
+                       "background. Use for 'tell me when X is done/finished/closes/downloads'. Pick a kind: "
+                       "'download' (a download in the Downloads folder finishes), 'process_exits' (an app/process "
+                       "named 'name' closes), 'process_starts' (it opens), 'app_idle' (an app named 'name' finishes "
+                       "heavy work, e.g. an export/render, then goes quiet), 'file' (a file at 'path' appears). "
+                       "Give a short 'label' describing what's being waited for.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["download", "process_exits", "process_starts", "app_idle", "file"]},
+                "label": {"type": "string"},
+                "name": {"type": "string", "description": "App/process name for process_* and app_idle"},
+                "path": {"type": "string", "description": "File path for kind 'file'"},
+            },
+            "required": ["kind", "label"],
+        },
+    },
+    {
+        "name": "cancel_watches",
+        "description": "Cancel all the pending 'notify me when…' watches.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "gesture_control",
         "description": "Turn the webcam hand-gesture controller (Gesture-App) on or off on the PC. 'start' opens a "
                        "camera window; 'stop' closes it. Use for 'start/stop gesture control'.",
@@ -454,6 +478,8 @@ def run(name: str, args: dict) -> str:
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
+    if name in ("notify_when", "cancel_watches"):
+        return approval.run_tool(name, args)   # must run in the main Jarvis process, not this short-lived one
     if name == "gesture_control":
         return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[args["action"]]()
     if name == "power_action":
