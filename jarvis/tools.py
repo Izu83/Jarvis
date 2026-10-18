@@ -315,6 +315,16 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "call_user",
+        "description": "Ring the user's phone with a 'Jarvis is calling…' notification so they can answer and talk "
+                       "to you by voice. Use when the user says 'call me' or asks you to call them to tell them "
+                       "something. Optional 'message' is the first thing you'll say when they answer.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"message": {"type": "string", "description": "Opening line to speak when they answer"}},
+        },
+    },
+    {
         "name": "notify_when",
         "description": "Watch for something to finish/happen on the PC and notify the user when it does, in the "
                        "background. Use for 'tell me when X is done/finished/closes/downloads'. Pick a kind: "
@@ -478,7 +488,7 @@ def run(name: str, args: dict) -> str:
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
-    if name in ("notify_when", "cancel_watches"):
+    if name in ("notify_when", "cancel_watches", "call_user"):
         return approval.run_tool(name, args)   # must run in the main Jarvis process, not this short-lived one
     if name == "gesture_control":
         return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[args["action"]]()

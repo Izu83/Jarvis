@@ -106,6 +106,16 @@ def main() -> None:
             return watchers.add(args["kind"], args["label"], args.get("name", ""), args.get("path", ""))
         if name == "cancel_watches":
             return watchers.clear()
+        if name == "call_user":
+            from . import push
+            msg, ph = args.get("message", ""), _bridge["phone"]
+            if ph and ph.clients:
+                ph.push({"kind": "call", "id": "call", "text": msg})
+                return "Ringing your phone."
+            if push.have_subs():
+                push.send_async("\U0001f4de Jarvis is calling…", msg or "Tap to answer.", "call", "./?call=1")
+                return "I sent a call to your phone."
+            return "Your phone isn't reachable right now."
         return "Unknown action."
 
     os.environ.update(approval.serve(

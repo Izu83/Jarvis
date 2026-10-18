@@ -248,6 +248,11 @@ def _join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+@simple(r"^(call|ring|phone)\s+me(\s+(now|up))?$|^give me a call$")
+def _call_me(m, text):
+    return tools.run("call_user", {})
+
+
 # ---------------------------------------------------------------- notify me when …
 
 @simple(r"\b(notify|tell|let)\s+me\s+(know\s+)?when\s+(the\s+|my\s+)?(downloads?)\s+(is|are|'?s|has|have)?\s*"

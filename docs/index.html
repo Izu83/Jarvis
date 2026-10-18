@@ -389,6 +389,39 @@
   .as-btn:active { background: var(--fill); }
   .as-btn.cancel { font-weight: 600; }
 
+  /* call screen */
+  #callScreen { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; align-items: center;
+    padding: calc(env(safe-area-inset-top) + 56px) 24px calc(env(safe-area-inset-bottom) + 40px);
+    background: radial-gradient(120% 80% at 50% 0%, #10203e, #05060c 75%); color: #fff; opacity: 1; text-align: center; }
+  #callScreen .cavatar { width: 118px; height: 118px; border-radius: 50%; padding: 4px; background: conic-gradient(from 200deg,#5ac8fa,#0a84ff,#bf5af2,#5ac8fa); position: relative; }
+  #callScreen .cavatar img { width: 110px; height: 110px; border-radius: 50%; border: 3px solid #05060c; object-fit: cover; }
+  #callScreen .cavatar::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(90,200,250,.5); opacity: 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    #callScreen[data-state="listening"] .cavatar::after { animation: ripple 1.6s ease-out infinite; }
+    #callScreen[data-state="speaking"] .cavatar::after { border-color: rgba(48,209,88,.6); animation: ripple 1s ease-out infinite; }
+    #callScreen.incoming .cavatar { animation: cshake .5s ease-in-out infinite; }
+  }
+  @keyframes ripple { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.5); opacity: 0; } }
+  @keyframes cshake { 0%,100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+  #callScreen .cname { font-size: 30px; font-weight: 700; letter-spacing: .3px; margin: 22px 0 6px; }
+  #callScreen .cstatus { font-size: 16px; color: rgba(255,255,255,.6); min-height: 22px; }
+  #callScreen .ctranscript { margin: 26px 0; font-size: 20px; line-height: 28px; max-width: 460px; min-height: 60px;
+    color: #fff; font-weight: 500; overflow-y: auto; max-height: 36vh; }
+  #callScreen[data-state="speaking"] .ctranscript { color: #bfe6c9; }
+  #callScreen .cdots { display: inline-flex; gap: 6px; } #callScreen .cdots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.7); animation: blink 1.3s infinite; }
+  #callScreen .cdots i:nth-child(2){animation-delay:.18s} #callScreen .cdots i:nth-child(3){animation-delay:.36s}
+  #callScreen .cactions { margin-top: auto; display: flex; gap: 44px; align-items: center; justify-content: center; }
+  #callScreen .cbtn { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  #callScreen .cbtn svg.i { width: 30px; height: 30px; }
+  #callScreen .cbtn small { display: block; }
+  #callScreen .cbtn.mute { background: rgba(255,255,255,.16); }
+  #callScreen .cbtn.mute.on { background: #fff; color: #000; }
+  #callScreen .cbtn.end { background: #ff3b30; }
+  #callScreen .cbtn.accept { background: #30d158; }
+  #callScreen .clabel { font-size: 13px; color: rgba(255,255,255,.65); margin-top: 8px; }
+  #callScreen .live-only { display: contents; } #callScreen.incoming .live-only { display: none; }
+  #callScreen .in-only { display: none; } #callScreen.incoming .in-only { display: grid; grid-auto-flow: column; gap: 44px; align-items: center; }
+
   /* permission alert (iOS UIAlertController look) */
   .alert-wrap { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.38); display: grid; place-items: center; padding: 24px; animation: fade .2s both; }
   .alert { width: 100%; max-width: 300px; border-radius: 22px; overflow: hidden; background: var(--glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 20px 60px -20px rgba(0,0,0,.6); animation: alertIn .35s var(--spring) both; }
@@ -478,6 +511,8 @@
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
   <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4M6 17v2.5M18 17v2.5"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.5 3.5h3l1.2 4-2 1.3a12 12 0 0 0 5.2 5.2l1.3-2 4 1.2v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z"/></symbol>
+  <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M2.5 13.5c4-4 15-4 19 0M8 11.8V9.5m8 2.3V9.5M4 19.5l16-16"/></symbol>
   <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5.4a1.4 1.4 0 0 1 2.8 0V11m0-.6V4.4a1.4 1.4 0 0 1 2.8 0V11m0-.4V5.4a1.4 1.4 0 0 1 2.8 0V13c0 3.6-2.2 6.5-5.8 6.5-2.2 0-3.4-1-4.6-2.8l-2.3-3.4a1.5 1.5 0 0 1 2.4-1.8l1 1.3V7.4a1.4 1.4 0 0 1 2.8 0V11"/></symbol>
   <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7.5 6.3a7.5 7.5 0 1 0 9 0"/></symbol>
   <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 1 2.5 6"/><path d="M3.5 20v-4.5H8"/></symbol>
@@ -695,6 +730,24 @@
   </div>
 </div>
 
+<!-- call screen -->
+<div id="callScreen" hidden data-state="idle">
+  <div class="cavatar"><img src="avatar.jpg" alt=""></div>
+  <div class="cname">Jarvis</div>
+  <div class="cstatus" id="callStatus"></div>
+  <div class="ctranscript" id="callTranscript"></div>
+  <div class="cactions">
+    <div class="live-only">
+      <button class="cbtn mute" id="callMute" aria-label="Mute"><svg class="i"><use href="#i-mic"/></svg></button>
+      <div><button class="cbtn end" id="callEnd" aria-label="End call"><svg class="i"><use href="#i-phone-off"/></svg></button><div class="clabel">End</div></div>
+    </div>
+    <div class="in-only">
+      <div><button class="cbtn end" id="callDecline" aria-label="Decline"><svg class="i"><use href="#i-phone-off"/></svg></button><div class="clabel">Decline</div></div>
+      <div><button class="cbtn accept" id="callAccept" aria-label="Accept"><svg class="i"><use href="#i-phone"/></svg></button><div class="clabel">Accept</div></div>
+    </div>
+  </div>
+</div>
+
 <!-- screenshot viewer -->
 <div class="viewer" id="viewer" hidden>
   <div class="stage" id="stage"><img id="vImg" alt="Your screens" draggable="false"></div>
@@ -706,7 +759,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.2";   // bump together with version.json
+const VERSION = "2026-10-19.3";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1132,7 +1185,7 @@ function fail(id, msg) {
   if (chat) addMessage(chat, { who: "jarvis", text: msg, error: true });
   if (p.chatId === db.current) { p.step?.remove(); if (p.el) { p.el.className = "bubble jarvis error"; p.el.textContent = msg; } }
 }
-async function send(text, tile = null) {
+async function send(text, tile = null, onReply = null) {
   text = text.trim();
   if (!text || !key) return;
   const chat = current();
@@ -1141,7 +1194,7 @@ async function send(text, tile = null) {
   bubble(text, "me");
   $("chatTitle").textContent = chat.title;
   const id = newId();
-  track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step: stepRow("Sending…"), status: "Sending…", tile });
+  track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step: stepRow("Sending…"), status: "Sending…", tile, onReply });
   if (tile) tileState(tile, "busy");
   scrollDown();
   try { await post({ type: "cmd", text, id, chat: chat.id, recent }); const p = pending.get(id); if (p && p.status === "Sending…") setStep(p, "Delivered"); }
@@ -1231,6 +1284,7 @@ async function onMessage(text) {
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
     if (data.kind === "file" && data.data) { addFileCard(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
+    if (data.kind === "call") { Call.open(true, data.text); return; }
     if (data.kind === "ask") { showAsk(data); return; }
     if (data.kind === "ask_done") { if ($("ask-" + data.id)) { $("ask-" + data.id).remove(); toast("Permission request expired", "x", "var(--label2)"); } return; }
     const p = pending.get(data.id);
@@ -1255,6 +1309,7 @@ async function onMessage(text) {
     if (!chat) return;
     addMessage(chat, { who: "jarvis", text: data.text });
     if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addActions(p.el, Date.now()); scrollDown(); }
+    if (p.onReply) p.onReply(data.text);
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
     if (!$("drawer").hidden) renderSidebar();
@@ -1426,6 +1481,7 @@ function renderShelf() {
   add(`<span class="ic" style="background:#8e8e93">${icon("display")}</span>Screens`, "", b => requestScreens(b));
   add(`<span class="ic" style="background:#30b0c7">${icon("chart")}</span>System`, "", openSystem);
   add(`<span class="ic" style="background:#30d158">${icon("music")}</span>Control`, "", openControl);
+  add(`<span class="ic" style="background:#34c759">${icon("phone")}</span>Call`, "", () => Call.open(false));
   add(`${icon("plus")} New mode`, "plain", () => { $("text").value = "Create a mode called "; autosize(); $("text").focus(); });
 }
 function renderModeList() {
@@ -1706,6 +1762,70 @@ async function checkForUpdate() {
   } catch {}
 }
 
+// ================= Jarvis call (live two-way voice) =================
+const Call = {
+  state: "idle", rec: null, recognizing: false, manual: false, opening: "", ringTimer: null, ringCtx: null,
+  open(incoming, opening) {
+    this.opening = opening || "";
+    const el = $("callScreen"); el.hidden = false; el.classList.toggle("incoming", !!incoming); el.dataset.state = "idle";
+    $("callTranscript").textContent = "";
+    if (incoming) { $("callStatus").textContent = "Jarvis is calling…"; this.startRing(); }
+    else this.answer();
+  },
+  answer() {
+    this.stopRing(); $("callScreen").classList.remove("incoming");
+    if (this.opening) this.speak(this.opening, () => this.listen()); else this.listen();
+  },
+  setState(st) {
+    this.state = st; $("callScreen").dataset.state = st;
+    const map = { listening: "Listening…", thinking: "", speaking: "Jarvis", idle: "" };
+    if (st === "thinking") $("callStatus").innerHTML = '<span class="cdots"><i></i><i></i><i></i></span>';
+    else $("callStatus").textContent = map[st] || "";
+  },
+  listen() {
+    if (!Recognition) { this.manual = true; this.setState("idle"); $("callStatus").textContent = "Tap the mic to talk"; return; }
+    this.setState("listening"); $("callTranscript").textContent = "";
+    const rec = this.rec = new Recognition();
+    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = false;
+    let finalText = "";
+    rec.onresult = e => { let interim = ""; finalText = ""; for (const r of e.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
+    rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { this.manual = true; $("callStatus").textContent = "Allow the microphone to talk"; } };
+    rec.onend = () => { this.recognizing = false; const t = finalText.trim(); if (this.state === "listening") { if (t) this.ask(t); else if (!this.manual) setTimeout(() => { if (this.state === "listening") this.listen(); }, 150); } };
+    try { this.recognizing = true; rec.start(); } catch {}
+  },
+  ask(text) { this.setState("thinking"); $("callTranscript").textContent = text; send(text, null, reply => this.onReply(reply)); },
+  onReply(text) { if ($("callScreen").hidden) return; this.speak(text, () => { if (!$("callScreen").hidden) this.listen(); }); },
+  speak(text, done) {
+    this.setState("speaking"); $("callTranscript").textContent = text;
+    if (!window.speechSynthesis) { setTimeout(() => done && done(), 400); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text); u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
+    let fired = false; const finish = () => { if (fired) return; fired = true; clearTimeout(guard); done && done(); };
+    u.onend = u.onerror = finish;
+    const guard = setTimeout(finish, 2500 + text.split(/\s+/).length * 360);   // never get stuck if onend doesn't fire
+    speechSynthesis.speak(u);
+  },
+  toggleMic() {
+    const btn = $("callMute");
+    if (this.state === "listening" && this.recognizing) { try { this.rec.stop(); } catch {} this.setState("idle"); $("callStatus").textContent = "Muted"; btn.classList.add("on"); }
+    else { btn.classList.remove("on"); this.listen(); }
+  },
+  startRing() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)(); this.ringCtx = ctx;
+      const beep = () => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 480; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8); o.start(); o.stop(ctx.currentTime + 0.85); };
+      beep(); this.ringTimer = setInterval(beep, 1600);
+    } catch {}
+    try { navigator.vibrate?.([500, 300, 500, 300]); } catch {}
+  },
+  stopRing() { clearInterval(this.ringTimer); this.ringTimer = null; try { this.ringCtx?.close(); } catch {} this.ringCtx = null; },
+  end() { this.setState("idle"); try { this.rec?.stop(); } catch {} this.recognizing = false; try { speechSynthesis?.cancel(); } catch {} this.stopRing(); $("callScreen").hidden = true; $("callMute").classList.remove("on"); },
+};
+$("callEnd").onclick = () => Call.end();
+$("callDecline").onclick = () => Call.end();
+$("callAccept").onclick = () => Call.answer();
+$("callMute").onclick = () => Call.toggleMic();
+
 // ================= permission prompts =================
 // Deleting, clearing and running commands on the PC wait for an explicit Allow here. No answer = not allowed.
 function showAsk(data) {
@@ -1853,6 +1973,7 @@ async function start() {
   try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
   renderShelf(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
   connect();
+  if (/[?&]call=1/.test(location.search)) { window.history.replaceState(null, "", location.pathname); setTimeout(() => Call.open(true, ""), 400); }
 }
 checkForUpdate();
 ensureSW();
