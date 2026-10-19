@@ -241,6 +241,22 @@
   .tile.plain { padding: 0 14px; font-weight: 500; color: var(--label2); gap: 6px; }
   .tile.plain svg.i { width: 18px; height: 18px; }
   .bar { display: flex; gap: 8px; align-items: flex-end; }
+  .attach { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 0 4px 10px; }
+  .attach::-webkit-scrollbar { display: none; }
+  .chip { position: relative; flex: none; display: flex; align-items: center; gap: 8px; height: 56px; max-width: 220px; border-radius: 16px; padding: 4px 30px 4px 4px; }
+  .chip .th { width: 48px; height: 48px; border-radius: 12px; flex: none; object-fit: cover; background: var(--fill); display: grid; place-items: center; color: var(--label2); }
+  .chip .th svg.i { width: 22px; height: 22px; }
+  .chip .nm { min-width: 0; font-size: 13px; line-height: 16px; }
+  .chip .nm b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .nm span { color: var(--label2); }
+  .chip .nm span.bad { color: var(--red); }
+  .chip .cx { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--label2); }
+  .chip .cx svg.i { width: 12px; height: 12px; stroke-width: 2.6; }
+  .chip .pbar { position: absolute; left: 10px; right: 34px; bottom: 5px; height: 3px; border-radius: 2px; background: var(--sep); overflow: hidden; }
+  .chip .pbar i { display: block; height: 100%; background: var(--blue); transition: width .2s; }
+  .bubble .att { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+  .bubble .att img { width: 120px; height: 120px; object-fit: cover; border-radius: 14px; display: block; }
+  .bubble .att .fn { font-size: 14px; opacity: .9; }
   .field { flex: 1; min-height: 48px; border-radius: 24px; display: flex; align-items: flex-end; padding: 0 5px 0 18px; }
   #text { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--label); resize: none; font: inherit; font-size: 17px; line-height: 22px; padding: 13px 0; max-height: 120px; }
   #text::placeholder { color: var(--label2); }
@@ -605,6 +621,7 @@
 
 <footer class="dock" id="dock" hidden>
   <div class="shelf" id="shelf"></div>
+  <div class="attach" id="attach" hidden></div>
   <div class="bar">
     <button class="glass press" id="clipPlus" aria-label="Send a file"><svg class="i"><use href="#i-paperclip"/></svg></button>
     <button class="glass press" id="mic" aria-label="Dictate"><svg class="i"><use href="#i-mic"/></svg></button>
@@ -761,7 +778,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.5";   // bump together with version.json
+const VERSION = "2026-10-19.6";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1189,17 +1206,30 @@ function fail(id, msg) {
 }
 async function send(text, tile = null, onReply = null) {
   text = text.trim();
-  if (!text || !key) return;
+  const atts = onReply || tile ? [] : attachments.slice();   // only typed messages carry attachments
+  if (atts.some(a => !a.path && !a.error)) { toast("Still sending your file…", "clip-up", "var(--orange)"); return false; }
+  const ready = atts.filter(a => a.path);
+  if (!key || (!text && !ready.length)) return false;
+  if (atts.length) { attachments.length = 0; renderAttach(); }
+  if (!text) { toast(ready.length > 1 ? `Saved ${ready.length} files on your PC` : "Saved on your PC", "check", "var(--green)"); return true; }
   const chat = current();
   const recent = chat.messages.filter(m => m.who !== "shots").slice(-6).map(m => ({ who: m.who, text: (m.text || "").slice(0, 250) }));
-  addMessage(chat, { who: "me", text });
-  bubble(text, "me");
+  addMessage(chat, { who: "me", text: text + ready.map(a => "\n\u{1F4CE} " + a.name).join("") });
+  const mine = bubble(text, "me");
+  if (ready.length) {
+    const box = document.createElement("div"); box.className = "att";
+    for (const a of ready) {
+      if (a.thumb) { const img = new Image(); img.src = a.thumb; img.alt = ""; box.append(img); }
+      else { const s = document.createElement("span"); s.className = "fn"; s.textContent = "\u{1F4CE} " + a.name; box.append(s); }
+    }
+    mine.prepend(box);
+  }
   $("chatTitle").textContent = chat.title;
   const id = newId();
   track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step: stepRow("Sending…"), status: "Sending…", tile, onReply });
   if (tile) tileState(tile, "busy");
   scrollDown();
-  try { await post({ type: "cmd", text, id, chat: chat.id, recent }); const p = pending.get(id); if (p && p.status === "Sending…") setStep(p, "Delivered"); }
+  try { await post({ type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) }); const p = pending.get(id); if (p && p.status === "Sending…") setStep(p, "Delivered"); }
   catch { fail(id, "Can't reach your PC right now. Is Jarvis running?"); }
 }
 async function quick(type, extra = {}) {   // Control Center buttons: answered with a toast, not a chat bubble
@@ -1288,6 +1318,8 @@ async function onMessage(text) {
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
     if (data.kind === "ask") { showAsk(data); return; }
+    if (data.kind === "uploaded") { onUploaded(data); return; }
+    if (data.kind === "upload_progress") return;
     if (data.kind === "ask_done") { if ($("ask-" + data.id)) { $("ask-" + data.id).remove(); toast("Permission request expired", "x", "var(--label2)"); } return; }
     const p = pending.get(data.id);
     if (!p) return;
@@ -1558,11 +1590,14 @@ document.querySelectorAll(".sheet").forEach(sheet => {
 
 // ================= composer + dictation =================
 const text = $("text");
-function autosize() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px"; $("send").disabled = !text.value.trim(); }
+function autosize() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px"; $("send").disabled = !text.value.trim() && !attachments.length; }
 text.addEventListener("input", autosize);
 text.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
 $("send").onclick = submit;
-function submit() { const v = text.value; text.value = ""; autosize(); send(v); }
+function submit() {
+  if (attachments.some(a => !a.path && !a.error)) { toast("Still sending your file…", "clip-up", "var(--orange)"); return; }
+  const v = text.value; text.value = ""; autosize(); send(v);
+}
 new ResizeObserver(() => document.documentElement.style.setProperty("--dock-h", $("dock").offsetHeight + 16 + "px")).observe($("dock"));
 
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1703,23 +1738,44 @@ async function refreshNotifyToggle(pcHasSub) {
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   $("notifyToggle").disabled = !supported;
   let on = false;
-  if (supported) { await ensureSW(); const sub = await swReg?.pushManager.getSubscription().catch(() => null); on = !!sub && Notification.permission === "granted"; }
+  let sub = null;
+  if (supported) { await ensureSW(); sub = await swReg?.pushManager.getSubscription().catch(() => null); on = !!sub && Notification.permission === "granted"; }
   if (document.activeElement !== $("notifyToggle")) $("notifyToggle").checked = on;
+  // The PC lost this phone's registration (or never got it): send it again, quietly
+  if (on && pcHasSub === false && !refreshNotifyToggle.resent) {
+    refreshNotifyToggle.resent = true;
+    post({ type: "push_sub", sub: sub.toJSON(), id: newId(), quiet: true }).catch(() => { refreshNotifyToggle.resent = false; });
+  }
 }
 async function enableNotify() {
-  if (!("Notification" in window)) { toast("Notifications aren't supported here", "x", "var(--orange)"); return false; }
-  if (!window.matchMedia("(display-mode: standalone)").matches && /iphone|ipad/i.test(navigator.userAgent)) {
-    toast("Add Jarvis to your Home Screen first", "x", "var(--orange)"); return false;
+  try {
+    if (!("Notification" in window) || !("PushManager" in window)) {
+      toast(/iphone|ipad/i.test(navigator.userAgent) ? "Add Jarvis to your Home Screen first" : "Notifications aren't supported here", "x", "var(--orange)"); return false;
+    }
+    if (!window.matchMedia("(display-mode: standalone)").matches && /iphone|ipad/i.test(navigator.userAgent)) {
+      toast("Open Jarvis from your Home Screen first", "x", "var(--orange)"); return false;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") { toast(perm === "denied" ? "Blocked: allow Jarvis in iPhone Settings › Notifications" : "Notifications not allowed", "x", "var(--orange)"); return false; }
+    await ensureSW();
+    if (!swReg) { toast("Couldn't start the notification service", "x", "var(--red)"); return false; }
+    const reg = await navigator.serviceWorker.ready;   // subscribing needs an active service worker
+    if (!vapidKey) { sync(); for (let i = 0; i < 20 && !vapidKey; i++) await new Promise(r => setTimeout(r, 250)); }
+    if (!vapidKey) { toast("Can't reach your PC, try again", "x", "var(--red)"); return false; }
+    let sub = await reg.pushManager.getSubscription();
+    const want = urlB64(vapidKey);
+    if (sub && sub.options?.applicationServerKey) {   // subscribed with an old key: start over
+      const had = new Uint8Array(sub.options.applicationServerKey);
+      if (had.length !== want.length || had.some((b, i) => b !== want[i])) { await sub.unsubscribe().catch(() => {}); sub = null; }
+    }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
+    await post({ type: "push_sub", sub: sub.toJSON(), id: newId() });
+    toast("Notifications on", "check", "var(--green)");
+    return true;
+  } catch (e) {
+    toast("Notifications failed: " + (e?.message || e), "x", "var(--red)");
+    return false;
   }
-  const perm = await Notification.requestPermission();
-  if (perm !== "granted") { toast("Notifications not allowed", "x", "var(--orange)"); return false; }
-  await ensureSW();
-  if (!swReg || !vapidKey) { toast("Can't set up notifications right now", "x", "var(--red)"); return false; }
-  let sub = await swReg.pushManager.getSubscription();
-  if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(vapidKey) });
-  await post({ type: "push_sub", sub: sub.toJSON(), id: newId() });
-  toast("Notifications on", "check", "var(--green)");
-  return true;
 }
 async function disableNotify() {
   await ensureSW();
@@ -1733,8 +1789,9 @@ $("notifyToggle").onchange = async e => {
 };
 $("notifyTest").onclick = async () => {
   if (Notification?.permission !== "granted") { if (!await enableNotify()) return; $("notifyToggle").checked = true; }
-  await post({ type: "push_test", id: newId() }).catch(() => toast("Can't reach your PC", "x", "var(--red)"));
-  toast("Test sent", "bell", "var(--blue)");
+  const id = newId();
+  track(id, { kind: "quick", timeout: 15000 });   // the PC answers with how many devices it reached
+  await post({ type: "push_test", id }).catch(() => fail(id, "Can't reach your PC"));
 };
 $("claudeToggle").onchange = e => { post({ type: "set", key: "use_claude", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Claude on" : "Claude off \u2014 free commands only", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("deleteAllBtn").onclick = () => { if (!confirm("Delete all chats and groups?")) return; db = { chats: [], groups: [], current: null }; saveDb(); closeSheets(); renderChat(); updateBadges(); };
@@ -1766,8 +1823,12 @@ async function checkForUpdate() {
 
 // ================= Jarvis call (live two-way voice) =================
 const Call = {
-  state: "idle", rec: null, recognizing: false, manual: false, opening: "", ringTimer: null, ringCtx: null,
+  // live: the call is on. Every delayed callback (speech ending, a late reply, the listen loop) checks it, so
+  // nothing can restart the mic or send words to Jarvis after you hang up.
+  state: "idle", rec: null, recognizing: false, manual: false, opening: "", ringTimer: null, ringCtx: null, live: false, turn: 0,
   open(incoming, opening) {
+    if (this.live) return;
+    this.live = true; this.turn++;
     this.opening = opening || "";
     const el = $("callScreen"); el.hidden = false; el.classList.toggle("incoming", !!incoming); el.dataset.state = "idle";
     $("callTranscript").textContent = "";
@@ -1775,6 +1836,7 @@ const Call = {
     else this.answer();
   },
   answer() {
+    if (!this.live) return;
     this.stopRing(); $("callScreen").classList.remove("incoming");
     if (this.opening) this.speak(this.opening, () => this.listen()); else this.listen();
   },
@@ -1785,6 +1847,7 @@ const Call = {
     else $("callStatus").textContent = map[st] || "";
   },
   listen() {
+    if (!this.live) return;
     if (!Recognition) { this.manual = true; this.setState("idle"); $("callStatus").textContent = "Tap the mic to talk"; return; }
     this.setState("listening"); $("callTranscript").textContent = "";
     const rec = this.rec = new Recognition();
@@ -1795,14 +1858,24 @@ const Call = {
     rec.onend = () => { this.recognizing = false; const t = finalText.trim(); if (this.state === "listening" && !this.holding) { if (t) this.ask(t); else if (!this.manual) setTimeout(() => { if (this.state === "listening" && !this.holding) this.listen(); }, 150); } };
     try { this.recognizing = true; rec.start(); } catch {}
   },
-  ask(text) { this.setState("thinking"); $("callTranscript").textContent = text; send(text, null, reply => this.onReply(reply)); },
-  onReply(text) { if ($("callScreen").hidden) return; this.speak(text, () => { if (!$("callScreen").hidden) this.listen(); }); },
+  ask(text) {
+    if (!this.live) return;
+    if (/^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye)\b/i.test(text.trim())) {
+      $("callTranscript").textContent = text;
+      this.speak("Bye.", () => this.end()); return;
+    }
+    this.setState("thinking"); $("callTranscript").textContent = text;
+    const turn = this.turn;
+    send(text, null, reply => { if (this.live && turn === this.turn) this.onReply(reply); });
+  },
+  onReply(text) { if (!this.live) return; this.speak(text, () => this.listen()); },
   speak(text, done) {
+    if (!this.live) return;
     this.setState("speaking"); $("callTranscript").textContent = text;
     if (!window.speechSynthesis) { setTimeout(() => done && done(), 400); return; }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text); u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
-    let fired = false; const finish = () => { if (fired) return; fired = true; clearTimeout(guard); done && done(); };
+    let fired = false; const finish = () => { if (fired) return; fired = true; clearTimeout(guard); if (this.live) done && done(); };
     u.onend = u.onerror = finish;
     const guard = setTimeout(finish, 2500 + text.split(/\s+/).length * 360);   // never get stuck if onend doesn't fire
     speechSynthesis.speak(u);
@@ -1810,6 +1883,7 @@ const Call = {
   abort() { this.recognizing = false; try { if (this.rec) { this.rec.onend = null; this.rec.abort(); } } catch {} this.rec = null; },
   holdStart(e) {
     if (e && e.preventDefault) e.preventDefault();
+    if (!this.live) return;
     if (!Recognition) { $("callStatus").textContent = "Speech isn't available here"; return; }
     this.abort(); this.holding = true; $("callTalk").classList.add("on"); this.setState("listening"); $("callTranscript").textContent = "";
     const rec = this.rec = new Recognition();
@@ -1830,10 +1904,21 @@ const Call = {
     try { navigator.vibrate?.([500, 300, 500, 300]); } catch {}
   },
   stopRing() { clearInterval(this.ringTimer); this.ringTimer = null; try { this.ringCtx?.close(); } catch {} this.ringCtx = null; },
-  end() { this.setState("idle"); try { this.rec?.stop(); } catch {} this.recognizing = false; try { speechSynthesis?.cancel(); } catch {} this.stopRing(); $("callScreen").hidden = true; $("callTalk").classList.remove("on"); this.holding = false; },
+  end() {
+    this.live = false; this.turn++; this.holding = false;
+    $("callScreen").hidden = true;   // first, so the screen goes away even if something below throws
+    $("callTalk").classList.remove("on");
+    this.abort();
+    try { speechSynthesis?.cancel(); } catch {}
+    this.stopRing();
+    this.state = "idle"; $("callScreen").dataset.state = "idle";
+  },
 };
-$("callEnd").onclick = () => Call.end();
-$("callDecline").onclick = () => Call.end();
+// End/Decline react on finger-up as well as click: iOS sometimes swallows the click while the mic is starting
+for (const id of ["callEnd", "callDecline"]) {
+  $(id).addEventListener("click", () => Call.end());
+  $(id).addEventListener("pointerup", () => Call.end());
+}
 $("callAccept").onclick = () => Call.answer();
 const _talk = $("callTalk");
 _talk.addEventListener("pointerdown", e => Call.holdStart(e));
@@ -1898,23 +1983,66 @@ function showWarning(data) {
   setTimeout(() => b.remove(), 30000);
 }
 
-// Pick a file on the phone and send it to the PC (saved to Downloads\From Phone)
+// Pick files/photos on the phone and send them to the PC (saved to Downloads\From Phone). They sit as chips above
+// the text box and go along with the next message, so Jarvis can look at them ("what's in this picture?").
+// Files travel in small pieces: one big message is too much for the tunnel.
+const attachments = [];   // { id, name, thumb, pct, path, error }
+const PART = 160 * 1024;
 function pickAndUpload() {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.onchange = async () => {
-    const file = input.files[0];
-    if (!file) return;
-    if (file.size > 40 * 1024 * 1024) { toast("That file is over 40 MB", "x", "var(--orange)"); return; }
-    if (!ws || ws.readyState !== WebSocket.OPEN) { toast("Can't reach your PC right now", "x", "var(--red)"); return; }
-    toast("Sending " + file.name + "…", "clip-up", "var(--blue)");
-    const buf = new Uint8Array(await file.arrayBuffer());
-    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-    const id = newId();
-    track(id, { kind: "quick", timeout: 20000 });
-    try { await post({ type: "upload", id, name: file.name, data: btoa(bin) }); } catch { fail(id, "Couldn't send the file."); }
-  };
+  let input = $("filePick");
+  if (!input) {   // iPhone drops the change event of a file input that isn't in the page, so keep one in it
+    input = document.createElement("input");
+    input.type = "file"; input.id = "filePick"; input.multiple = true;
+    input.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;width:1px;height:1px";
+    input.onchange = () => { for (const f of [...input.files]) uploadFile(f); input.value = ""; };
+    document.body.append(input);
+  }
   input.click();
+}
+const toB64 = bytes => { let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin); };
+async function uploadFile(file) {
+  if (file.size > 40 * 1024 * 1024) { toast("That file is over 40 MB", "x", "var(--orange)"); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { toast("Can't reach your PC right now", "x", "var(--red)"); return; }
+  const att = { id: newId(), name: file.name || "photo.jpg", thumb: /^image\//.test(file.type) ? URL.createObjectURL(file) : null, pct: 0, path: null, error: null };
+  attachments.push(att); renderAttach();
+  try {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const n = Math.max(1, Math.ceil(buf.length / PART));
+    for (let i = 0; i < n; i++) {
+      if (!attachments.includes(att)) return;   // removed while sending
+      await post({ type: "upload_part", id: newId(), up: att.id, i, n, name: att.name, data: toB64(buf.subarray(i * PART, (i + 1) * PART)) });
+      while (ws && ws.bufferedAmount > 512 * 1024) await new Promise(r => setTimeout(r, 40));   // don't flood a slow connection
+      att.pct = (i + 1) / n; renderAttach();
+    }
+    att.timer = setTimeout(() => { if (!att.path) { att.error = "PC didn't confirm"; renderAttach(); } }, 30000);
+  } catch { att.error = "Couldn't send"; renderAttach(); }
+}
+function onUploaded(data) {
+  const att = attachments.find(a => a.id === data.id);
+  if (!att) return;
+  clearTimeout(att.timer);
+  if (data.ok) { att.path = data.path; att.pct = 1; } else att.error = data.text || "Couldn't save";
+  renderAttach();
+}
+function renderAttach() {
+  const box = $("attach");
+  box.hidden = !attachments.length;
+  box.innerHTML = "";
+  for (const a of attachments) {
+    const c = document.createElement("div");
+    c.className = "chip glass";
+    c.innerHTML = (a.thumb ? `<img class="th" alt="">` : `<span class="th">${icon("doc")}</span>`)
+      + `<span class="nm"><b></b><span></span></span><button class="cx" aria-label="Remove">${icon("x")}</button>`
+      + (!a.path && !a.error ? `<span class="pbar"><i style="width:${Math.round(a.pct * 100)}%"></i></span>` : "");
+    if (a.thumb) c.querySelector("img").src = a.thumb;
+    c.querySelector("b").textContent = a.name;
+    const st = c.querySelector(".nm span");
+    st.textContent = a.error || (a.path ? "Ready" : "Sending…");
+    if (a.error) st.className = "bad";
+    c.querySelector(".cx").onclick = () => { attachments.splice(attachments.indexOf(a), 1); renderAttach(); };
+    box.append(c);
+  }
+  autosize();
 }
 $("clipPlus").onclick = pickAndUpload;
 let gestureOn = false;
@@ -1991,6 +2119,7 @@ async function start() {
 }
 checkForUpdate();
 ensureSW();
+navigator.serviceWorker?.addEventListener("message", e => { if (e.data?.type === "call" && cfg) Call.open(true, ""); });
 window.addEventListener("hashchange", start);
 start();
 </script>

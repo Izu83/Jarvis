@@ -13,13 +13,14 @@ from cryptography.hazmat.primitives import serialization
 from py_vapid import Vapid01
 from pywebpush import WebPushException, webpush
 
-from .config import ROOT
+from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.push")
 
 VAPID_FILE = ROOT / ".brain" / "vapid.json"
 SUBS_FILE = ROOT / ".brain" / "push_subs.json"
-CLAIMS = {"sub": "mailto:jarvis@localhost"}
+# Apple rejects a "localhost" contact in the VAPID claim (403 BadJwtToken), so use the phone page's real address.
+CLAIMS = {"sub": (settings.get("phone_page_url") or "https://github.com").rstrip("/")}
 _lock = threading.Lock()
 
 
@@ -89,11 +90,13 @@ def send(title: str, body: str, tag: str = "jarvis", url: str = "") -> int:
             if code in (404, 410):   # the subscription is gone (app deleted / unsubscribed)
                 dead.append(sub.get("endpoint"))
             else:
-                log.warning("Push failed (%s)", code or e)
+                body = getattr(e.response, "text", "")[:200] if e.response is not None else ""
+                log.warning("Push failed (%s) %s", code or e, body)
         except Exception:
             log.exception("Push failed")
     for ep in dead:
         remove_sub(ep)
+    log.info("Notification '%s' delivered to %d device(s).", title, sent)
     return sent
 
 

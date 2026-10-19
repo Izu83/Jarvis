@@ -90,16 +90,36 @@ def main() -> None:
 
     _bridge = {"phone": None}
 
-    def notify(title: str, body: str) -> None:   # a watch finished: banner if the app is open, else push
+    def ring_phone(msg: str) -> str:
         from . import push
         ph = _bridge["phone"]
+        sent = False
         if ph and ph.clients:
-            ph._alert("watch", "success", "check", title, body)
-        else:
+            ph.push({"kind": "call", "id": "call", "text": msg})
+            sent = True
+        if push.have_subs():   # also push it: an open-looking socket may belong to a phone that's asleep
+            push.send_async("📞 Jarvis is calling…", msg or "Tap to answer.", "call", "./?call=1")
+            sent = True
+        return "Ringing your phone." if sent else ("Your phone isn't reachable: turn on notifications in the "
+                                                   "Jarvis app's settings so I can reach it when it's closed.")
+
+    def notify(title: str, body: str, call: bool = False) -> None:
+        """A watch or reminder fired: always push to the phone, plus a banner if the app is open."""
+        from . import push
+        if call:
+            ring_phone(body)
+            return
+        ph = _bridge["phone"]
+        if ph and ph.clients:
+            ph._alert("watch", "success", "check", title, body, also_push=False)
+        if push.have_subs():
             push.send_async(title, body, "watch", "./")
+        elif not (ph and ph.clients):
+            log.warning("Couldn't deliver '%s': no phone has notifications turned on.", title)
 
     from . import watchers
     watchers.set_notifier(notify)
+    watchers.load_reminders()
 
     def main_tool(name: str, args: dict) -> str:   # tools that must live in this process
         if name == "notify_when":
@@ -107,15 +127,12 @@ def main() -> None:
         if name == "cancel_watches":
             return watchers.clear()
         if name == "call_user":
-            from . import push
-            msg, ph = args.get("message", ""), _bridge["phone"]
-            if ph and ph.clients:
-                ph.push({"kind": "call", "id": "call", "text": msg})
-                return "Ringing your phone."
-            if push.have_subs():
-                push.send_async("\U0001f4de Jarvis is calling…", msg or "Tap to answer.", "call", "./?call=1")
-                return "I sent a call to your phone."
-            return "Your phone isn't reachable right now."
+            return ring_phone(args.get("message", ""))
+        if name == "remind_me":
+            return watchers.remind(args.get("message", ""), args.get("at", ""), args.get("in_minutes") or 0,
+                                   bool(args.get("call")))
+        if name == "list_watches":
+            return watchers.listing()
         return "Unknown action."
 
     os.environ.update(approval.serve(

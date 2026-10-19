@@ -187,3 +187,42 @@ def press_keys(keys: str, window: str = "") -> str:
             raise ValueError(f"Unknown key '{p}'")
     _send([_key(c) for c in codes] + [_key(c, 0, KEYEVENTF_KEYUP) for c in reversed(codes)])
     return f"Pressed {keys}."
+
+
+# ---------------------------------------------------------------- raw mouse (for clicking what Claude sees in a screenshot)
+
+_BUTTONS = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010), "middle": (0x0020, 0x0040)}
+
+
+def mouse_click(x: int, y: int, button: str = "left", double: bool = False) -> str:
+    user32 = ctypes.windll.user32
+    user32.SetCursorPos(int(x), int(y))
+    time.sleep(0.05)
+    down, up = _BUTTONS.get(button, _BUTTONS["left"])
+    for _ in range(2 if double else 1):
+        user32.mouse_event(down, 0, 0, 0, 0)
+        user32.mouse_event(up, 0, 0, 0, 0)
+        time.sleep(0.06)
+    return f"{'Double-' if double else ''}{button}-clicked at screen ({x}, {y})."
+
+
+def mouse_scroll(amount: int, x: int | None = None, y: int | None = None) -> str:
+    """amount > 0 scrolls up, < 0 down, in notches."""
+    user32 = ctypes.windll.user32
+    if x is not None and y is not None:
+        user32.SetCursorPos(int(x), int(y))
+        time.sleep(0.05)
+    user32.mouse_event(0x0800, 0, 0, int(amount) * 120, 0)
+    return f"Scrolled {'up' if amount > 0 else 'down'} {abs(int(amount))}."
+
+
+def mouse_drag(x1: int, y1: int, x2: int, y2: int) -> str:
+    user32 = ctypes.windll.user32
+    user32.SetCursorPos(int(x1), int(y1))
+    time.sleep(0.05)
+    user32.mouse_event(0x0002, 0, 0, 0, 0)
+    for i in range(1, 11):   # move in steps so apps register a drag
+        user32.SetCursorPos(int(x1 + (x2 - x1) * i / 10), int(y1 + (y2 - y1) * i / 10))
+        time.sleep(0.02)
+    user32.mouse_event(0x0004, 0, 0, 0, 0)
+    return f"Dragged from ({x1}, {y1}) to ({x2}, {y2})."

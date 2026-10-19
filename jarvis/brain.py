@@ -61,11 +61,26 @@ other way.
 - "start/stop gesture control" (or "gestures"/"hand control") means gesture_control.
 - "call me" / "ring me" / "call me and tell me X" means call_user (put X in the message). After you call, the user \
 answers and talks to you by voice; keep spoken replies short and natural.
+- Seeing: look_at_screen saves a screenshot; open it with the Read tool to see it. Use it when ui_list doesn't show what you need (games, browsers, custom apps), to verify something worked, or when asked what's on screen. Then act with mouse_click / mouse_scroll / mouse_drag using pixel positions from that picture, plus type_text and press_keys. After clicking, look again if you need to confirm. Screenshots cost tokens: use ui_list first when it works.
+- Files the user attached from the phone appear as paths in the message: Read them (images included) and act on them.
+- Questions about the world (news, facts, prices, weather, how-to): answer with WebSearch / WebFetch.
+- Read / Glob / Grep let you look through files and code on the PC directly.
+- Timed reminders: remind_me for "remind me at 10:53", "notify me in 20 minutes", "call me at 7" (call=true). These reach the phone even when the app is closed. You CAN schedule notifications; never say you can't.
+- You are the user's stand-in at this PC: if a request is doable with keyboard, mouse, screen and PowerShell, do it rather than saying you can't. Only stop for things that need their password, money or explicit consent.
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
 This PC:
 {environment}"""
+
+BUILTIN_TOOLS = "Read,Glob,Grep,WebSearch,WebFetch"
+
+
+def _drives() -> list[str]:
+    """Every fixed drive, so Read can open screenshots, uploads and the user's files anywhere."""
+    import string
+    return [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+
 
 # Long idle gap = new conversation, so old context can't confuse new commands.
 IDLE_RESET_SECONDS = 300
@@ -120,6 +135,18 @@ STEP_LABELS = {
     "cancel_watches": lambda a: "Cancelling watches…",
     "send_message": lambda a: f"Writing a message to {a.get('to', 'them')}…",
     "send_file_to_phone": lambda a: "Sending the file to your phone…",
+    "look_at_screen": lambda a: "Looking at your screen…",
+    "mouse_click": lambda a: "Clicking…",
+    "mouse_scroll": lambda a: "Scrolling…",
+    "mouse_drag": lambda a: "Dragging…",
+    "remind_me": lambda a: "Setting a reminder…",
+    "list_watches": lambda a: "Checking your reminders…",
+    "clipboard": lambda a: "Using the clipboard…",
+    "Read": lambda a: "Looking at it…",
+    "Glob": lambda a: "Searching files…",
+    "Grep": lambda a: "Searching inside files…",
+    "WebSearch": lambda a: f"Searching the web for “{a.get('query', '')}”…",
+    "WebFetch": lambda a: "Reading a web page…",
 }
 
 
@@ -176,9 +203,12 @@ class ClaudeCodeBrain:
             self.exe, "-p",
             "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
             "--system-prompt", self.system,
-            "--tools", "",  # no file editing / shell: only Jarvis's own tools
+            # read-only built-ins (see images, search files, web); anything that changes the PC goes through
+            # Jarvis's own tools, which ask the user where it matters
+            "--tools", BUILTIN_TOOLS,
             "--mcp-config", str(self.mcp_config), "--strict-mcp-config",
-            "--allowedTools", "mcp__jarvis",
+            "--allowedTools", "mcp__jarvis," + BUILTIN_TOOLS,
+            "--add-dir", *_drives(),
             "--no-session-persistence",
             "--effort", settings["claude_code_effort"],
         ]

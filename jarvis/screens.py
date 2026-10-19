@@ -40,3 +40,53 @@ def capture_desktop(max_width: int = 2600, quality: int = 78) -> tuple[bytes, li
     buf = io.BytesIO()
     canvas.save(buf, "JPEG", quality=quality, optimize=True)
     return buf.getvalue(), layout
+
+
+# ---------------------------------------------------------------- screenshots Claude looks at (costs tokens)
+
+def _shot_dir():
+    from .config import ROOT
+    d = ROOT / ".brain" / "shots"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _default_monitor() -> int:
+    """The monitor with the active window, so 'look at my screen' sees what the user is working on."""
+    import ctypes
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    w = win.get_window(hwnd) if hwnd else None
+    if w and w.monitor:
+        return w.monitor
+    return win.list_monitors()[0].number
+
+
+def capture_for_claude(monitor: int | None = None, max_side: int = 1400) -> str:
+    """Save one monitor as a PNG for Claude to Read, and remember how its pixels map to the screen so
+    mouse_click can take coordinates straight from the picture."""
+    import json
+    number = int(monitor) if monitor else _default_monitor()
+    m = win.get_monitor(number)
+    b = m.bounds
+    shot = ImageGrab.grab(bbox=(b.x, b.y, b.x + b.w, b.y + b.h), all_screens=True)
+    scale = min(1.0, max_side / max(b.w, b.h))
+    if scale < 1:
+        shot = shot.resize((round(b.w * scale), round(b.h * scale)), Image.LANCZOS)
+    path = _shot_dir() / f"monitor{number}.png"
+    shot.save(path, "PNG", optimize=True)
+    (_shot_dir() / f"monitor{number}.json").write_text(json.dumps({"x": b.x, "y": b.y, "scale": scale}))
+    return (f"Saved monitor {number} ({b.w}x{b.h}) as {path} ({shot.width}x{shot.height} px). Use the Read tool "
+            f"to look at it. To click something in it, call mouse_click with monitor={number} and the x,y pixel "
+            f"position in THIS picture.")
+
+
+def to_screen(monitor: int, x: float, y: float) -> tuple[int, int]:
+    """Picture coordinates from the last capture_for_claude of that monitor -> real screen coordinates."""
+    import json
+    f = _shot_dir() / f"monitor{int(monitor)}.json"
+    if f.exists():
+        info = json.loads(f.read_text())
+    else:   # no picture yet: treat x,y as pixels on that monitor
+        b = win.get_monitor(int(monitor)).bounds
+        info = {"x": b.x, "y": b.y, "scale": 1.0}
+    return round(info["x"] + x / info["scale"]), round(info["y"] + y / info["scale"])

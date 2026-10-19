@@ -4,7 +4,7 @@ import json
 import subprocess
 import time
 
-from . import apps, approval, files, gesture, modes, power, spotify, sysinfo, ui, watchers
+from . import apps, approval, files, gesture, modes, pc, power, screens, spotify, sysinfo, ui, watchers
 from . import windows as win
 from .config import settings
 
@@ -418,6 +418,93 @@ TOOLS = [
             "required": ["key"],
         },
     },
+    {
+        "name": "look_at_screen",
+        "description": "Take a screenshot of one monitor and save it as an image you can then open with the Read "
+                       "tool to SEE the screen. Use it when ui_list can't find what you need (games, web pages, "
+                       "custom apps), to check the result of an action, or when the user asks what's on screen. "
+                       "Costs tokens, so prefer ui_list/ui_click when they work. Default: the monitor with the "
+                       "active window.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"monitor": {"type": "integer", "description": "Windows display number (1/2/3)"}},
+        },
+    },
+    {
+        "name": "mouse_click",
+        "description": "Click at a position you saw in a look_at_screen picture. x,y are pixel coordinates in that "
+                       "picture of that monitor; they're converted to the real screen for you.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "monitor": {"type": "integer"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "button": {"type": "string", "enum": ["left", "right", "middle"]},
+                "double": {"type": "boolean"},
+            },
+            "required": ["monitor", "x", "y"],
+        },
+    },
+    {
+        "name": "mouse_scroll",
+        "description": "Scroll the mouse wheel (positive = up, negative = down, in notches), optionally over a "
+                       "point x,y in a look_at_screen picture of 'monitor'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "amount": {"type": "integer"},
+                "monitor": {"type": "integer"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+            },
+            "required": ["amount"],
+        },
+    },
+    {
+        "name": "mouse_drag",
+        "description": "Drag with the left button from (x1,y1) to (x2,y2), coordinates in a look_at_screen picture "
+                       "of 'monitor'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "monitor": {"type": "integer"},
+                "x1": {"type": "number"}, "y1": {"type": "number"},
+                "x2": {"type": "number"}, "y2": {"type": "number"},
+            },
+            "required": ["monitor", "x1", "y1", "x2", "y2"],
+        },
+    },
+    {
+        "name": "remind_me",
+        "description": "Send the user a phone notification (or call them, call=true) at a set time. For 'remind me "
+                       "at 10:53 to X', 'notify me in 20 minutes', 'call me at 7'. Give 'at' as HH:MM (24h) or "
+                       "'YYYY-MM-DD HH:MM', or 'in_minutes'. 'message' is what the notification says.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string"},
+                "at": {"type": "string"},
+                "in_minutes": {"type": "number"},
+                "call": {"type": "boolean"},
+            },
+            "required": ["message"],
+        },
+    },
+    {
+        "name": "list_watches",
+        "description": "List pending reminders and 'notify me when…' watches.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "clipboard",
+        "description": "Read the PC's clipboard text (action 'get') or put text on it (action 'set').",
+        "input_schema": {
+            "type": "object",
+            "properties": {"action": {"type": "string", "enum": ["get", "set"]}, "text": {"type": "string"}},
+            "required": ["action"],
+        },
+    },
 ]
 
 MEDIA_KEYS = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1,
@@ -488,7 +575,26 @@ def run(name: str, args: dict) -> str:
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
-    if name in ("notify_when", "cancel_watches", "call_user"):
+    if name == "look_at_screen":
+        return screens.capture_for_claude(args.get("monitor"))
+    if name == "mouse_click":
+        x, y = screens.to_screen(args["monitor"], args["x"], args["y"])
+        return ui.mouse_click(x, y, args.get("button", "left"), bool(args.get("double")))
+    if name == "mouse_scroll":
+        if args.get("monitor") and args.get("x") is not None and args.get("y") is not None:
+            x, y = screens.to_screen(args["monitor"], args["x"], args["y"])
+            return ui.mouse_scroll(int(args["amount"]), x, y)
+        return ui.mouse_scroll(int(args["amount"]))
+    if name == "mouse_drag":
+        x1, y1 = screens.to_screen(args["monitor"], args["x1"], args["y1"])
+        x2, y2 = screens.to_screen(args["monitor"], args["x2"], args["y2"])
+        return ui.mouse_drag(x1, y1, x2, y2)
+    if name == "clipboard":
+        if args["action"] == "set":
+            pc.set_clipboard(args.get("text", ""))
+            return "Copied to the clipboard."
+        return pc.get_clipboard() or "The clipboard has no text."
+    if name in ("notify_when", "cancel_watches", "call_user", "remind_me", "list_watches"):
         return approval.run_tool(name, args)   # must run in the main Jarvis process, not this short-lived one
     if name == "gesture_control":
         return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[args["action"]]()

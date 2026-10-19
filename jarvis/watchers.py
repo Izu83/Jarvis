@@ -3,13 +3,18 @@
 Each watch polls a cheap condition every few seconds and, when it comes true, fires a notification (a phone push,
 or a banner if the app is open). Watches auto-expire after a few hours so they never pile up.
 """
+import datetime as dt
+import json
 import logging
 import os
+import re
 import threading
 import time
 from pathlib import Path
 
 import psutil
+
+from .config import ROOT
 
 log = logging.getLogger("jarvis.watchers")
 
@@ -19,8 +24,9 @@ PARTIAL = (".crdownload", ".part", ".tmp", ".opdownload", ".download")
 
 _watches: dict[str, dict] = {}
 _lock = threading.Lock()
-_notifier = None    # set by the app: fn(title, body)
+_notifier = None    # set by the app: fn(title, body, call=False)
 _started = False
+REMINDERS_FILE = ROOT / ".brain" / "reminders.json"   # timed reminders survive a Jarvis restart
 
 
 def set_notifier(fn) -> None:
@@ -53,6 +59,8 @@ def _procs(name: str) -> list[psutil.Process]:
 
 def _check(w: dict) -> bool:
     kind = w["kind"]
+    if kind == "at":
+        return time.time() >= w["when"]
     if kind == "download":
         # Fire only when a download that was in progress (a .crdownload/.part/… file) has finished.
         if _partials(_downloads()):
@@ -105,9 +113,15 @@ def _loop() -> None:
                         due.append(_watches.pop(wid))
                 except Exception:
                     log.debug("watch check failed", exc_info=True)
+        if any(w["kind"] == "at" for w in due):
+            _save_reminders()
         for w in due:
             log.info("Watch done: %s", w["label"])
-            if _notifier:
+            if not _notifier:
+                continue
+            if w["kind"] == "at":
+                _notifier("⏰ Reminder", w["label"], w.get("call", False))
+            else:
                 _notifier("✅ " + w["label"], w.get("done_text", "It's done."))
 
 
@@ -116,6 +130,70 @@ def _ensure_loop() -> None:
     if not _started:
         _started = True
         threading.Thread(target=_loop, daemon=True, name="watchers").start()
+
+
+def _save_reminders() -> None:
+    with _lock:
+        items = [w for w in _watches.values() if w["kind"] == "at"]
+    try:
+        REMINDERS_FILE.parent.mkdir(exist_ok=True)
+        REMINDERS_FILE.write_text(json.dumps(items))
+    except OSError:
+        log.warning("Couldn't save reminders", exc_info=True)
+
+
+def load_reminders() -> None:
+    """Re-arm reminders saved before a restart (ones that came due while Jarvis was off fire right away)."""
+    try:
+        items = json.loads(REMINDERS_FILE.read_text())
+    except (OSError, ValueError):
+        return
+    with _lock:
+        for w in items:
+            w["deadline"] = max(w["deadline"], time.time() + 120)
+            _watches[w["id"]] = w
+    if items:
+        _ensure_loop()
+        log.info("Re-armed %d reminder(s).", len(items))
+
+
+def parse_when(at: str = "", in_minutes: float = 0) -> float:
+    """'10:53', '10:53pm', '22:05', '2026-10-20 09:00', or in_minutes -> epoch seconds (the next such time)."""
+    now = dt.datetime.now()
+    if in_minutes:
+        return time.time() + float(in_minutes) * 60
+    text = (at or "").strip().lower().replace(".", ":")
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return dt.datetime.strptime(text, fmt).timestamp()
+        except ValueError:
+            pass
+    m = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text)
+    if not m:
+        raise ValueError(f"I couldn't understand the time '{at}'. Use HH:MM.")
+    hour, minute, ampm = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    when = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if when <= now:
+        when += dt.timedelta(days=1)
+    return when.timestamp()
+
+
+def remind(message: str, at: str = "", in_minutes: float = 0, call: bool = False) -> str:
+    when = parse_when(at, in_minutes)
+    _ensure_loop()
+    wid = str(time.time())
+    w = {"id": wid, "kind": "at", "label": message or "Reminder", "when": when, "call": bool(call),
+         "deadline": when + 3600, "since": time.time()}
+    with _lock:
+        _watches[wid] = w
+    _save_reminders()
+    hhmm = dt.datetime.fromtimestamp(when).strftime("%H:%M")
+    day = "" if dt.datetime.fromtimestamp(when).date() == dt.date.today() else " tomorrow"
+    return f"Okay, I'll {'call' if call else 'notify'} you at {hhmm}{day}: {message or 'reminder'}."
 
 
 def add(kind: str, label: str, name: str = "", path: str = "", threshold: float = 8, done_text: str = "") -> str:
@@ -147,10 +225,17 @@ def clear() -> str:
     with _lock:
         n = len(_watches)
         _watches.clear()
+    _save_reminders()
     return f"Cancelled {n} watch(es)." if n else "You have no active watches."
 
 
 def listing() -> str:
     if not _watches:
         return "No active watches."
-    return "Watching: " + "; ".join(w["label"] for w in _watches.values())
+    parts = []
+    for w in _watches.values():
+        if w["kind"] == "at":
+            parts.append(f"{dt.datetime.fromtimestamp(w['when']).strftime('%H:%M')} reminder: {w['label']}")
+        else:
+            parts.append(w["label"])
+    return "Watching: " + "; ".join(parts)

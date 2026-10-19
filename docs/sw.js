@@ -20,7 +20,11 @@ self.addEventListener("notificationclick", event => {
   const url = event.notification.data?.url || "./";
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of all) { if ("focus" in c) return c.focus(); }
+    for (const c of all) {
+      if (!("focus" in c)) continue;
+      if (url.includes("call=1")) c.postMessage({ type: "call" });   // app already open: answer there
+      return c.focus();
+    }
     if (self.clients.openWindow) return self.clients.openWindow(url);
   })());
 });

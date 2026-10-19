@@ -253,6 +253,26 @@ def _call_me(m, text):
     return tools.run("call_user", {})
 
 
+# ---------------------------------------------------------------- reminders at a time
+
+_WHEN = r"(?:(?:at|for)\s+(?P<at>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)|in\s+(?P<at2>\d{1,2}[:.]\d{2}\s*(?:am|pm)?)|in\s+(?P<n>\d+|an?|one)\s*(?P<unit>min(?:ute)?s?|hours?|hrs?|h|m))"
+
+
+@simple(r"^(?:please\s+)?(?:(?P<call>call|ring)\s+me|remind\s+me|notify\s+me|ping\s+me|alert\s+me|"
+        r"(?:send|give)\s+me\s+(?:a\s+)?(?:notification|reminder|ping|alert))"
+        r"(?:\s+on\s+my\s+phone)?\s+" + _WHEN +
+        r"(?:\s+(?:to|that|about|saying|and\s+(?:say|tell\s+me))\s+(?P<msg>.+?))?(?:\s+please)?[.!]?$")
+def _remind(m, text):
+    at, n, unit = m.group("at") or m.group("at2"), m.group("n"), (m.group("unit") or "").lower()
+    minutes = 0
+    if n:
+        count = 1 if n.lower() in ("a", "an", "one") else int(n)
+        minutes = count * (60 if unit.startswith("h") else 1)
+    msg = (m.group("msg") or "").strip() or ("Jarvis calling" if m.group("call") else "Reminder")
+    return tools.run("remind_me", {"message": msg[:1].upper() + msg[1:], "at": at or "", "in_minutes": minutes,
+                                   "call": bool(m.group("call"))})
+
+
 # ---------------------------------------------------------------- notify me when …
 
 @simple(r"\b(notify|tell|let)\s+me\s+(know\s+)?when\s+(the\s+|my\s+)?(downloads?)\s+(is|are|'?s|has|have)?\s*"

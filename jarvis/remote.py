@@ -82,6 +82,7 @@ class PhoneChannel:
         self.watch_until = 0.0
         self._watching = False
         self.asks: dict[str, dict] = {}   # permission prompts waiting for an answer
+        self.uploads: dict[str, dict] = {}   # files arriving from the phone in pieces
 
     # ------------------------------------------------------------ crypto
 
@@ -245,12 +246,20 @@ class PhoneChannel:
             self.reply(msg_id, "Copied to your PC's clipboard.")
         elif kind == "push_sub":   # the phone registered for notifications
             push.add_sub(data.get("sub") or {})
-            self.reply(msg_id, "Notifications are on. You'll hear from me even when the app is closed.")
+            if data.get("quiet"):
+                self.send_state()
+            else:
+                self.reply(msg_id, "Notifications are on. You'll hear from me even when the app is closed.")
         elif kind == "push_off":
             push.remove_sub(data.get("endpoint", ""))
             self.send_state()
         elif kind == "push_test":
-            push.send_async("Jarvis", "Notifications are working \U0001f44d", "test")
+            if not push.have_subs():
+                self.reply(msg_id, "Your PC has no phone registered. Turn the switch off and on again.")
+            else:
+                sent = push.send("Jarvis", "Notifications are working \U0001f44d", "test")
+                self.reply(msg_id, "Test notification sent." if sent else
+                           "Apple refused the notification. Turn the switch off and on again (details in jarvis.log).")
         elif kind == "set":   # a settings toggle from the phone
             if data.get("key") == "use_claude":
                 set_setting("use_claude", bool(data.get("value")))
@@ -259,8 +268,10 @@ class PhoneChannel:
         elif kind == "clip_get":
             text = pc.get_clipboard()
             self.reply(msg_id, text or "Your PC's clipboard has no text in it.", kind="clip" if text else "reply")
-        elif kind == "upload":   # a file sent from the phone -> save it on the PC
+        elif kind == "upload":   # a file sent from the phone -> save it on the PC (old single-message form)
             self._save_upload(data)
+        elif kind == "upload_part":   # big files come in pieces so no single message is too large
+            self._upload_part(data)
         elif kind == "gesture":   # the Gesture button: start/stop the webcam hand controller, no Claude
             from . import gesture
             action = data.get("action", "toggle")
@@ -268,7 +279,13 @@ class PhoneChannel:
         elif data.get("text"):
             log.info("Phone: %r", data["text"])
             self.reply(msg_id, "On it...", done=False)
-            self.on_command(data["text"], lambda text, i=msg_id: self._reply_or_push(i, text),
+            text = data["text"]
+            files = [f for f in (data.get("files") or []) if isinstance(f, str) and os.path.isfile(f)]
+            if files:   # the user attached files (photos, screenshots, docs) from the phone
+                text += ("\n\n[The user attached these files from their phone (saved on this PC): "
+                         + "; ".join(files) + ". Open them with the Read tool (it shows images) if they "
+                         "matter for the request.]")
+            self.on_command(text, lambda text, i=msg_id: self._reply_or_push(i, text),
                             chat=data.get("chat"), recent=data.get("recent"),
                             progress=lambda text, i=msg_id: self.reply(i, text, done=False), via="phone")
 
@@ -301,8 +318,22 @@ class PhoneChannel:
         except Exception:
             log.exception("Phone request failed")
 
-    def _save_upload(self, data: dict) -> None:
-        import base64
+    def _upload_part(self, data: dict) -> None:
+        up, i, n = data.get("up", ""), int(data.get("i", 0)), int(data.get("n", 1))
+        now = time.time()
+        for k in [k for k, v in self.uploads.items() if now - v["t"] > 600]:   # drop abandoned uploads
+            self.uploads.pop(k, None)
+        entry = self.uploads.setdefault(up, {"name": data.get("name", "file"), "n": n, "parts": {}, "t": now})
+        entry["parts"][i] = data.get("data", "")
+        entry["t"] = now
+        if len(entry["parts"]) < entry["n"]:
+            self._publish({"kind": "upload_progress", "id": up, "got": len(entry["parts"]), "n": entry["n"]})
+            return
+        self.uploads.pop(up, None)
+        joined = b"".join(base64.b64decode(entry["parts"][k]) for k in range(entry["n"]))
+        self._save_upload({"id": up, "name": entry["name"]}, joined)
+
+    def _save_upload(self, data: dict, raw: bytes | None = None) -> None:
         from pathlib import Path
         name = os.path.basename(data.get("name", "file")) or "file"
         folder = Path(os.path.expanduser("~/Downloads")) / "From Phone"
@@ -313,13 +344,14 @@ class PhoneChannel:
             dest = folder / f"{Path(name).stem} ({i}){Path(name).suffix}"
             i += 1
         try:
-            dest.write_bytes(base64.b64decode(data.get("data", "")))
+            dest.write_bytes(raw if raw is not None else base64.b64decode(data.get("data", "")))
         except Exception:
             log.exception("Couldn't save the uploaded file")
-            self.reply(data.get("id", ""), "I couldn't save that file.")
+            self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": False, "text": "I couldn't save that file."})
             return
         log.info("Saved a file from the phone: %s", dest)
-        self.reply(data.get("id", ""), f"Saved {dest.name} to Downloads\\From Phone.")
+        self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": True, "path": str(dest),
+                       "text": f"Saved {dest.name} to Downloads\\From Phone."})
 
     def _monitor(self) -> None:
         """Warn the phone when the disk gets low or the GPU runs hot (once per episode, re-armed on recovery)."""
@@ -349,11 +381,11 @@ class PhoneChannel:
             except Exception:
                 log.debug("monitor check failed", exc_info=True)
 
-    def _alert(self, tag: str, level: str, icon: str, title: str, text: str) -> None:
+    def _alert(self, tag: str, level: str, icon: str, title: str, text: str, also_push: bool = True) -> None:
         """Show a banner if the app is open, otherwise send it as a phone notification."""
         if self.clients:
             self._publish({"kind": "warn", "id": tag, "level": level, "icon": icon, "title": title, "text": text})
-        elif push.have_subs():
+        elif also_push and push.have_subs():
             push.send_async(title, text, tag, "./")
 
     async def _serve(self) -> None:
