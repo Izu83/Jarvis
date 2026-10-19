@@ -86,8 +86,11 @@
   .press:active { transform: scale(.94); filter: brightness(1.08); transition-duration: .12s; }
 
   /* ---------- header ---------- */
-  .top { position: fixed; z-index: 5; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 14px 14px; pointer-events: none;
-    background: linear-gradient(to bottom, var(--base) 55%, transparent); }
+  .top { position: fixed; z-index: 5; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 14px 22px; pointer-events: none; background: transparent; }
+  .top::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(to bottom, var(--base), color-mix(in srgb, var(--base) 55%, transparent) 62%, transparent);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    -webkit-mask: linear-gradient(to bottom, #000 42%, transparent); mask: linear-gradient(to bottom, #000 42%, transparent); }
   .top > * { pointer-events: auto; }
   .round { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; }
   .avatar { border-radius: 50%; object-fit: cover; display: block; flex: none; }
@@ -250,8 +253,11 @@
   .widget.offline .np, .widget.offline .controls, .widget.offline .stats { opacity: .4; pointer-events: none; }
 
   /* ---------- dock ---------- */
-  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 26px 10px calc(env(safe-area-inset-bottom) + 10px);
-    background: linear-gradient(to top, var(--base) 42%, color-mix(in srgb, var(--base) 80%, transparent) 72%, transparent); }
+  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 40px 10px calc(env(safe-area-inset-bottom) + 10px); background: transparent; }
+  .dock::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(to top, var(--base), color-mix(in srgb, var(--base) 55%, transparent) 58%, transparent);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    -webkit-mask: linear-gradient(to top, #000 38%, transparent); mask: linear-gradient(to top, #000 38%, transparent); }
   .shelf { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 12px; scrollbar-width: none; -webkit-mask: linear-gradient(90deg, #000 92%, transparent); mask: linear-gradient(90deg, #000 92%, transparent); }
   .shelf::-webkit-scrollbar { display: none; }
   .tile { flex: none; height: 40px; border-radius: 20px; padding: 0 14px 0 6px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.24px; }
@@ -808,7 +814,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.1";   // bump together with version.json
+const VERSION = "2026-10-20.2";   // bump together with version.json
 const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
