@@ -159,6 +159,20 @@ def describe_step(tool: str, args: dict) -> str:
         return "Working…"
 
 
+def _compose_thoughts(think_text: list[str], narration: list[str], steps: list[str], answer: str) -> str:
+    """Build the 'thoughts' shown under a reply. Prefer real thinking; otherwise the working commentary and the
+    steps taken. The final answer is dropped so the panel shows the reasoning, not a copy of the reply."""
+    if think_text:
+        return "\n\n".join(think_text)
+    parts = [n for n in narration if n and n.strip() != (answer or "").strip()]
+    body = "\n\n".join(parts)
+    doing = [s for s in steps if s and s != "Working…"]
+    if doing:
+        log_lines = "\n".join("• " + s.rstrip("…") for s in doing)
+        body = (body + "\n\n" if body else "") + "What I did:\n" + log_lines
+    return body.strip()
+
+
 def make_brain():
     return ApiBrain() if settings["brain"] == "api" else ClaudeCodeBrain()
 
@@ -194,6 +208,7 @@ class ClaudeCodeBrain:
         self.events: queue.Queue = queue.Queue()
         self.commands = 0
         self.last_used = time.time()
+        self.last_thinking = ""
         self._spawn()
         threading.Thread(target=self._recycle_when_idle, daemon=True, name="brain-recycler").start()
         atexit.register(self._kill)
@@ -259,6 +274,7 @@ class ClaudeCodeBrain:
                 self.thread = chat
             self.commands += 1
             started = time.time()
+            self.last_thinking = ""
             try:
                 answer = self._ask(command, progress)
             finally:
@@ -267,6 +283,11 @@ class ClaudeCodeBrain:
             return answer
 
     def _ask(self, command: str, progress=None) -> str:
+        # On the Pro plan the CLI strips raw thinking text, so Jarvis's "thoughts" are built from its running
+        # commentary (text it writes between actions) and the steps it takes — the honest process behind the answer.
+        think_text: list[str] = []   # real thinking, when the model exposes it (API brain / future CLI)
+        narration: list[str] = []    # text the model writes while working
+        steps: list[str] = []        # the actions it took
         message = {"type": "user", "message": {"role": "user", "content": command}}
         try:
             self.proc.stdin.write(json.dumps(message) + "\n")
@@ -285,12 +306,26 @@ class ClaudeCodeBrain:
                 self._spawn()
                 return ("Claude Code stopped unexpectedly. If this keeps happening, run 'claude' in a "
                         "terminal and check you're logged in.")
-            if event.get("type") == "assistant" and progress:
+            if event.get("type") == "assistant":
                 for block in event.get("message", {}).get("content", []):
-                    if block.get("type") == "tool_use":
-                        progress(describe_step(block.get("name", ""), block.get("input") or {}))
+                    bt = block.get("type")
+                    if bt == "thinking":
+                        chunk = (block.get("thinking") or "").strip()
+                        if chunk:
+                            think_text.append(chunk)
+                    elif bt == "text":
+                        chunk = (block.get("text") or "").strip()
+                        if chunk:
+                            narration.append(chunk)
+                    elif bt == "tool_use":
+                        step = describe_step(block.get("name", ""), block.get("input") or {})
+                        steps.append(step)
+                        if progress:
+                            progress(step)
             if event.get("type") != "result":
                 continue
+            answer = (event.get("result") or "").strip()
+            self.last_thinking = _compose_thoughts(think_text, narration, steps, answer)
             usage = event.get("usage") or {}
             log.info("tokens: in=%s cached=%s+%s out=%s, model turns=%s",
                      usage.get("input_tokens"), usage.get("cache_read_input_tokens"),
@@ -312,6 +347,7 @@ class ApiBrain:
         self.thread = None
         self.progress = None
         self.last_used = 0.0
+        self.last_thinking = ""
         self.lock = threading.Lock()
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
@@ -342,6 +378,7 @@ class ApiBrain:
 
     def _run(self, command: str) -> str:
         self.history.append({"role": "user", "content": command})
+        thoughts: list[str] = []
         for _ in range(MAX_TOOL_ROUNDS):
             response = self.client.beta.messages.create(
                 model=settings["model"],
@@ -356,6 +393,10 @@ class ApiBrain:
             )
             # Append the full content (incl. thinking blocks) so the conversation stays valid.
             self.history.append({"role": "assistant", "content": response.content})
+            for b in response.content:
+                if b.type == "thinking" and getattr(b, "thinking", "").strip():
+                    thoughts.append(b.thinking.strip())
+            self.last_thinking = "\n\n".join(thoughts)
 
             if response.stop_reason == "refusal":
                 self.history = []

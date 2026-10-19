@@ -108,6 +108,7 @@
   .hello .ring img { width: 56px; height: 56px; border: 2px solid var(--base); }
   .hello h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: .3px; line-height: 1.12; }
   .hello p { margin: 3px 0 0; color: var(--label2); font-size: 15px; letter-spacing: -.24px; }
+  .jni-tag { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 8px; background: var(--fill); color: var(--label2); font-size: 12px; font-weight: 600; letter-spacing: 0; vertical-align: 1px; }
   .suggest { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; }
   .suggest::-webkit-scrollbar { display: none; }
   .suggest button { flex: none; border-radius: 18px; padding: 10px 14px; text-align: left; font-size: 14px; max-width: 200px; line-height: 18px; letter-spacing: -.15px; }
@@ -122,6 +123,13 @@
   .msg-actions button:active, .msg-actions button.on { background: var(--fill); color: var(--blue); }
   .msg-actions svg.i { width: 18px; height: 18px; stroke-width: 1.9; }
   .msg-actions + .me { margin-top: 10px; }
+  .thoughts { align-self: flex-start; max-width: 88%; margin: 4px 2px 0; }
+  .th-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border-radius: 14px; background: var(--fill); color: var(--label2); font-size: 13px; font-weight: 600; letter-spacing: -.08px; }
+  .th-toggle svg.i { width: 15px; height: 15px; }
+  .th-toggle svg.i:last-child { width: 14px; height: 14px; transition: transform .3s var(--ease); }
+  .thoughts.open .th-toggle svg.i:last-child { transform: rotate(180deg); }
+  .th-body { display: none; margin-top: 6px; padding: 11px 13px; border-radius: 15px; background: var(--fill); color: var(--label2); font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; animation: rise .3s var(--ease) both; }
+  .thoughts.open .th-body { display: block; }
   .time { font-size: 11px; color: var(--label2); margin: 1px 6px 0; letter-spacing: 0; font-variant-numeric: tabular-nums; }
   .time.right { align-self: flex-end; } .time.left { align-self: flex-start; }
   .msg-actions .t { font-size: 11px; color: var(--label2); margin-left: 4px; align-self: center; font-variant-numeric: tabular-nums; }
@@ -686,7 +694,7 @@
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
         <button class="row btn" id="relinkBtn">Connect with Pairing Link</button>
         <div class="row"><span class="grow">Encryption</span><span class="value">AES-256-GCM</span></div>
-        <div class="row"><span class="grow">Version</span><span class="value" id="versionLabel"></span></div>
+        <div class="row"><span class="grow">Version</span><span class="value"><b id="jniLabel" style="color:var(--label)"></b> · <span id="versionLabel"></span></span></div>
       </div>
       <div class="group" style="margin-top:22px"><button class="row btn danger" id="deleteAllBtn">Delete All Chats</button></div>
       <div class="group" style="margin-top:22px"><button class="row btn danger" id="unpair">Unpair This Phone</button></div>
@@ -778,7 +786,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.6";   // bump together with version.json
+const VERSION = "2026-10-19.7";   // bump together with version.json
+const JNI = "JNIv1";   // Jarvis · Niko · Izu83 · version 1 — Jarvis's own release name
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -867,20 +876,32 @@ function stamp(ts) {
   el.textContent = (today ? "Today " : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + " ") + timeLabel(ts);
   $("log").append(el);
 }
-function bubble(text, who, ts = Date.now(), error = false) {
+function bubble(text, who, ts = Date.now(), error = false, thinking = "") {
   clearHome(); stamp(ts);
   const el = document.createElement("div");
   el.className = `bubble ${who}` + (error ? " error" : "");
   if (text === null) el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
   else el.innerHTML = rich(text);
   $("log").append(el);
-  if (who === "jarvis" && text) addActions(el, ts);
+  if (who === "jarvis" && text) { addThoughts(el, thinking); addActions(el, ts); }
   else if (who === "me") { const t = document.createElement("div"); t.className = "time right"; t.textContent = timeLabel(ts); $("log").append(t); }
   return el;
 }
+// Jarvis's own reasoning, saved under the reply and shown when tapped (like Claude's "thinking")
+function addThoughts(el, thinking) {
+  if (!thinking || !thinking.trim()) return;
+  if (el.nextElementSibling?.classList.contains("thoughts")) return;
+  const wrap = document.createElement("div");
+  wrap.className = "thoughts";
+  wrap.innerHTML = `<button class="th-toggle press">${icon("sparkles")}<span>Jarvis's thoughts</span>${icon("chevron")}</button><div class="th-body selectable"></div>`;
+  wrap.querySelector(".th-body").textContent = thinking.trim();
+  wrap.querySelector(".th-toggle").onclick = () => { wrap.classList.toggle("open"); if (wrap.classList.contains("open")) scrollDown(); };
+  el.after(wrap);
+}
 // Copy / Read aloud under each of Jarvis's replies
 function addActions(el, ts = Date.now()) {
-  if (el.nextElementSibling?.classList.contains("msg-actions")) return;
+  const anchor = el.nextElementSibling?.classList.contains("thoughts") ? el.nextElementSibling : el;
+  if (anchor.nextElementSibling?.classList.contains("msg-actions")) return;
   const row = document.createElement("div");
   row.className = "msg-actions";
   row.innerHTML = `<button aria-label="Copy">${icon("copy")}</button><button aria-label="Read aloud">${icon("speaker")}</button><span class="t"></span>`;
@@ -888,7 +909,7 @@ function addActions(el, ts = Date.now()) {
   row.querySelector(".t").textContent = timeLabel(ts);
   copyBtn.onclick = () => copyText(el.innerText, copyBtn);
   speakBtn.onclick = () => readAloud(el.innerText, speakBtn);
-  el.after(row);
+  anchor.after(row);
 }
 async function copyText(text, btn) {
   let ok = false;
@@ -979,7 +1000,7 @@ function renderHome() {
   home.className = "home"; home.id = "home";
   const h = new Date().getHours();
   const greeting = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  home.innerHTML = `<div class="hello"><div class="ring"><img class="avatar" src="avatar.jpg" alt=""></div><div><h1>${greeting},<br>Izu83</h1><p>What should Jarvis do?</p></div></div><div class="suggest" id="suggest"></div>`;
+  home.innerHTML = `<div class="hello"><div class="ring"><img class="avatar" src="avatar.jpg" alt=""></div><div><h1>${greeting},<br>Izu83</h1><p>What should Jarvis do? <span class="jni-tag">${JNI}</span></p></div></div><div class="suggest" id="suggest"></div>`;
   for (const [title, cmd] of SUGGESTIONS) {
     const b = document.createElement("button");
     b.className = "surface press";
@@ -998,7 +1019,7 @@ function renderChat() {
   if (!chat.messages.length && ![...pending.values()].some(p => p.chatId === chat.id)) renderHome();
   for (const m of chat.messages) {
     if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts); if (p) p.card = card; }
-    else bubble(m.text, m.who, m.ts, m.error);
+    else bubble(m.text, m.who, m.ts, m.error, m.thinking);
   }
   for (const p of pending.values()) {
     if (p.chatId !== chat.id || p.kind !== "cmd") continue;
@@ -1341,8 +1362,8 @@ async function onMessage(text) {
     }
     const chat = chatById(p.chatId);
     if (!chat) return;
-    addMessage(chat, { who: "jarvis", text: data.text });
-    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addActions(p.el, Date.now()); scrollDown(); }
+    addMessage(chat, { who: "jarvis", text: data.text, thinking: data.thinking || "" });
+    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addThoughts(p.el, data.thinking); addActions(p.el, Date.now()); scrollDown(); }
     if (p.onReply) p.onReply(data.text);
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
@@ -1722,6 +1743,7 @@ $("profileBtn").onclick = () => openSheet("sheet");
 $("meRow").onclick = () => { closeDrawer(); openSheet("sheet"); };
 $("titlePill").onclick = openControl;
 $("versionLabel").textContent = VERSION;
+$("jniLabel").textContent = JNI;
 for (const [id, k, def] of [["speakToggle", "jarvis.speak", "0"], ["autoSendToggle", "jarvis.autosend", "1"]]) {
   $(id).checked = (load(k) ?? def) === "1";
   $(id).onchange = e => store(k, e.target.checked ? "1" : "0");

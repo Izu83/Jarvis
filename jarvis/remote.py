@@ -142,8 +142,11 @@ class PhoneChannel:
             if self.tunnel.url:
                 self._announce(self.tunnel.url)
 
-    def reply(self, msg_id: str, text: str, done: bool = True, kind: str = "reply") -> None:
-        self._publish({"kind": kind, "id": msg_id, "text": text, "done": done})
+    def reply(self, msg_id: str, text: str, done: bool = True, kind: str = "reply", thinking: str = "") -> None:
+        payload = {"kind": kind, "id": msg_id, "text": text, "done": done}
+        if thinking:
+            payload["thinking"] = thinking[:6000]
+        self._publish(payload)
         if done:
             self.send_state()
 
@@ -285,13 +288,13 @@ class PhoneChannel:
                 text += ("\n\n[The user attached these files from their phone (saved on this PC): "
                          + "; ".join(files) + ". Open them with the Read tool (it shows images) if they "
                          "matter for the request.]")
-            self.on_command(text, lambda text, i=msg_id: self._reply_or_push(i, text),
+            self.on_command(text, lambda text, think="", i=msg_id: self._reply_or_push(i, text, think),
                             chat=data.get("chat"), recent=data.get("recent"),
                             progress=lambda text, i=msg_id: self.reply(i, text, done=False), via="phone")
 
-    def _reply_or_push(self, msg_id: str, text: str) -> None:
+    def _reply_or_push(self, msg_id: str, text: str, thinking: str = "") -> None:
         """Final reply to a phone command: if the app has since closed, send it as a notification instead."""
-        self.reply(msg_id, text)
+        self.reply(msg_id, text, thinking=thinking)
         if not self.clients and push.have_subs():
             push.send_async("Jarvis", text[:160], "reply", "./")
 

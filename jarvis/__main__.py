@@ -150,6 +150,7 @@ def main() -> None:
             current["via"] = via
             log.info("Command: %s", text)
             mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
+            thinking = ""
             try:
                 if mode:
                     answer = modes.run(mode)
@@ -159,6 +160,7 @@ def main() -> None:
                         log.info("(handled locally, no tokens used)")
                     elif settings["use_claude"]:                       # not understood locally -> Claude
                         answer = brain.handle(text, chat=chat, recent=recent, progress=progress)
+                        thinking = getattr(brain, "last_thinking", "") or ""
                     else:                                              # Claude is switched off: stay free
                         answer = ("I didn't catch that one, and Claude is switched off to save tokens. "
                                   "Try a simpler command, or turn Claude back on in Settings.")
@@ -167,7 +169,10 @@ def main() -> None:
                 answer = f"Something went wrong: {e}"
             log.info("Jarvis: %s", answer)
             if reply:
-                reply(answer)
+                try:
+                    reply(answer, thinking)
+                except TypeError:   # older reply callbacks take only the text
+                    reply(answer)
             else:
                 speak.say(answer)
 
@@ -192,7 +197,9 @@ def main() -> None:
                 if line:
                     done = threading.Event()
 
-                    def show(answer: str, done=done) -> None:
+                    def show(answer: str, thinking: str = "", done=done) -> None:
+                        if thinking:
+                            print(f"[thinking]\n{thinking}\n")
                         print(f"Jarvis: {answer}")
                         done.set()
 
