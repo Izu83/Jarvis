@@ -86,7 +86,8 @@
   .press:active { transform: scale(.94); filter: brightness(1.08); transition-duration: .12s; }
 
   /* ---------- header ---------- */
-  .top { position: fixed; z-index: 5; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 14px 0; pointer-events: none; }
+  .top { position: fixed; z-index: 5; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 14px 14px; pointer-events: none;
+    background: linear-gradient(to bottom, var(--base) 55%, transparent); }
   .top > * { pointer-events: auto; }
   .round { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; }
   .avatar { border-radius: 50%; object-fit: cover; display: block; flex: none; }
@@ -101,7 +102,7 @@
 
   /* ---------- conversation ---------- */
   #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 64px) 14px var(--dock-h, 170px); display: flex; flex-direction: column; gap: 3px; }
-  .home { margin: auto 0; padding: 12px 2px 8px; display: flex; flex-direction: column; gap: 16px; }
+  .home { margin: 0; padding: 8px 2px 8px; display: flex; flex-direction: column; gap: 16px; }
   .hello { display: flex; align-items: center; gap: 14px; padding: 0 4px; }
   .hello .ring { width: 62px; height: 62px; border-radius: 50%; padding: 3px; background: conic-gradient(from 200deg, #5ac8fa, #0a84ff, #bf5af2, #5ac8fa); flex: none; }
   .hello .ring img { width: 56px; height: 56px; border: 2px solid var(--base); }
@@ -228,7 +229,8 @@
   .widget.offline .np, .widget.offline .controls, .widget.offline .stats { opacity: .4; pointer-events: none; }
 
   /* ---------- dock ---------- */
-  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 0 10px calc(env(safe-area-inset-bottom) + 10px); }
+  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 26px 10px calc(env(safe-area-inset-bottom) + 10px);
+    background: linear-gradient(to top, var(--base) 42%, color-mix(in srgb, var(--base) 80%, transparent) 72%, transparent); }
   .shelf { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 12px; scrollbar-width: none; -webkit-mask: linear-gradient(90deg, #000 92%, transparent); mask: linear-gradient(90deg, #000 92%, transparent); }
   .shelf::-webkit-scrollbar { display: none; }
   .tile { flex: none; height: 40px; border-radius: 20px; padding: 0 14px 0 6px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.24px; }
@@ -759,7 +761,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.4";   // bump together with version.json
+const VERSION = "2026-10-19.5";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
