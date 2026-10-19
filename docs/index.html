@@ -839,10 +839,17 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.8";   // bump together with version.json
-const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
+const VERSION = "2026-10-20.9";   // bump together with version.json
+const JNI = "JNIv3";   // Jarvis · Niko · Izu83 · version 3 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv3", when: "Oct 20, 2026", title: "Camera, a tidier bar & working alerts", notes: [
+    "New Camera button (and \"take a photo\" by voice) sends a shot from your PC's webcam straight to your phone — free, never through Claude.",
+    "Fixed the chat bar running off the right edge, so the text field and send button fit properly.",
+    "The attach, mic and gesture buttons tuck into one \"+\" that pops them up.",
+    "Notifications actually send now, and pop-up messages expand so you can read them in full — just tap one.",
+    "Smoother header and keyboard bar; the app also updates itself reliably now.",
+  ] },
   { v: "JNIv2", when: "Oct 20, 2026", title: "What's New & a smoother phone", notes: [
     "Tap the version badge anywhere to see every release and what changed.",
     "The screen now fades cleanly behind the header and the keyboard bar — no more hard edges or text bleeding through.",
