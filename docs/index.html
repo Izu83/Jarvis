@@ -108,7 +108,20 @@
   .hello .ring img { width: 56px; height: 56px; border: 2px solid var(--base); }
   .hello h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: .3px; line-height: 1.12; }
   .hello p { margin: 3px 0 0; color: var(--label2); font-size: 15px; letter-spacing: -.24px; }
-  .jni-tag { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 8px; background: var(--fill); color: var(--label2); font-size: 12px; font-weight: 600; letter-spacing: 0; vertical-align: 1px; }
+  .jni-tag { position: relative; display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 8px; background: var(--fill); color: var(--label2); font-size: 12px; font-weight: 600; letter-spacing: 0; vertical-align: 1px; }
+  .jni-tag .nd { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--base); }
+  /* ---------- What's New ---------- */
+  .rel { margin: 0 16px 14px; border-radius: 22px; background: var(--card); overflow: hidden; box-shadow: inset 0 1px 0 var(--rim-lo); }
+  .rel.latest { box-shadow: inset 0 0 0 1.5px var(--blue); }
+  .rel-head { display: flex; align-items: center; gap: 9px; padding: 14px 18px 7px; }
+  .rel-head b { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
+  .rel-head .tag { font-size: 11px; font-weight: 700; color: #fff; background: var(--blue); padding: 2px 8px; border-radius: 8px; letter-spacing: .2px; }
+  .rel-head .when { margin-left: auto; font-size: 13px; color: var(--label2); }
+  .rel .ttl { padding: 0 18px 8px; color: var(--label2); font-size: 14px; letter-spacing: -.1px; }
+  .rel ul { margin: 0; padding: 0 18px 16px 36px; display: flex; flex-direction: column; gap: 7px; }
+  .rel li { font-size: 15px; line-height: 20px; letter-spacing: -.2px; }
+  .rel li::marker { color: var(--blue); }
+  .row .disclose { width: 15px; height: 15px; stroke-width: 2.4; color: var(--label3); flex: none; }
   .suggest { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; }
   .suggest::-webkit-scrollbar { display: none; }
   .suggest button { flex: none; border-radius: 18px; padding: 10px 14px; text-align: left; font-size: 14px; max-width: 200px; line-height: 18px; letter-spacing: -.15px; }
@@ -694,7 +707,7 @@
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
         <button class="row btn" id="relinkBtn">Connect with Pairing Link</button>
         <div class="row"><span class="grow">Encryption</span><span class="value">AES-256-GCM</span></div>
-        <div class="row"><span class="grow">Version</span><span class="value"><b id="jniLabel" style="color:var(--label)"></b> · <span id="versionLabel"></span></span></div>
+        <button class="row" id="versionRow"><span class="grow">What's New</span><span class="value"><b id="jniLabel" style="color:var(--label)"></b> · <span id="versionLabel"></span></span><svg class="i disclose"><use href="#i-right"/></svg></button></div>
       </div>
       <div class="group" style="margin-top:22px"><button class="row btn danger" id="deleteAllBtn">Delete All Chats</button></div>
       <div class="group" style="margin-top:22px"><button class="row btn danger" id="unpair">Unpair This Phone</button></div>
@@ -708,6 +721,15 @@
     <div class="grabber"></div>
     <div class="sheet-head"><span style="width:32px"></span><h3>Your PC</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
     <div class="sheet-body" id="pcSheetBody" style="padding:8px 14px 24px"></div>
+  </div>
+</div>
+
+<!-- What's New sheet (from the version badge) -->
+<div class="sheet-wrap" id="newsSheet" hidden>
+  <div class="sheet glass strong tall" role="dialog" aria-label="What's New">
+    <div class="grabber"></div>
+    <div class="sheet-head"><span style="width:32px"></span><h3>What's New</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-body" id="newsBody" style="padding:8px 0 24px"></div>
   </div>
 </div>
 
@@ -786,8 +808,25 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.7";   // bump together with version.json
-const JNI = "JNIv1";   // Jarvis · Niko · Izu83 · version 1 — Jarvis's own release name
+const VERSION = "2026-10-20.1";   // bump together with version.json
+const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
+// Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
+const RELEASES = [
+  { v: "JNIv2", when: "Oct 20, 2026", title: "What's New & a smoother phone", notes: [
+    "Tap the version badge anywhere to see every release and what changed.",
+    "The screen now fades cleanly behind the header and the keyboard bar — no more hard edges or text bleeding through.",
+    "Calls use a hold-to-talk mic so your voice comes through reliably on iPhone.",
+    "Jarvis can now see your screen and move the mouse to act inside apps.",
+    "Fixed notifications, hanging up a call, and sending files from your phone.",
+  ] },
+  { v: "JNIv1", when: "Oct 2026", title: "First release", notes: [
+    "Control your PC by voice (\"Hey Jarvis\") or from your phone, anywhere.",
+    "Open apps, arrange windows across your monitors, and switch modes.",
+    "Live system stats, one-tap screenshots, Spotify and a Control Center.",
+    "Ask Jarvis to watch a task and notify you when it's done, plus reminders.",
+    "Direct, end-to-end encrypted connection between phone and PC.",
+  ] },
+];
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1000,7 +1039,8 @@ function renderHome() {
   home.className = "home"; home.id = "home";
   const h = new Date().getHours();
   const greeting = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  home.innerHTML = `<div class="hello"><div class="ring"><img class="avatar" src="avatar.jpg" alt=""></div><div><h1>${greeting},<br>Izu83</h1><p>What should Jarvis do? <span class="jni-tag">${JNI}</span></p></div></div><div class="suggest" id="suggest"></div>`;
+  home.innerHTML = `<div class="hello"><div class="ring"><img class="avatar" src="avatar.jpg" alt=""></div><div><h1>${greeting},<br>Izu83</h1><p>What should Jarvis do? <button class="jni-tag press" id="jniTag" aria-label="What's new">${JNI}<span class="nd" id="jniDot" hidden></span></button></p></div></div><div class="suggest" id="suggest"></div>`;
+  home.querySelector("#jniTag").onclick = openNews;
   for (const [title, cmd] of SUGGESTIONS) {
     const b = document.createElement("button");
     b.className = "surface press";
@@ -1010,6 +1050,7 @@ function renderHome() {
   }
   home.append($("widget"));
   $("log").append(home);
+  updateReleaseDot();
 }
 function renderChat() {
   const chat = current();
@@ -1579,6 +1620,20 @@ $("clipCopy").onclick = async () => {
 };
 function openSheet(id) { $(id).classList.remove("closing"); $(id).hidden = false; }
 function openControl() { $("pcSheetBody").append($("widget")); openSheet("pcSheet"); sync(); }
+function openNews() {
+  $("newsBody").innerHTML = RELEASES.map((r, i) => `<div class="rel${i === 0 ? " latest" : ""}">
+    <div class="rel-head"><b>${esc(r.v)}</b>${i === 0 ? '<span class="tag">Latest</span>' : ""}<span class="when">${esc(r.when)}</span></div>
+    <div class="ttl">${esc(r.title)}</div>
+    <ul>${r.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>
+  </div>`).join("");
+  openSheet("newsSheet");
+  store("jarvis.seenRelease", RELEASES[0].v);   // this device has now seen the latest
+  updateReleaseDot();
+}
+function updateReleaseDot() {
+  const unseen = load("jarvis.seenRelease") !== RELEASES[0].v;
+  document.querySelectorAll("#jniDot").forEach(d => d.hidden = !unseen);
+}
 function hideAnimated(el, done) {   // play the closing animation, then hide
   if (el.hidden || el.classList.contains("closing")) return;
   el.classList.add("closing");
@@ -1744,6 +1799,7 @@ $("meRow").onclick = () => { closeDrawer(); openSheet("sheet"); };
 $("titlePill").onclick = openControl;
 $("versionLabel").textContent = VERSION;
 $("jniLabel").textContent = JNI;
+$("versionRow").onclick = openNews;
 for (const [id, k, def] of [["speakToggle", "jarvis.speak", "0"], ["autoSendToggle", "jarvis.autosend", "1"]]) {
   $(id).checked = (load(k) ?? def) === "1";
   $(id).onchange = e => store(k, e.target.checked ? "1" : "0");
