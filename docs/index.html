@@ -812,7 +812,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.3";   // bump together with version.json
+const VERSION = "2026-10-20.4";   // bump together with version.json
 const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1896,10 +1896,13 @@ async function checkForUpdate() {
   try {
     const latest = (await (await fetch(`version.json?t=${Date.now()}`, { cache: "no-store" })).json()).version;
     if (!latest || latest === VERSION) { if (load("jarvis.updated") === VERSION) { store("jarvis.updated"); toast("Jarvis updated", "sparkles", "var(--blue)"); } return; }
-    if (load("jarvis.updateTried") === latest) return;   // tried once already; don't loop if a cache serves the old page
-    store("jarvis.updateTried", latest); store("jarvis.updated", latest);
-    await fetch(location.pathname, { cache: "reload" });
-    location.reload();
+    // A newer version is live but this document is older. A plain reload can get the SAME cached page back
+    // (iOS is aggressive), which used to strand the app on an old version forever. Put the version in the URL
+    // so the cache physically can't satisfy it, forcing a genuinely fresh page.
+    const bust = "v=" + encodeURIComponent(latest);
+    if (location.search.includes(bust)) return;   // already asked for exactly this version; don't loop
+    store("jarvis.updated", latest);
+    location.replace(location.pathname + "?" + bust + location.hash);
   } catch {}
 }
 
