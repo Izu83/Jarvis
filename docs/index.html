@@ -414,8 +414,8 @@
   #callScreen .cbtn { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
   #callScreen .cbtn svg.i { width: 30px; height: 30px; }
   #callScreen .cbtn small { display: block; }
-  #callScreen .cbtn.mute { background: rgba(255,255,255,.16); }
-  #callScreen .cbtn.mute.on { background: #fff; color: #000; }
+  #callScreen .cbtn.talk { background: rgba(255,255,255,.16); transition: transform .12s, background .12s; -webkit-user-select: none; user-select: none; touch-action: none; }
+  #callScreen .cbtn.talk.on { background: #30d158; transform: scale(1.12); }
   #callScreen .cbtn.end { background: #ff3b30; }
   #callScreen .cbtn.accept { background: #30d158; }
   #callScreen .clabel { font-size: 13px; color: rgba(255,255,255,.65); margin-top: 8px; }
@@ -738,7 +738,7 @@
   <div class="ctranscript" id="callTranscript"></div>
   <div class="cactions">
     <div class="live-only">
-      <button class="cbtn mute" id="callMute" aria-label="Mute"><svg class="i"><use href="#i-mic"/></svg></button>
+      <div><button class="cbtn talk" id="callTalk" aria-label="Hold to talk"><svg class="i"><use href="#i-mic"/></svg></button><div class="clabel" id="talkLabel">Hold to talk</div></div>
       <div><button class="cbtn end" id="callEnd" aria-label="End call"><svg class="i"><use href="#i-phone-off"/></svg></button><div class="clabel">End</div></div>
     </div>
     <div class="in-only">
@@ -759,7 +759,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-19.3";   // bump together with version.json
+const VERSION = "2026-10-19.4";   // bump together with version.json
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -1790,7 +1790,7 @@ const Call = {
     let finalText = "";
     rec.onresult = e => { let interim = ""; finalText = ""; for (const r of e.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
     rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { this.manual = true; $("callStatus").textContent = "Allow the microphone to talk"; } };
-    rec.onend = () => { this.recognizing = false; const t = finalText.trim(); if (this.state === "listening") { if (t) this.ask(t); else if (!this.manual) setTimeout(() => { if (this.state === "listening") this.listen(); }, 150); } };
+    rec.onend = () => { this.recognizing = false; const t = finalText.trim(); if (this.state === "listening" && !this.holding) { if (t) this.ask(t); else if (!this.manual) setTimeout(() => { if (this.state === "listening" && !this.holding) this.listen(); }, 150); } };
     try { this.recognizing = true; rec.start(); } catch {}
   },
   ask(text) { this.setState("thinking"); $("callTranscript").textContent = text; send(text, null, reply => this.onReply(reply)); },
@@ -1805,11 +1805,20 @@ const Call = {
     const guard = setTimeout(finish, 2500 + text.split(/\s+/).length * 360);   // never get stuck if onend doesn't fire
     speechSynthesis.speak(u);
   },
-  toggleMic() {
-    const btn = $("callMute");
-    if (this.state === "listening" && this.recognizing) { try { this.rec.stop(); } catch {} this.setState("idle"); $("callStatus").textContent = "Muted"; btn.classList.add("on"); }
-    else { btn.classList.remove("on"); this.listen(); }
+  abort() { this.recognizing = false; try { if (this.rec) { this.rec.onend = null; this.rec.abort(); } } catch {} this.rec = null; },
+  holdStart(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!Recognition) { $("callStatus").textContent = "Speech isn't available here"; return; }
+    this.abort(); this.holding = true; $("callTalk").classList.add("on"); this.setState("listening"); $("callTranscript").textContent = "";
+    const rec = this.rec = new Recognition();
+    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = true;
+    let finalText = "";
+    rec.onresult = ev => { let interim = ""; finalText = ""; for (const r of ev.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
+    rec.onerror = ev => { if (ev.error === "not-allowed" || ev.error === "service-not-allowed") $("callStatus").textContent = "Allow the microphone to talk"; };
+    rec.onend = () => { this.recognizing = false; $("callTalk").classList.remove("on"); const t = (finalText || $("callTranscript").textContent || "").trim(); if (t) this.ask(t); else if (this.state === "listening") this.setState("idle"); };
+    try { this.recognizing = true; rec.start(); } catch {}
   },
+  holdEnd() { if (!this.holding) return; this.holding = false; $("callTalk").classList.remove("on"); try { this.rec?.stop(); } catch {} },
   startRing() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)(); this.ringCtx = ctx;
@@ -1819,12 +1828,15 @@ const Call = {
     try { navigator.vibrate?.([500, 300, 500, 300]); } catch {}
   },
   stopRing() { clearInterval(this.ringTimer); this.ringTimer = null; try { this.ringCtx?.close(); } catch {} this.ringCtx = null; },
-  end() { this.setState("idle"); try { this.rec?.stop(); } catch {} this.recognizing = false; try { speechSynthesis?.cancel(); } catch {} this.stopRing(); $("callScreen").hidden = true; $("callMute").classList.remove("on"); },
+  end() { this.setState("idle"); try { this.rec?.stop(); } catch {} this.recognizing = false; try { speechSynthesis?.cancel(); } catch {} this.stopRing(); $("callScreen").hidden = true; $("callTalk").classList.remove("on"); this.holding = false; },
 };
 $("callEnd").onclick = () => Call.end();
 $("callDecline").onclick = () => Call.end();
 $("callAccept").onclick = () => Call.answer();
-$("callMute").onclick = () => Call.toggleMic();
+const _talk = $("callTalk");
+_talk.addEventListener("pointerdown", e => Call.holdStart(e));
+["pointerup", "pointercancel", "pointerleave"].forEach(ev => _talk.addEventListener(ev, () => Call.holdEnd()));
+_talk.addEventListener("contextmenu", e => e.preventDefault());
 
 // ================= permission prompts =================
 // Deleting, clearing and running commands on the PC wait for an explicit Allow here. No answer = not allowed.
