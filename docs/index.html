@@ -282,7 +282,7 @@
   .bubble .att { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
   .bubble .att img { width: 120px; height: 120px; object-fit: cover; border-radius: 14px; display: block; }
   .bubble .att .fn { font-size: 14px; opacity: .9; }
-  .field { flex: 1; min-height: 48px; border-radius: 24px; display: flex; align-items: flex-end; padding: 0 5px 0 18px; }
+  .field { flex: 1; min-width: 0; min-height: 48px; border-radius: 24px; display: flex; align-items: flex-end; padding: 0 5px 0 18px; }
   #text { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--label); resize: none; font: inherit; font-size: 17px; line-height: 22px; padding: 13px 0; max-height: 120px; }
   #text::placeholder { color: var(--label2); }
   #send { width: 38px; height: 38px; margin: 5px 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(180deg, #3d9cff, #0a7cff); box-shadow: 0 4px 12px -3px rgba(10,124,255,.6), inset 0 1px 0 rgba(255,255,255,.4); transition: transform .35s var(--spring), opacity .2s; }
@@ -812,7 +812,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.4";   // bump together with version.json
+const VERSION = "2026-10-20.5";   // bump together with version.json
 const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
