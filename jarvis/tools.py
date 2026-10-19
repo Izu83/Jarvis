@@ -325,6 +325,13 @@ TOOLS = [
         },
     },
     {
+        "name": "camera_photo",
+        "description": "Take one photo from the PC's webcam and send it to the user's phone. Use for 'send me a "
+                       "photo/picture from the camera', 'take a selfie', 'show me the webcam'. The photo goes straight "
+                       "to the phone; you don't see it.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "notify_when",
         "description": "Watch for something to finish/happen on the PC and notify the user when it does, in the "
                        "background. Use for 'tell me when X is done/finished/closes/downloads'. Pick a kind: "
@@ -594,7 +601,7 @@ def run(name: str, args: dict) -> str:
             pc.set_clipboard(args.get("text", ""))
             return "Copied to the clipboard."
         return pc.get_clipboard() or "The clipboard has no text."
-    if name in ("notify_when", "cancel_watches", "call_user", "remind_me", "list_watches"):
+    if name in ("notify_when", "cancel_watches", "call_user", "remind_me", "list_watches", "camera_photo"):
         return approval.run_tool(name, args)   # must run in the main Jarvis process, not this short-lived one
     if name == "gesture_control":
         return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[args["action"]]()

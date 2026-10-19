@@ -543,6 +543,7 @@
   <symbol id="i-house" viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
   <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></symbol>
   <symbol id="i-display" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2.5"/><path d="M9 20.5h6M12 16.5v4"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M5.5 7.5h1.6l1-1.7a1.4 1.4 0 0 1 1.2-.7h3.4a1.4 1.4 0 0 1 1.2.7l1 1.7h1.6A2.5 2.5 0 0 1 20 10v6.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V10a2.5 2.5 0 0 1 1.5-2.5z"/><circle cx="12" cy="13" r="3.2"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
@@ -724,9 +725,10 @@
       </div>
       <div class="group-title">Notifications</div>
       <div class="group">
-        <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed (add to Home Screen first)</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
         <button class="row btn" id="notifyTest">Send a Test Notification</button>
       </div>
+      <div class="group-foot" id="notifyHint" hidden></div>
       <div class="group-title">Connection</div>
       <div class="group">
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
@@ -833,7 +835,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.6";   // bump together with version.json
+const VERSION = "2026-10-20.7";   // bump together with version.json
 const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1021,11 +1023,11 @@ function setStep(p, text) {
 }
 
 // --- one-picture screenshots
-function shotsCard(id, ts) {
+function shotsCard(id, ts, title = "Your screens") {
   clearHome(); stamp(ts);
   const card = document.createElement("div");
   card.className = "shots surface";
-  card.innerHTML = '<header><b>Your screens</b><span></span></header><div class="desk loading"><div class="spinner"></div></div>';
+  card.innerHTML = `<header><b>${esc(title)}</b><span></span></header><div class="desk loading"><div class="spinner"></div></div>`;
   $("log").append(card);
   fillShots(card, id);
   return card;
@@ -1084,7 +1086,7 @@ function renderChat() {
   $("chatTitle").textContent = chat.title || "New chat";
   if (!chat.messages.length && ![...pending.values()].some(p => p.chatId === chat.id)) renderHome();
   for (const m of chat.messages) {
-    if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts); if (p) p.card = card; }
+    if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts, m.title); if (p) p.card = card; }
     else bubble(m.text, m.who, m.ts, m.error, m.thinking);
   }
   for (const p of pending.values()) {
@@ -1334,12 +1336,27 @@ async function requestScreens(tile = null) {
   scrollDown();
   try { await post({ type: "screens", id }); } catch { fail(id, "Can't reach your PC right now."); }
 }
+async function requestCamera(tile = null) {
+  if (!key) return;
+  const chat = current(), id = newId();
+  addMessage(chat, { who: "shots", id, title: "Camera" });
+  track(id, { chatId: chat.id, kind: "shots", timeout: 20000, tile });
+  if (tile) tileState(tile, "busy");
+  pending.get(id).card = shotsCard(id, Date.now(), "Camera");
+  scrollDown();
+  try { await post({ type: "camera", id }); } catch { fail(id, "Can't reach your PC right now."); }
+}
 const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 async function addScreenshot(id, info) {
-  const p = pending.get(id);
-  if (!p) return;
   const blobUrl = URL.createObjectURL(new Blob([b64bytes(info.data)], { type: "image/jpeg" }));
   shotsCache.set(id, { url: blobUrl, monitors: info.monitors || [], ts: Date.now() });
+  const p = pending.get(id);
+  if (!p) {   // Jarvis sent this on its own (e.g. a camera photo you asked for by voice): give it a card
+    const chat = current();
+    addMessage(chat, { who: "shots", id, title: info.title });
+    fillShots(shotsCard(id, Date.now(), info.title), id); scrollDown();
+    return;
+  }
   clearTimeout(p.timer); pending.delete(id);
   if (p.tile) tileState(p.tile, "done");
   if (p.card?.isConnected) { fillShots(p.card, id); scrollDown(); }
@@ -1600,6 +1617,7 @@ function renderShelf() {
   };
   for (const m of modes) add(`<span class="ic" style="background:${TINTS[m.icon] || TINTS.sparkles}">${icon(m.icon)}</span>${esc(cap(m.name))}`, "", b => send(`${m.name} mode`, b));
   add(`<span class="ic" style="background:#8e8e93">${icon("display")}</span>Screens`, "", b => requestScreens(b));
+  add(`<span class="ic" style="background:#ff9f0a">${icon("camera")}</span>Camera`, "", b => requestCamera(b));
   add(`<span class="ic" style="background:#30b0c7">${icon("chart")}</span>System`, "", openSystem);
   add(`<span class="ic" style="background:#30d158">${icon("music")}</span>Control`, "", openControl);
   add(`<span class="ic" style="background:#34c759">${icon("phone")}</span>Call`, "", () => Call.open(false));
@@ -1839,7 +1857,19 @@ async function ensureSW() {
 }
 async function refreshNotifyToggle(pcHasSub) {
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-  $("notifyToggle").disabled = !supported;
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const isIOS = /iphone|ipad/i.test(navigator.userAgent);
+  const hint = $("notifyHint");
+  if (isIOS && !standalone) {
+    hint.innerHTML = "📲 On iPhone, notifications only work when Jarvis is on your Home Screen. Tap the <b>Share</b> button in Safari → <b>Add to Home Screen</b>, then open Jarvis from that icon and turn this on.";
+    hint.hidden = false;
+  } else if (!supported) {
+    hint.innerHTML = "This browser doesn't support notifications.";
+    hint.hidden = false;
+  } else {
+    hint.hidden = true;
+  }
+  $("notifyToggle").disabled = !supported || (isIOS && !standalone);
   let on = false;
   let sub = null;
   if (supported) { await ensureSW(); sub = await swReg?.pushManager.getSubscription().catch(() => null); on = !!sub && Notification.permission === "granted"; }

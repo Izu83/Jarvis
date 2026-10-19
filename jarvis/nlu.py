@@ -130,6 +130,12 @@ def _screens(m, text):
     return "Tap Screens at the bottom of the app to see your monitors."
 
 
+@simple(r"\b(take|send|grab|snap|show me)( me)?( a| the)?\s*(photo|picture|pic|selfie|camera|webcam)( (shot|photo|picture))?\b|^(camera|webcam|selfie)$")
+def _camera(m, text):
+    from . import approval
+    return approval.run_tool("camera_photo", {})
+
+
 @simple(r"^(what'?s|what is) open\b|^list (the )?(open )?(windows|apps)$")
 def _whats_open(m, text):
     wins = win.list_windows()

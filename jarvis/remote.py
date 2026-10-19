@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import approval, media, modes, pc, push, screens, sysinfo, tools
+from . import approval, camera, media, modes, pc, push, screens, sysinfo, tools
 from .config import secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -176,6 +176,17 @@ class PhoneChannel:
             m["label"] = _short_label(m["monitor"])
         self._publish({"kind": "image", "id": msg_id, "monitors": layout, "data": base64.b64encode(jpeg).decode()})
 
+    def send_camera(self, msg_id: str) -> None:
+        """One webcam photo straight to the phone; Claude never sees it, so it costs no tokens."""
+        try:
+            jpeg = camera.capture()
+        except Exception as e:
+            log.warning("Camera capture failed: %s", e)
+            self.reply(msg_id, f"I couldn't take a photo: {e}")
+            return
+        self._publish({"kind": "image", "id": msg_id, "monitors": [], "title": "Camera",
+                       "data": base64.b64encode(jpeg).decode()})
+
     def send_art(self, art_id: str) -> None:
         jpeg = media.art(art_id)
         if jpeg:
@@ -228,6 +239,9 @@ class PhoneChannel:
         elif kind == "screens":
             log.info("Phone: screenshots")
             self.send_screens(msg_id)
+        elif kind == "camera":
+            log.info("Phone: camera photo")
+            self.send_camera(msg_id)
         elif kind == "watch":
             self.watch()
         elif kind == "answer":

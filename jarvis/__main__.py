@@ -121,16 +121,32 @@ def main() -> None:
     watchers.set_notifier(notify)
     watchers.load_reminders()
 
+    def _reach_hint() -> str:
+        """Warn if a future alert can't reach the phone when the app is closed (no push set up)."""
+        from . import push
+        if push.have_subs():
+            return ""
+        return (" One thing — phone notifications aren't set up yet, so I can only alert you while the Jarvis "
+                "app is open. Add Jarvis to your Home Screen and turn on notifications in Settings to hear from me "
+                "when it's closed.")
+
     def main_tool(name: str, args: dict) -> str:   # tools that must live in this process
         if name == "notify_when":
-            return watchers.add(args["kind"], args["label"], args.get("name", ""), args.get("path", ""))
+            return watchers.add(args["kind"], args["label"], args.get("name", ""), args.get("path", "")) + _reach_hint()
         if name == "cancel_watches":
             return watchers.clear()
         if name == "call_user":
             return ring_phone(args.get("message", ""))
+        if name == "camera_photo":
+            ph = _bridge["phone"]
+            if not (ph and ph.clients):
+                return "Open the Jarvis app on your phone first, then ask again and I'll send a camera photo."
+            ph.send_camera("cam-" + str(int(time.time())))
+            return "I've sent a photo from your camera to your phone."
         if name == "remind_me":
-            return watchers.remind(args.get("message", ""), args.get("at", ""), args.get("in_minutes") or 0,
-                                   bool(args.get("call")))
+            msg = watchers.remind(args.get("message", ""), args.get("at", ""), args.get("in_minutes") or 0,
+                                  bool(args.get("call")))
+            return msg + (_reach_hint() if not args.get("call") else "")
         if name == "list_watches":
             return watchers.listing()
         return "Unknown action."
