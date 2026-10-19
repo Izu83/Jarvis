@@ -19,21 +19,30 @@ _SNAP = (
     "cam = cv2.VideoCapture(int(sys.argv[2]), cv2.CAP_DSHOW)\n"
     "cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280); cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)\n"
     "ok, frame = False, None\n"
-    "for _ in range(8):\n"
+    "for _ in range(4):\n"          # a few frames so the camera auto-exposes; fewer = faster
     "    ok, frame = cam.read()\n"
     "cam.release()\n"
     "sys.exit(0 if ok and frame is not None and "
     "cv2.imwrite(sys.argv[1], frame, [cv2.IMWRITE_JPEG_QUALITY, 82]) else 1)\n"
 )
 
+_exe: str | None = None   # cache the cv2-capable Python so we don't re-probe (an extra cv2 import) every photo
+
+
+def _python() -> str | None:
+    global _exe
+    if _exe is None:
+        _exe = gesture._python() or ""   # "" = probed and none found; don't keep re-probing
+    return _exe or None
+
 
 def available() -> bool:
-    return gesture._python() is not None
+    return _python() is not None
 
 
 def capture(index: int = 0) -> bytes:
     """One JPEG from the webcam. Raises RuntimeError if no camera/OpenCV is available or the grab fails."""
-    exe = gesture._python()
+    exe = _python()
     if not exe:
         raise RuntimeError("no camera library found (install opencv-python in your Python 3.13)")
     out = Path(tempfile.gettempdir()) / "jarvis_cam.jpg"

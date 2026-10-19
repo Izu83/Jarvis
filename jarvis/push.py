@@ -13,14 +13,26 @@ from cryptography.hazmat.primitives import serialization
 from py_vapid import Vapid01
 from pywebpush import WebPushException, webpush
 
+from urllib.parse import urlsplit
+
 from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.push")
 
 VAPID_FILE = ROOT / ".brain" / "vapid.json"
 SUBS_FILE = ROOT / ".brain" / "push_subs.json"
-# Apple rejects a "localhost" contact in the VAPID claim (403 BadJwtToken), so use the phone page's real address.
-CLAIMS = {"sub": (settings.get("phone_page_url") or "https://github.com").rstrip("/")}
+
+
+def _contact() -> str:
+    """The VAPID 'sub' (a contact for the push service). py_vapid only accepts a bare https ORIGIN (no path) or a
+    mailto:, and Apple rejects a localhost one, so use just the scheme+host of the phone page."""
+    parts = urlsplit(settings.get("phone_page_url") or "")
+    if parts.scheme in ("http", "https") and parts.netloc and "localhost" not in parts.netloc:
+        return f"https://{parts.netloc}"
+    return "https://github.com"
+
+
+CLAIMS = {"sub": _contact()}
 _lock = threading.Lock()
 
 
