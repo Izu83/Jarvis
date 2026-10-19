@@ -22,7 +22,7 @@ from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
 from . import approval, camera, media, modes, pc, push, screens, sysinfo, tools
-from .config import secret, set_secret, set_setting, settings
+from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
 log = logging.getLogger("jarvis.remote")
@@ -353,8 +353,14 @@ class PhoneChannel:
     def _save_upload(self, data: dict, raw: bytes | None = None) -> None:
         from pathlib import Path
         name = os.path.basename(data.get("name", "file")) or "file"
-        folder = Path(os.path.expanduser("~/Downloads")) / "From Phone"
-        folder.mkdir(parents=True, exist_ok=True)
+        # Default to "From Phone" on the same drive as the project (D:), so a nearly-full C: isn't a problem.
+        # Override with "upload_folder" in config.json. Fall back to Downloads if that folder can't be made.
+        folder = Path(settings.get("upload_folder") or (Path(ROOT).anchor + "From Phone"))
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            folder = Path(os.path.expanduser("~/Downloads")) / "From Phone"
+            folder.mkdir(parents=True, exist_ok=True)
         dest = folder / name
         i = 1
         while dest.exists():   # don't overwrite
