@@ -839,7 +839,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.9";   // bump together with version.json
+const VERSION = "2026-10-20.10";   // bump together with version.json
 const JNI = "JNIv3";   // Jarvis · Niko · Izu83 · version 3 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1426,6 +1426,18 @@ function openSocket(url) {
     };
     sock.onmessage = e => onMessage(e.data);
   });
+}
+async function ensureConnected(ms = 9000) {
+  // iOS suspends the socket while the file/photo picker is open, so reconnect and wait before (and during) a send.
+  if (ws && ws.readyState === WebSocket.OPEN) return true;
+  const t0 = Date.now();
+  connect();
+  while (Date.now() - t0 < ms) {
+    if (ws && ws.readyState === WebSocket.OPEN) return true;
+    await new Promise(r => setTimeout(r, 150));
+    if (!connecting && !(ws && ws.readyState <= WebSocket.OPEN)) connect();
+  }
+  return !!(ws && ws.readyState === WebSocket.OPEN);
 }
 async function onMessage(text) {
     let data;
@@ -2154,20 +2166,25 @@ function pickAndUpload() {
 const toB64 = bytes => { let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin); };
 async function uploadFile(file) {
   if (file.size > 40 * 1024 * 1024) { toast("That file is over 40 MB", "x", "var(--orange)"); return; }
-  if (!ws || ws.readyState !== WebSocket.OPEN) { toast("Can't reach your PC right now", "x", "var(--red)"); return; }
   const att = { id: newId(), name: file.name || "photo.jpg", thumb: /^image\//.test(file.type) ? URL.createObjectURL(file) : null, pct: 0, path: null, error: null };
   attachments.push(att); renderAttach();
   try {
-    const buf = new Uint8Array(await file.arrayBuffer());
+    const buf = new Uint8Array(await file.arrayBuffer());   // read the file first, before touching the socket
     const n = Math.max(1, Math.ceil(buf.length / PART));
     for (let i = 0; i < n; i++) {
       if (!attachments.includes(att)) return;   // removed while sending
-      await post({ type: "upload_part", id: newId(), up: att.id, i, n, name: att.name, data: toB64(buf.subarray(i * PART, (i + 1) * PART)) });
+      let ok = false;
+      for (let attempt = 0; attempt < 4 && !ok; attempt++) {   // the socket can drop (iOS backgrounds it): reconnect & retry
+        if (!await ensureConnected()) break;
+        try { await post({ type: "upload_part", id: newId(), up: att.id, i, n, name: att.name, data: toB64(buf.subarray(i * PART, (i + 1) * PART)) }); ok = true; }
+        catch { await new Promise(r => setTimeout(r, 600)); }
+      }
+      if (!ok) { attachments.splice(attachments.indexOf(att), 1); renderAttach(); toast("Couldn't send — your PC dropped off. Try again.", "x", "var(--orange)"); return; }
       while (ws && ws.bufferedAmount > 512 * 1024) await new Promise(r => setTimeout(r, 40));   // don't flood a slow connection
       att.pct = (i + 1) / n; renderAttach();
     }
     att.timer = setTimeout(() => { if (!att.path) { att.error = "PC didn't confirm"; renderAttach(); } }, 30000);
-  } catch { att.error = "Couldn't send"; renderAttach(); }
+  } catch (e) { att.error = "Couldn't send: " + (e?.message || e); renderAttach(); }
 }
 function onUploaded(data) {
   const att = attachments.find(a => a.id === data.id);
