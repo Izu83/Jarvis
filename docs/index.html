@@ -293,6 +293,22 @@
   #gestureBtn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--label); }
   #gestureBtn.on { color: #fff; background: var(--purple); }
   @keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(255,59,48,.5); } 100% { box-shadow: 0 0 0 16px rgba(255,59,48,0); } }
+  /* ---------- collapsible + menu in the composer ---------- */
+  .plusmenu { position: relative; flex: none; }
+  .plus-toggle { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--label); }
+  .plus-toggle svg.i { width: 23px; height: 23px; transition: transform .4s var(--spring); }
+  .plusmenu.open .plus-toggle svg.i { transform: rotate(45deg); }
+  .plusmenu.open .plus-toggle { color: #fff; background: var(--blue); }
+  .plusmenu.active .plus-toggle::after { content: ""; position: absolute; top: 7px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--base); }
+  .shelf { transition: opacity .2s var(--ease); }
+  .dock.menuopen .shelf { opacity: 0; pointer-events: none; }
+  .plus-actions { position: absolute; left: 0; bottom: calc(100% + 10px); display: flex; flex-direction: column-reverse; gap: 10px; }
+  .plus-actions > button { opacity: 0; transform: translateY(14px) scale(.5); pointer-events: none;
+    transition: opacity .2s var(--ease), transform .4s var(--spring); }
+  .plusmenu.open .plus-actions > button { opacity: 1; transform: none; pointer-events: auto; }
+  .plusmenu.open .plus-actions > button:nth-child(1) { transition-delay: .02s; }
+  .plusmenu.open .plus-actions > button:nth-child(2) { transition-delay: .07s; }
+  .plusmenu.open .plus-actions > button:nth-child(3) { transition-delay: .12s; }
 
   /* ---------- sidebar ---------- */
   .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.28); animation: fade .3s both; }
@@ -648,9 +664,14 @@
   <div class="shelf" id="shelf"></div>
   <div class="attach" id="attach" hidden></div>
   <div class="bar">
-    <button class="glass press" id="clipPlus" aria-label="Send a file"><svg class="i"><use href="#i-paperclip"/></svg></button>
-    <button class="glass press" id="mic" aria-label="Dictate"><svg class="i"><use href="#i-mic"/></svg></button>
-    <button class="glass press" id="gestureBtn" aria-label="Gesture control"><svg class="i"><use href="#i-hand"/></svg></button>
+    <div class="plusmenu" id="plusMenu">
+      <div class="plus-actions">
+        <button class="glass press" id="clipPlus" aria-label="Send a file"><svg class="i"><use href="#i-paperclip"/></svg></button>
+        <button class="glass press" id="mic" aria-label="Dictate"><svg class="i"><use href="#i-mic"/></svg></button>
+        <button class="glass press" id="gestureBtn" aria-label="Gesture control"><svg class="i"><use href="#i-hand"/></svg></button>
+      </div>
+      <button class="glass press plus-toggle" id="plusToggle" aria-label="More" aria-expanded="false"><svg class="i"><use href="#i-plus"/></svg></button>
+    </div>
     <div class="field glass">
       <textarea id="text" rows="1" placeholder="Ask Jarvis" enterkeyhint="send"></textarea>
       <button id="send" aria-label="Send" disabled><svg class="i"><use href="#i-up"/></svg></button>
@@ -812,7 +833,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-20.5";   // bump together with version.json
+const VERSION = "2026-10-20.6";   // bump together with version.json
 const JNI = "JNIv2";   // Jarvis · Niko · Izu83 · version 2 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -2140,6 +2161,16 @@ $("gestureBtn").onclick = () => {
   } });
   post({ type: "gesture", action: "toggle", id }).catch(() => fail(id, "Can't reach your PC right now."));
 };
+// Collapsible + menu: tap to pop the three buttons up; tap again, outside, or Escape to close.
+const plusMenu = $("plusMenu"), plusToggle = $("plusToggle");
+function closePlus() { plusMenu.classList.remove("open"); $("dock").classList.remove("menuopen"); plusToggle.setAttribute("aria-expanded", "false"); }
+const syncPlusActive = () => plusMenu.classList.toggle("active",
+  $("mic").classList.contains("on") || $("gestureBtn").classList.contains("on"));
+plusToggle.onclick = e => { e.stopPropagation(); const open = plusMenu.classList.toggle("open"); $("dock").classList.toggle("menuopen", open); plusToggle.setAttribute("aria-expanded", open ? "true" : "false"); };
+$("clipPlus").addEventListener("click", closePlus);   // one-shot: collapse after the file picker opens
+document.addEventListener("click", e => { if (!plusMenu.contains(e.target)) closePlus(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePlus(); });
+for (const id of ["mic", "gestureBtn"]) new MutationObserver(syncPlusActive).observe($(id), { attributes: true, attributeFilter: ["class"] });
 $("sendFileBtn")?.addEventListener("click", () => { closeSheets(); pickAndUpload(); });
 document.querySelectorAll("[data-power]").forEach(btn => btn.onclick = () => {
   const action = btn.dataset.power, label = { sleep: "sleep", restart: "restart", shutdown: "shut down" }[action];
