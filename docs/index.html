@@ -203,6 +203,18 @@
   .jarvis.error { color: var(--red); }
   .step { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--label2); margin: 5px 6px 0; align-self: flex-start; letter-spacing: -.08px; animation: rise .3s var(--ease) both; }
   .step .spinner { width: 13px; height: 13px; border-width: 2px; }
+  /* live, collapsible "what Jarvis is doing" log */
+  .worklog { align-self: flex-start; max-width: 90%; margin: 6px 4px 2px; border-radius: 15px; background: var(--card); overflow: hidden; animation: rise .3s var(--ease) both; }
+  .wl-head { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 12px; text-align: left; font-size: 13px; color: var(--label2); }
+  .wl-head .spinner { width: 14px; height: 14px; border-width: 2px; flex: none; }
+  .wl-head .wl-check { width: 15px; height: 15px; color: var(--green); flex: none; }
+  .wl-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wl-head .chev { width: 15px; height: 15px; color: var(--label3); flex: none; transition: transform .3s var(--ease); }
+  .worklog.open .wl-head .chev { transform: rotate(180deg); }
+  .wl-body { display: none; padding: 1px 12px 10px 33px; }
+  .worklog.open .wl-body { display: block; }
+  .wl-step { font-size: 13px; color: var(--label2); line-height: 1.45; padding: 2px 0; position: relative; animation: rise .25s var(--ease) both; }
+  .wl-step::before { content: ""; position: absolute; left: -15px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
   @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.96); } }
   .typing { display: inline-flex; gap: 5px; padding: 5px 2px; }
   .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--label2); animation: blink 1.3s infinite; }
@@ -878,7 +890,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-21.2";   // bump together with version.json
+const VERSION = "2026-10-21.3";   // bump together with version.json
 const JNI = "JNIv4";   // Jarvis · Niko · Izu83 · version 4 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1068,14 +1080,27 @@ function readAloud(text, btn) {
 }
 function stepRow(text) {
   const el = document.createElement("div");
-  el.className = "step"; el.innerHTML = '<span class="spinner"></span><span></span>';
-  el.lastChild.textContent = text;
+  el.className = "worklog open";
+  el.innerHTML = `<button class="wl-head press" aria-label="What Jarvis is doing"><span class="spinner"></span><span class="wl-title"></span>${icon("chevron", "i chev")}</button><div class="wl-body"></div>`;
+  el.querySelector(".wl-title").textContent = text;
+  el.querySelector(".wl-head").onclick = () => { el.classList.toggle("open"); if (el.classList.contains("open")) scrollDown(); };
+  el._lines = [text];
+  const first = document.createElement("div"); first.className = "wl-step"; first.textContent = text;
+  el.querySelector(".wl-body").append(first);
   $("log").append(el);
   return el;
 }
 function setStep(p, text) {
   p.status = text;
-  if (p.step?.isConnected) { p.step.lastChild.textContent = text; p.step.style.animation = "none"; p.step.offsetWidth; p.step.style.animation = ""; }
+  const wl = p.step;
+  if (!wl?.isConnected) return;
+  wl.querySelector(".wl-title").textContent = text;   // header shows the latest action
+  if (wl._lines[wl._lines.length - 1] === text) return;
+  wl._lines.push(text);
+  const line = document.createElement("div");         // the body keeps the full running list
+  line.className = "wl-step"; line.textContent = text;
+  wl.querySelector(".wl-body").append(line);
+  if (wl.classList.contains("open")) scrollDown();
 }
 
 // --- one-picture screenshots

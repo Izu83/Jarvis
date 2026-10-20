@@ -35,7 +35,7 @@ DEFAULTS = {
     "voice_enabled": True,
     "wake_word_model": "hey_jarvis",
     "wake_threshold": 0.5,
-    "whisper_model": "base.en",  # fast and accurate; "small.en" is slower (only try it if words get misheard)
+    "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
     "speak_replies": True,
     "tts_voice": "",  # part of a Windows voice name, e.g. "David" or "Zira"; empty = default
     # Phone

@@ -15,10 +15,10 @@ log = logging.getLogger("jarvis.voice")
 
 RATE = 16000
 CHUNK = 1280  # 80 ms, the frame size openWakeWord expects
-PRE_ROLL_CHUNKS = 20  # keep 1.6 s before the wake word so words right after it aren't lost
-SILENCE_TO_STOP = 0.9  # seconds of quiet that end a command
-MAX_COMMAND = 15.0
-NO_SPEECH_TIMEOUT = 5.0
+PRE_ROLL_CHUNKS = 22  # keep ~1.8 s before the wake word so words right after it aren't lost
+SILENCE_TO_STOP = 1.2  # seconds of quiet that end a command (longer = less chance of cutting you off mid-sentence)
+MAX_COMMAND = 20.0
+NO_SPEECH_TIMEOUT = 6.0
 
 # Vocabulary hint so Whisper spells app names right
 WHISPER_PROMPT = "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3."
@@ -78,7 +78,7 @@ class VoiceListener:
 
     def _record(self, pre_roll: list[np.ndarray], noise: float) -> np.ndarray:
         """Collect audio until the speaker has been quiet for SILENCE_TO_STOP seconds."""
-        speech_level = max(noise * 2.5, 400.0)
+        speech_level = max(noise * 2.2, 280.0)   # a bit lower, so softer speech still registers
         chunks = list(pre_roll)
         heard_speech, quiet, total = False, 0.0, 0.0
         step = CHUNK / RATE
@@ -98,10 +98,16 @@ class VoiceListener:
 
     def _transcribe(self, audio: np.ndarray) -> str:
         samples = audio.astype(np.float32) / 32768.0
-        segments, _ = self.whisper.transcribe(samples, language="en", beam_size=1,
-                                              vad_filter=True, initial_prompt=WHISPER_PROMPT)
-        # Whisper hallucinates words like "You" on silence; drop segments it thinks aren't speech
-        text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.6).strip()
+        segments, _ = self.whisper.transcribe(
+            samples, language="en",
+            beam_size=5,                           # search wider for the right words (base used greedy = more mistakes)
+            temperature=[0.0, 0.2, 0.4],           # retry a little hotter if a pass looks like a hallucination
+            condition_on_previous_text=False,      # each command is independent; stops it echoing an earlier one
+            vad_filter=True, vad_parameters=dict(min_silence_duration_ms=300),
+            no_speech_threshold=0.7,
+            initial_prompt=WHISPER_PROMPT)
+        # Whisper hallucinates words like "You" on silence; drop only segments it's quite sure aren't speech
+        text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
         log.info("Heard: %r", text)
         return WAKE_PREFIX.sub("", text).strip(" ,.")
 
