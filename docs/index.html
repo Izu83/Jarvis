@@ -890,10 +890,16 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-21.3";   // bump together with version.json
-const JNI = "JNIv4";   // Jarvis · Niko · Izu83 · version 4 — Jarvis's own release name
+const VERSION = "2026-10-21.4";   // bump together with version.json
+const JNI = "JNIv5";   // Jarvis · Niko · Izu83 · version 5 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv5", when: "Oct 21, 2026", title: "Sharper ears + a desktop pop-up", notes: [
+    "Much better voice recognition — Jarvis catches far more of what you say, and waits for you to finish instead of cutting off.",
+    "A 'Hey Jarvis' pop-up now appears in the top-right of your PC screen, showing your words live as you speak and Jarvis's reply.",
+    "When Jarvis works on a task it prints each step live in the chat, in a panel you can fold away with one tap.",
+    "Jarvis keeps listening for 'Hey Jarvis' whenever it's running (set it to start at login once with run.bat --startup).",
+  ] },
   { v: "JNIv4", when: "Oct 21, 2026", title: "A redesigned, customizable look", notes: [
     "A calmer, more polished design — one muted backdrop instead of clashing colours, softer glass and gentler motion.",
     "Make it yours: choose a Theme (Auto / Light / Dark), a Wallpaper and an Accent colour in Settings → Appearance — presets or your own colour.",

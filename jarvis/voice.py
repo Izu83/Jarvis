@@ -30,8 +30,11 @@ def _beep(freq: int) -> None:
 
 
 class VoiceListener:
-    def __init__(self, on_command):
+    def __init__(self, on_command, on_wake=None, on_partial=None, on_idle=None):
         self.on_command = on_command
+        self.on_wake = on_wake        # wake word heard -> show the pop-up
+        self.on_partial = on_partial  # live transcription as you speak
+        self.on_idle = on_idle        # heard the wake word but no command -> hide the pop-up
         self.audio: queue.Queue[np.ndarray] = queue.Queue()
 
     def _load_models(self):
@@ -64,6 +67,9 @@ class VoiceListener:
                 if max(scores.values()) < threshold:
                     continue
                 _beep(880)
+                if self.on_wake:
+                    try: self.on_wake()
+                    except Exception: log.debug("on_wake failed", exc_info=True)
                 noise = float(np.percentile([_rms(c) for c in recent], 20))
                 audio = self._record(list(recent), noise)
                 self.wake.reset()
@@ -75,13 +81,29 @@ class VoiceListener:
                     self.on_command(text)
                 else:
                     log.info("Heard the wake word but no command.")
+                    if self.on_idle:
+                        try: self.on_idle()
+                        except Exception: pass
 
     def _record(self, pre_roll: list[np.ndarray], noise: float) -> np.ndarray:
-        """Collect audio until the speaker has been quiet for SILENCE_TO_STOP seconds."""
+        """Collect audio until the speaker has been quiet for SILENCE_TO_STOP seconds, emitting live partial
+        transcriptions (word-by-word feel) to on_partial while they talk."""
         speech_level = max(noise * 2.2, 280.0)   # a bit lower, so softer speech still registers
         chunks = list(pre_roll)
         heard_speech, quiet, total = False, 0.0, 0.0
         step = CHUNK / RATE
+        last_partial, busy = 0.0, [False]
+
+        def partial(buf):
+            try:
+                txt = self._quick_transcribe(buf)
+                if txt and self.on_partial:
+                    self.on_partial(txt)
+            except Exception:
+                log.debug("partial transcribe failed", exc_info=True)
+            finally:
+                busy[0] = False
+
         while total < MAX_COMMAND:
             chunk = self.audio.get()
             chunks.append(chunk)
@@ -90,11 +112,23 @@ class VoiceListener:
                 heard_speech, quiet = True, 0.0
             else:
                 quiet += step
+            # every ~0.7 s of speech, transcribe what we have so far and show it live (off-thread, non-overlapping)
+            if self.on_partial and heard_speech and not busy[0] and total - last_partial >= 0.7:
+                last_partial, busy[0] = total, True
+                threading.Thread(target=partial, args=(np.concatenate(chunks),), daemon=True).start()
             if heard_speech and quiet >= SILENCE_TO_STOP:
                 break
             if not heard_speech and total >= NO_SPEECH_TIMEOUT:
                 break
         return np.concatenate(chunks)
+
+    def _quick_transcribe(self, audio: np.ndarray) -> str:
+        """A fast, rough pass for the live pop-up (the accurate pass runs once you stop talking)."""
+        samples = audio.astype(np.float32) / 32768.0
+        segments, _ = self.whisper.transcribe(samples, language="en", beam_size=1,
+                                              condition_on_previous_text=False, initial_prompt=WHISPER_PROMPT)
+        text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
+        return WAKE_PREFIX.sub("", text).strip(" ,.")
 
     def _transcribe(self, audio: np.ndarray) -> str:
         samples = audio.astype(np.float32) / 32768.0

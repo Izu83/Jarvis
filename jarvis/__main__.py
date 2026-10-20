@@ -201,8 +201,25 @@ def main() -> None:
         threading.Thread(target=phone.run, daemon=True, name="phone").start()
 
     if settings["voice_enabled"] and not args.no_voice:
+        from .overlay import OverlayClient
         from .voice import VoiceListener
-        threading.Thread(target=VoiceListener(submit).run, daemon=True, name="voice").start()
+        overlay = OverlayClient()
+        if settings["overlay_enabled"]:
+            overlay.start()
+
+        def voice_command(text: str) -> None:
+            overlay.partial(text)   # show the finished command in the pop-up
+            overlay.thinking()
+
+            def reply(answer: str, thinking: str = "") -> None:
+                overlay.reply(answer)
+                speak.say(answer)
+
+            submit(text, reply=reply, via="pc")
+
+        listener = VoiceListener(voice_command, on_wake=overlay.show,
+                                 on_partial=overlay.partial, on_idle=overlay.hide)
+        threading.Thread(target=listener.run, daemon=True, name="voice").start()
 
     speak.say("Jarvis online.")
     try:

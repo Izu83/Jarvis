@@ -33,6 +33,7 @@ DEFAULTS = {
     },
     # Voice
     "voice_enabled": True,
+    "overlay_enabled": True,   # the "Hey Jarvis" pop-up in the top-right corner of the screen
     "wake_word_model": "hey_jarvis",
     "wake_threshold": 0.5,
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
