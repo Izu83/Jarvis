@@ -29,29 +29,34 @@
     --accent-top: color-mix(in srgb, #ffffff 24%, var(--accent));
     --accent-grad: linear-gradient(180deg, var(--accent-top), var(--accent));
     --accent-glow: color-mix(in srgb, var(--accent) 52%, transparent);
-    /* surfaces */
+    /* wallpaper tint (set per wallpaper; works in light & dark) */
+    --wall-hue: #3a6ed2;
+    /* surfaces — DARK theme (default) */
     --base: #0a0b11;
     --glass: color-mix(in srgb, #5a5e72 26%, transparent); --glass-strong: rgba(22,23,29,.76); --card: rgba(255,255,255,.052);
     --rim-hi: rgba(255,255,255,.26); --rim-lo: rgba(255,255,255,.045);
     --shade: 0 16px 44px -16px rgba(0,0,0,.6), 0 3px 12px rgba(0,0,0,.26);
     --sep: rgba(255,255,255,.08); --fill: rgba(132,134,150,.18); --select: var(--accent-soft);
     --bubble: rgba(52,54,64,.64); --bubble-line: rgba(255,255,255,.07);
-    /* backdrop (wallpaper) — a single muted tone, not clashing blobs */
     --ambient-bg:
-      radial-gradient(88vmax 64vmax at 50% -14%, rgba(70,104,180,.22), transparent 60%),
+      radial-gradient(90vmax 66vmax at 50% -14%, color-mix(in srgb, var(--wall-hue) 26%, transparent), transparent 60%),
       radial-gradient(58vmax 52vmax at 102% 104%, var(--accent-soft), transparent 62%);
     /* motion */
     --spring: cubic-bezier(.33,1.3,.5,1); --ease: cubic-bezier(.22,.74,.2,1); --ios: cubic-bezier(.32,.72,0,1);
   }
-  /* ---------- wallpapers (Settings › Appearance) ---------- */
-  html[data-wall="graphite"] { --base: #0a0a0c; --ambient-bg: radial-gradient(92vmax 70vmax at 50% -16%, rgba(255,255,255,.05), transparent 60%); }
-  html[data-wall="midnight"] { --base: #080a14; --ambient-bg: radial-gradient(84vmax 62vmax at 50% -12%, rgba(58,110,214,.26), transparent 60%), radial-gradient(58vmax 50vmax at 98% 106%, rgba(44,74,170,.18), transparent 62%); }
-  html[data-wall="slate"]    { --base: #0c0e13; --ambient-bg: radial-gradient(88vmax 66vmax at 22% -12%, rgba(96,124,166,.16), transparent 60%), radial-gradient(52vmax 48vmax at 100% 108%, rgba(70,90,130,.14), transparent 62%); }
-  html[data-wall="plum"]     { --base: #0d0912; --ambient-bg: radial-gradient(82vmax 62vmax at 72% -12%, rgba(156,74,206,.22), transparent 60%), radial-gradient(56vmax 50vmax at 4% 102%, rgba(96,54,166,.16), transparent 62%); }
-  html[data-wall="forest"]   { --base: #070e0b; --ambient-bg: radial-gradient(82vmax 62vmax at 28% -12%, rgba(42,156,114,.17), transparent 60%), radial-gradient(52vmax 48vmax at 100% 104%, rgba(34,120,120,.13), transparent 62%); }
-  html[data-wall="ember"]    { --base: #100a07; --ambient-bg: radial-gradient(82vmax 62vmax at 62% -12%, rgba(234,124,62,.17), transparent 60%), radial-gradient(56vmax 50vmax at 4% 102%, rgba(206,62,84,.13), transparent 62%); }
-  html[data-wall="accent"]   { --ambient-bg: radial-gradient(94vmax 72vmax at 50% -16%, var(--accent-soft), transparent 60%), radial-gradient(60vmax 52vmax at 100% 104%, var(--accent-soft), transparent 62%); }
-  html[data-wall="daylight"] { color-scheme: light; --label: #0b0b0f; --label2: rgba(60,60,67,.6); --label3: rgba(60,60,67,.3); --base: #eef0f6; --glass: rgba(255,255,255,.55); --glass-strong: rgba(250,250,253,.85); --card: rgba(255,255,255,.66); --rim-hi: rgba(255,255,255,.95); --rim-lo: rgba(255,255,255,.3); --shade: 0 14px 36px -14px rgba(30,40,80,.18), 0 2px 8px rgba(30,40,80,.06); --sep: rgba(60,60,67,.13); --fill: rgba(120,120,128,.14); --bubble: rgba(255,255,255,.84); --bubble-line: rgba(0,0,0,.05); --ambient-bg: radial-gradient(88vmax 66vmax at 50% -12%, rgba(150,178,236,.34), transparent 60%), radial-gradient(60vmax 52vmax at 100% 104%, color-mix(in srgb, var(--accent) 22%, #ffffff), transparent 60%); }
+  /* ---------- Light theme (Settings › Appearance › Theme) ---------- */
+  html[data-theme="light"] { color-scheme: light; --label: #0b0b0f; --label2: rgba(60,60,67,.6); --label3: rgba(60,60,67,.3); --base: #eef0f6; --glass: rgba(255,255,255,.55); --glass-strong: rgba(250,250,253,.86); --card: rgba(255,255,255,.68); --rim-hi: rgba(255,255,255,.95); --rim-lo: rgba(255,255,255,.3); --shade: 0 14px 36px -14px rgba(30,40,80,.18), 0 2px 8px rgba(30,40,80,.06); --sep: rgba(60,60,67,.13); --fill: rgba(120,120,128,.14); --bubble: rgba(255,255,255,.86); --bubble-line: rgba(0,0,0,.05); --ambient-bg: radial-gradient(90vmax 66vmax at 50% -12%, color-mix(in srgb, var(--wall-hue) 34%, #ffffff), transparent 60%), radial-gradient(60vmax 52vmax at 102% 104%, color-mix(in srgb, var(--accent) 22%, #ffffff), transparent 62%); }
+  @media (prefers-color-scheme: light) {
+    html[data-theme="auto"] { color-scheme: light; --label: #0b0b0f; --label2: rgba(60,60,67,.6); --label3: rgba(60,60,67,.3); --base: #eef0f6; --glass: rgba(255,255,255,.55); --glass-strong: rgba(250,250,253,.86); --card: rgba(255,255,255,.68); --rim-hi: rgba(255,255,255,.95); --rim-lo: rgba(255,255,255,.3); --shade: 0 14px 36px -14px rgba(30,40,80,.18), 0 2px 8px rgba(30,40,80,.06); --sep: rgba(60,60,67,.13); --fill: rgba(120,120,128,.14); --bubble: rgba(255,255,255,.86); --bubble-line: rgba(0,0,0,.05); --ambient-bg: radial-gradient(90vmax 66vmax at 50% -12%, color-mix(in srgb, var(--wall-hue) 34%, #ffffff), transparent 60%), radial-gradient(60vmax 52vmax at 102% 104%, color-mix(in srgb, var(--accent) 22%, #ffffff), transparent 62%); }
+  }
+  /* ---------- wallpapers: just a colour tint; the theme sets the surfaces ---------- */
+  html[data-wall="midnight"] { --wall-hue: #3a6ed2; }
+  html[data-wall="graphite"] { --wall-hue: #9196a3; }
+  html[data-wall="slate"]    { --wall-hue: #5f79a2; }
+  html[data-wall="plum"]     { --wall-hue: #a24fd6; }
+  html[data-wall="forest"]   { --wall-hue: #2aa578; }
+  html[data-wall="ember"]    { --wall-hue: #ef7e3c; }
+  html[data-wall="accent"]   { --wall-hue: var(--accent); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--base); color: var(--label); }
   body {
@@ -93,6 +98,10 @@
   .press:active { transform: scale(.955); filter: brightness(1.06); transition-duration: .1s; }
   /* ---------- Appearance (wallpaper + accent pickers) ---------- */
   .opt-label { font-size: 13px; color: var(--label2); margin: 2px 0 11px 2px; letter-spacing: -.1px; }
+  .segment { display: flex; background: var(--fill); border-radius: 13px; padding: 3px; gap: 2px; }
+  .segment button { flex: 1; height: 36px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--label2); display: flex; align-items: center; justify-content: center; gap: 7px; transition: color .2s, background .25s var(--ease); }
+  .segment button svg.i { width: 16px; height: 16px; stroke-width: 2.1; }
+  .segment button.sel { background: var(--glass-strong); color: var(--label); box-shadow: 0 1px 4px rgba(0,0,0,.22), inset 0 0 0 .5px var(--rim-lo); }
   .swatches { display: flex; gap: 11px; flex-wrap: wrap; }
   .swatch { position: relative; flex: none; cursor: pointer; box-shadow: inset 0 0 0 1px var(--rim-lo); transition: transform .35s var(--spring), box-shadow .25s var(--ease); }
   .swatch:not(.acc) { width: 54px; height: 54px; border-radius: 16px; }
@@ -563,6 +572,7 @@
   <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
   <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7.5 4v16M16.5 4v16M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.3 4.3l1.7 1.7M18 18l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.3 19.7l1.7-1.7M18 6l1.7-1.7"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z"/></symbol>
   <symbol id="i-house" viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
   <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></symbol>
@@ -737,7 +747,9 @@
       </div>
       <div class="group-title">Appearance</div>
       <div class="group" style="padding: 15px 16px 17px;">
-        <div class="opt-label">Wallpaper</div>
+        <div class="opt-label">Theme</div>
+        <div class="segment" id="themeSeg"></div>
+        <div class="opt-label" style="margin-top: 17px;">Wallpaper</div>
         <div class="swatches" id="wallpapers"></div>
         <div class="opt-label" style="margin-top: 17px;">Accent</div>
         <div class="swatches" id="accents"></div>
@@ -866,13 +878,13 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-21.1";   // bump together with version.json
+const VERSION = "2026-10-21.2";   // bump together with version.json
 const JNI = "JNIv4";   // Jarvis · Niko · Izu83 · version 4 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
   { v: "JNIv4", when: "Oct 21, 2026", title: "A redesigned, customizable look", notes: [
     "A calmer, more polished design — one muted backdrop instead of clashing colours, softer glass and gentler motion.",
-    "Make it yours: pick a Wallpaper and an Accent colour in Settings → Appearance (choose a preset or your own colour).",
+    "Make it yours: choose a Theme (Auto / Light / Dark), a Wallpaper and an Accent colour in Settings → Appearance — presets or your own colour.",
     "Cleaner cards, bars and buttons throughout, with a steadier, less busy feel.",
     "Your chats, Control Center, camera and calls all work exactly as before.",
   ] },
@@ -1693,21 +1705,31 @@ const WALLS = [
   { id: "forest",   css: "radial-gradient(130% 95% at 50% 0%, #2a7c5c, #070e0b)" },
   { id: "ember",    css: "radial-gradient(130% 95% at 50% 0%, #a95b3b, #100a07)" },
   { id: "accent",   css: "radial-gradient(130% 95% at 50% 0%, var(--accent), #0a0b11)" },
-  { id: "daylight", css: "radial-gradient(130% 95% at 50% 0%, #cfddf5, #eef0f6)" },
 ];
 const ACCENTS = ["#3b82f6", "#5e5ce6", "#bf5af2", "#ff2d78", "#ff6b3d", "#ffb020", "#30d158", "#2bd0c8"];
-const DEFAULT_WALL = "midnight", DEFAULT_ACCENT = "#3b82f6";
+const THEMES = [["auto", "Auto", "sparkles"], ["light", "Light", "sun"], ["dark", "Dark", "moon"]];
+const DEFAULT_WALL = "midnight", DEFAULT_ACCENT = "#3b82f6", DEFAULT_THEME = "dark";
 function applyAppearance() {
-  const wall = load("jarvis.wall") || DEFAULT_WALL;
+  document.documentElement.dataset.theme = load("jarvis.theme") || DEFAULT_THEME;
+  document.documentElement.dataset.wall = load("jarvis.wall") || DEFAULT_WALL;
   const acc = load("jarvis.accent");
-  document.documentElement.dataset.wall = wall;
   if (acc) document.documentElement.style.setProperty("--blue", acc);
   else document.documentElement.style.removeProperty("--blue");
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--base").trim() || "#0a0b11";
 }
 function renderAppearance() {
   const wallSel = load("jarvis.wall") || DEFAULT_WALL, accSel = (load("jarvis.accent") || DEFAULT_ACCENT).toLowerCase();
+  const themeSel = load("jarvis.theme") || DEFAULT_THEME;
+  const seg = $("themeSeg");
+  if (seg) {
+    seg.innerHTML = "";
+    for (const [id, name, ic] of THEMES) {
+      const b = document.createElement("button");
+      b.className = "press" + (id === themeSel ? " sel" : "");
+      b.innerHTML = `${icon(ic)}<span>${name}</span>`;
+      b.onclick = () => { store("jarvis.theme", id); applyAppearance(); renderAppearance(); };
+      seg.append(b);
+    }
+  }
   const wbox = $("wallpapers"); if (!wbox) return;
   wbox.innerHTML = "";
   for (const w of WALLS) {
