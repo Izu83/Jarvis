@@ -4,9 +4,25 @@ import json
 import subprocess
 import time
 
+import logging
+
 from . import apps, approval, files, gesture, modes, pc, power, screens, spotify, sysinfo, ui, watchers
 from . import windows as win
 from .config import settings
+
+log = logging.getLogger("jarvis.tools")
+
+# Which risk categories each autonomy level auto-approves (everything else still asks the user).
+# Hard safety stays in code regardless: files.check_deletable blocks system/Windows/main-user folders.
+_AUTO = {"ask": (), "risky_only": ("cmd", "change"), "full": ("cmd", "change", "delete")}
+
+
+def _confirm(risk: str, title: str, detail: str, confirm: str) -> bool:
+    """Ask the user to approve an action, unless the chosen autonomy level auto-approves this kind of action."""
+    if risk in _AUTO.get(settings.get("autonomy", "ask"), ()):
+        log.info("Auto-approved (%s): %s", risk, title)
+        return True
+    return approval.ask(title, detail, confirm)
 
 TOOLS = [
     {
@@ -638,7 +654,7 @@ def _power_action(action: str) -> str:
     if action == "cancel":
         return power.cancel()
     title, detail, confirm, fn = _POWER[action]
-    if not approval.ask(title, detail, confirm):
+    if not _confirm("power", title, detail, confirm):
         return DECLINED
     return fn()
 
@@ -647,7 +663,7 @@ def _send_message(args: dict) -> str:
     window, to, message = args["window"], args["to"], args["message"]
     ui.type_text(message, window)   # type into the chat box the user has open
     time.sleep(0.2)
-    if not approval.ask(f"Send this message to {to}?", f"{message}", "Send"):
+    if not _confirm("send", f"Send this message to {to}?", f"{message}", "Send"):
         return DECLINED + " The message was typed but not sent; the user can delete it."
     if args.get("send_control"):
         ui.click(window, args["send_control"])
@@ -676,7 +692,7 @@ def _delete_paths(args: dict) -> str:
     title = (f"Permanently delete {len(targets)} item(s)?" if permanent
              else f"Move {len(targets)} item(s) to the Recycle Bin?")
     detail = listing + f"\n\nTotal: {files.fmt_size(total)}" + ("\nThis can't be undone." if permanent else "")
-    if not approval.ask(title, detail, "Delete" if permanent else "Move to Bin"):
+    if not _confirm("delete", title, detail, "Delete" if permanent else "Move to Bin"):
         return DECLINED
     return files.delete(targets, permanent)
 
@@ -692,7 +708,7 @@ def _clear_folder(args: dict) -> str:
     detail = (f"{folder}\n{len(items)} item(s), {files.fmt_size(size)}\n\n"
               + ("They'll be deleted permanently to free the space." if permanent
                  else "They'll go to the Recycle Bin."))
-    if not approval.ask(title, detail, "Clear"):
+    if not _confirm("delete", title, detail, "Clear"):
         return DECLINED
     return files.clear(items, permanent)
 
@@ -701,7 +717,7 @@ def _empty_bin(args: dict) -> str:
     summary = files.recycle_bin_summary()
     if summary.startswith("0 item"):
         return "The Recycle Bin is already empty."
-    if not approval.ask("Empty the Recycle Bin?", f"{summary} will be deleted permanently.\nThis can't be undone.", "Empty"):
+    if not _confirm("delete", "Empty the Recycle Bin?", f"{summary} will be deleted permanently.\nThis can't be undone.", "Empty"):
         return DECLINED
     return files.empty_recycle_bin()
 
@@ -709,15 +725,15 @@ def _empty_bin(args: dict) -> str:
 def _write_file(args: dict) -> str:
     p = files.resolve(args["path"])
     if p.exists() and not args.get("append"):
-        if not approval.ask(f"Overwrite {p.name}?", f"{p}\nalready exists ({files.fmt_size(p.stat().st_size)}) "
-                                                    f"and will be replaced.", "Overwrite"):
+        if not _confirm("change", f"Overwrite {p.name}?", f"{p}\nalready exists ({files.fmt_size(p.stat().st_size)}) "
+                                                          f"and will be replaced.", "Overwrite"):
             return DECLINED
     return files.write_file(args["path"], args["text"], bool(args.get("append")))
 
 
 def _run_powershell(args: dict) -> str:
     command = args["command"].strip()
-    if not approval.ask("Run this command on your PC?", f"{args.get('why', '')}\n\n{command}", "Run"):
+    if not _confirm("cmd", "Run this command on your PC?", f"{args.get('why', '')}\n\n{command}", "Run"):
         return DECLINED
     try:
         proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command],

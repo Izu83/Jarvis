@@ -34,6 +34,10 @@ DEFAULTS = {
     # Voice
     "voice_enabled": True,
     "overlay_enabled": True,   # the "Hey Jarvis" pop-up in the top-right corner of the screen
+    # How much Jarvis confirms before acting: "ask" (confirm everything risky), "risky_only" (run commands & change
+    # things freely, still confirm deletes/power/messages), "full" (do almost everything without asking; system/Windows
+    # folders are still never deletable, and shutdowns and sending messages still confirm).
+    "autonomy": "full",
     "wake_word_model": "hey_jarvis",
     "wake_threshold": 0.5,
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
