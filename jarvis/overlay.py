@@ -16,12 +16,15 @@ transparentcolor only and shows/hides instantly.
 """
 import ctypes
 import json
+import logging
 import math
 import queue
 import sys
 import threading
 import tkinter as tk
 import tkinter.font as tkfont
+
+log = logging.getLogger("jarvis.overlay")
 
 KEY = "#ff00fe"          # chroma-key colour Windows renders fully transparent -> rounded corners
 PANEL = "#15161c"
@@ -142,6 +145,7 @@ class Overlay:
         self.visible = True
         self.root.overrideredirect(True)    # re-assert: Windows can re-add the title bar after remap
         self._place(self.h)
+        self.root.update_idletasks()        # force the on-screen geometry to apply NOW (else it can stay parked)
         self.root.attributes("-topmost", True)
         self.root.lift()
 
@@ -233,18 +237,25 @@ class OverlayClient:
                 try: self.on_event(ev)
                 except Exception: pass
 
+    def _ensure(self) -> None:
+        """Make sure the overlay process is alive; restart it if it died, so the pop-up always appears."""
+        if self.proc is None or self.proc.poll() is not None:
+            log.info("Overlay not running; (re)starting it.")
+            self.start()
+
     def _send(self, obj: dict) -> None:
         p = self.proc
         if not p or p.poll() is not None or not p.stdin:
+            log.debug("overlay not reachable for %s", obj.get("cmd"))
             return
         try:
             with self._lock:
                 p.stdin.write(json.dumps(obj) + "\n")
                 p.stdin.flush()
         except OSError:
-            pass
+            log.debug("overlay write failed", exc_info=True)
 
-    def show(self):            self._send({"cmd": "show"})
+    def show(self):            self._ensure(); self._send({"cmd": "show"})
     def partial(self, text):   self._send({"cmd": "partial", "text": text})
     def thinking(self):        self._send({"cmd": "state", "state": "thinking"})
     def reply(self, text):     self._send({"cmd": "reply", "text": text})
