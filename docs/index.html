@@ -901,10 +901,15 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-22.2";   // bump together with version.json
-const JNI = "JNIv7";   // Jarvis · Niko · Izu83 · version 7 — Jarvis's own release name
+const VERSION = "2026-10-23.1";   // bump together with version.json
+const JNI = "JNIv8";   // Jarvis · Niko · Izu83 · version 8 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv8", when: "Oct 23, 2026", title: "A real voice + a smoother pop-up", notes: [
+    "Jarvis now talks back in a natural, human-sounding woman's voice — and the 'Hey Jarvis' pop-up reads replies out loud again.",
+    "The pop-up slides in and out smoothly instead of snapping on and off.",
+    "The voice uses Microsoft's free neural voices (online); the built-in offline voice is the backup if you're not connected.",
+  ] },
   { v: "JNIv7", when: "Oct 22, 2026", title: "Mic, timing & usage controls", notes: [
     "Settings now shows your Claude usage — how many times Jarvis used Claude, how many tokens, and how much it handled locally for free.",
     "Pick which microphone Jarvis listens on, right from the tray icon (handy if you have more than one).",

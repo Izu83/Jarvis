@@ -52,7 +52,10 @@ DEFAULTS = {
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
     "speak_replies": True,
     "speak_on_shortcut": True,  # speak the reply aloud when you start a command with the Ctrl+Alt+J shortcut
-    "tts_voice": "",  # part of a Windows voice name, e.g. "David" or "Zira"; empty = default
+    # Voice: "edge" = Microsoft's free natural neural voices (online, no key); "windows" = the built-in offline voice.
+    "tts_engine": "edge",
+    "edge_voice": "en-US-AriaNeural",  # a natural female voice; e.g. en-US-JennyNeural, en-US-AvaNeural, en-GB-SoniaNeural
+    "tts_voice": "",  # the built-in Windows voice name (offline fallback), e.g. "Zira"; empty = default
     "input_device": None,       # which microphone to listen on (device index); None = Windows default
     # How long Jarvis listens. Bigger = waits longer for you, less chance of cutting you off.
     "silence_seconds": 5.0,       # quiet time that ends a command (bigger = more room to pause mid-sentence)

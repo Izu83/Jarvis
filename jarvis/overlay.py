@@ -76,19 +76,22 @@ class Overlay:
         self.state = "listening"
         self.text = ""
         self.visible = False
+        self.anim = False
         self.pulse = 0.0
         self.h = 70
+        self.y_on, self.y_off = PAD, -200
+        self.y = self.target = self.y_off
         self.hide_after = None
         self._xbox = (0, 0, 0, 0)   # clickable rectangle of the close button
-        self._place(self.h, off=True)   # start parked off-screen
+        self._place_y(self.y)       # start parked above the screen
         threading.Thread(target=self._reader, daemon=True).start()
         self.root.after(40, self._poll)
-        self.root.after(33, self._tick)
+        self.root.after(16, self._tick)   # ~60 fps for a smooth slide
 
-    def _place(self, h: int, off: bool = False):
+    def _place_y(self, y: float):
         pw, _ = _primary_size()
         x = pw - W - PAD
-        self.root.geometry(f"{W}x{h + 20}+{x}+{-h - 600}" if off else f"{W}x{h + 20}+{x}+{PAD}")
+        self.root.geometry(f"{W}x{self.h + 20}+{x}+{int(y)}")
 
     @staticmethod
     def _round(c, x1, y1, x2, y2, r, **kw):
@@ -105,10 +108,7 @@ class Overlay:
         bb = c.bbox(probe)
         th = (bb[3] - bb[1]) if bb else 18
         c.delete(probe)
-        h = max(70, 40 + th)
-        if h != self.h:
-            self.h = h
-            self._place(h)
+        h = self.h = max(70, 40 + th)
         top = 6
         self._round(c, 2, top + 1, W - 2, top + h, 22, fill=BORDER, outline="")       # soft border
         self._round(c, 3, top + 2, W - 3, top + h - 1, 21, fill=PANEL, outline="")     # panel
@@ -136,23 +136,28 @@ class Overlay:
             self._hide()
 
     def _tick(self):
-        if self.visible:
+        if self.visible or self.anim:
+            if self.anim:
+                self.y += (self.target - self.y) * 0.3   # ease toward the target position
+                if abs(self.y - self.target) < 1.0:
+                    self.y, self.anim = self.target, False
+                    if self.target <= self.y_off + 1:
+                        self.visible = False
             self.pulse += 0.16
             self._draw()
-        self.root.after(33, self._tick)
+            self._place_y(self.y)
+        self.root.after(16, self._tick)
 
     def _show(self):
-        self.visible = True
+        if not self.visible:
+            self.y = self.y_off             # start above the screen so it slides down into view
+        self.visible, self.anim, self.target = True, True, self.y_on
         self.root.overrideredirect(True)    # re-assert: Windows can re-add the title bar after remap
-        self._place(self.h)
-        self.root.update_idletasks()        # force the on-screen geometry to apply NOW (else it can stay parked)
         self.root.attributes("-topmost", True)
         self.root.lift()
 
     def _hide(self):
-        self.visible = False
-        self.canvas.delete("all")
-        self._place(self.h, off=True)       # park off-screen so it never blocks clicks
+        self.anim, self.target = True, self.y_off   # slide up out of view; _tick hides it when it's gone
 
     # ---- stdin -> queue ----
     def _reader(self):
