@@ -55,7 +55,7 @@ DEFAULTS = {
     "tts_voice": "",  # part of a Windows voice name, e.g. "David" or "Zira"; empty = default
     "input_device": None,       # which microphone to listen on (device index); None = Windows default
     # How long Jarvis listens. Bigger = waits longer for you, less chance of cutting you off.
-    "silence_seconds": 2.0,       # quiet time that ends a command
+    "silence_seconds": 3.5,       # quiet time that ends a command (bigger = more room to pause mid-sentence)
     "max_command_seconds": 40.0,  # hard cap on one command
     "no_speech_seconds": 8.0,     # give up if no speech after the wake word
     # Phone
