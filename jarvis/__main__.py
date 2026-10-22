@@ -42,6 +42,21 @@ def pair() -> None:
         print("\nNOTE: set \"phone_page_url\" in config.json to your GitHub Pages URL first, then run --pair again.")
 
 
+_singleton_handle = None
+
+
+def _already_running() -> bool:
+    """True if another Jarvis already holds the single-instance lock (a Windows named mutex)."""
+    global _singleton_handle
+    try:
+        import ctypes
+        k = ctypes.windll.kernel32
+        _singleton_handle = k.CreateMutexW(None, False, "JarvisSingleInstance_v1")  # keep the handle for life
+        return k.GetLastError() == 183   # ERROR_ALREADY_EXISTS
+    except Exception:
+        return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="jarvis")
     parser.add_argument("--text", action="store_true", help="type commands here instead of / as well as speaking")
@@ -69,6 +84,13 @@ def main() -> None:
     if args.pair:
         pair()
         return
+
+    # Only one Jarvis at a time. A named mutex is held for the life of the process; a second copy (however it
+    # got launched) sees it already exists and bows out, so two copies never answer the same command.
+    if _already_running():
+        log.warning("Jarvis is already running — this duplicate is exiting.")
+        return
+
     if settings["brain"] == "api" and not secret("ANTHROPIC_API_KEY"):
         log.warning("ANTHROPIC_API_KEY isn't set in .env; falling back to any `ant auth login` profile.")
 
