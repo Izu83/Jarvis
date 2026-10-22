@@ -894,10 +894,16 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-21.5";   // bump together with version.json
-const JNI = "JNIv5";   // Jarvis · Niko · Izu83 · version 5 — Jarvis's own release name
+const VERSION = "2026-10-22.1";   // bump together with version.json
+const JNI = "JNIv6";   // Jarvis · Niko · Izu83 · version 6 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv6", when: "Oct 22, 2026", title: "A free local brain + runs in the background", notes: [
+    "Jarvis now has its own free brain (Hermes) running right on your PC — most commands cost zero Claude usage and work offline.",
+    "It automatically falls back to Claude only for the hard things it can't do locally — seeing your screen, the web, and exact file searches — so answers stay right.",
+    "Jarvis can run quietly in the background with just a tray icon (under the ^ arrow) — no console window. Right-click it to quit, or double-click Jarvis.vbs to start it hidden.",
+    "Press Ctrl + Alt + J anywhere to start talking without the wake word (toggle it in Settings › Desktop).",
+  ] },
   { v: "JNIv5", when: "Oct 21, 2026", title: "Sharper ears + a desktop pop-up", notes: [
     "Much better voice recognition — Jarvis catches far more of what you say, and waits for you to finish instead of cutting off.",
     "A 'Hey Jarvis' pop-up now appears in the top-right of your PC screen, showing your words live as you speak and Jarvis's reply.",
