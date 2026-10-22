@@ -47,6 +47,7 @@ def main() -> None:
     parser.add_argument("--text", action="store_true", help="type commands here instead of / as well as speaking")
     parser.add_argument("--no-voice", action="store_true", help="don't use the microphone")
     parser.add_argument("--no-phone", action="store_true", help="don't listen for phone commands")
+    parser.add_argument("--no-tray", action="store_true", help="don't show the taskbar tray icon")
     parser.add_argument("--pair", action="store_true", help="show the link/QR code that connects your phone")
     parser.add_argument("--startup", action="store_true", help="start Jarvis hidden at login from now on")
     parser.add_argument("--startup-off", action="store_true", help="stop starting Jarvis at login")
@@ -225,6 +226,15 @@ def main() -> None:
         hotkey.configure(settings["hotkey"], listener.trigger)
         if settings["hotkey_enabled"]:
             hotkey.set_enabled(True)
+
+    # A tray icon lets Jarvis run with no console window (double-click Jarvis.vbs, or start it at login);
+    # right-click it to quit. --text keeps the console for typing, so skip the tray there.
+    if settings["tray_enabled"] and not args.no_tray and not args.text:
+        try:
+            from .tray import Tray
+            threading.Thread(target=Tray().run, daemon=True, name="tray").start()
+        except Exception:
+            log.debug("couldn't start the tray icon", exc_info=True)
 
     speak.say("Jarvis online.")
     try:

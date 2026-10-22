@@ -36,6 +36,7 @@ DEFAULTS = {
     "overlay_enabled": True,   # the "Hey Jarvis" pop-up in the top-right corner of the screen
     "hotkey_enabled": True,    # a keyboard shortcut that starts Jarvis listening without the wake word
     "hotkey": "Ctrl+Alt+J",    # the shortcut to press (modifiers + one key, e.g. "Ctrl+Shift+Space")
+    "tray_enabled": True,      # show a Jarvis icon in the taskbar tray (so it can run with no console window)
     # How much Jarvis confirms before acting: "ask" (confirm everything risky), "risky_only" (run commands & change
     # things freely, still confirm deletes/power/messages), "full" (do almost everything without asking; system/Windows
     # folders are still never deletable, and shutdowns and sending messages still confirm).
