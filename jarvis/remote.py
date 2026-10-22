@@ -159,6 +159,7 @@ class PhoneChannel:
             status = None
         self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status,
                        "use_claude": settings["use_claude"],
+                       "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "vapid": push.public_key(), "notify": push.have_subs()})
 
     def _later(self, seconds: float, fn, *args) -> None:
@@ -278,9 +279,15 @@ class PhoneChannel:
                 self.reply(msg_id, "Test notification sent." if sent else
                            "Apple refused the notification. Turn the switch off and on again (details in jarvis.log).")
         elif kind == "set":   # a settings toggle from the phone
-            if data.get("key") == "use_claude":
-                set_setting("use_claude", bool(data.get("value")))
-                log.info("Claude turned %s from the phone.", "on" if data.get("value") else "off")
+            key, value = data.get("key"), bool(data.get("value"))
+            if key == "use_claude":
+                set_setting("use_claude", value)
+                log.info("Claude turned %s from the phone.", "on" if value else "off")
+            elif key == "hotkey_enabled":
+                set_setting("hotkey_enabled", value)
+                from . import hotkey
+                hotkey.set_enabled(value)
+                log.info("Keyboard shortcut turned %s from the phone.", "on" if value else "off")
             self.send_state()
         elif kind == "clip_get":
             text = pc.get_clipboard()

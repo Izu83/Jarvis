@@ -221,6 +221,11 @@ def main() -> None:
                                  on_partial=overlay.partial, on_idle=overlay.hide)
         threading.Thread(target=listener.run, daemon=True, name="voice").start()
 
+        from . import hotkey   # a keyboard shortcut (Ctrl+Alt+J) that starts listening without the wake word
+        hotkey.configure(settings["hotkey"], listener.trigger)
+        if settings["hotkey_enabled"]:
+            hotkey.set_enabled(True)
+
     speak.say("Jarvis online.")
     try:
         if args.text:

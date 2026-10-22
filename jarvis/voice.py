@@ -36,6 +36,11 @@ class VoiceListener:
         self.on_partial = on_partial  # live transcription as you speak
         self.on_idle = on_idle        # heard the wake word but no command -> hide the pop-up
         self.audio: queue.Queue[np.ndarray] = queue.Queue()
+        self._manual = threading.Event()   # set by the keyboard shortcut to start listening without the wake word
+
+    def trigger(self) -> None:
+        """Start listening now, as if the wake word had been heard (used by the Ctrl+Alt+J shortcut)."""
+        self._manual.set()
 
     def _load_models(self):
         from faster_whisper import WhisperModel
@@ -64,8 +69,10 @@ class VoiceListener:
                 chunk = self.audio.get()
                 recent.append(chunk)
                 scores = self.wake.predict(chunk)
-                if max(scores.values()) < threshold:
+                manual = self._manual.is_set()
+                if not manual and max(scores.values()) < threshold:
                     continue
+                self._manual.clear()
                 _beep(880)
                 if self.on_wake:
                     try: self.on_wake()
