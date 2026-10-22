@@ -181,8 +181,18 @@ def _compose_thoughts(think_text: list[str], narration: list[str], steps: list[s
     return body.strip()
 
 
+def make_brain_named(name: str):
+    """Build a specific brain by name: 'api', 'hermes' (free, local), or 'claude-code' (the default)."""
+    if name == "api":
+        return ApiBrain()
+    if name == "hermes":
+        from .hermes import HermesBrain   # imported lazily so hermes.py can import from this module
+        return HermesBrain()
+    return ClaudeCodeBrain()
+
+
 def make_brain():
-    return ApiBrain() if settings["brain"] == "api" else ClaudeCodeBrain()
+    return make_brain_named(settings["brain"])
 
 
 class ClaudeCodeBrain:

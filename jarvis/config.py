@@ -11,8 +11,14 @@ CONFIG_PATH = ROOT / "config.json"
 
 DEFAULTS = {
     # Brain: "claude-code" uses your Claude Pro/Max subscription through the Claude Code CLI;
-    # "api" uses a paid API key (ANTHROPIC_API_KEY) and is a bit faster.
+    # "api" uses a paid API key (ANTHROPIC_API_KEY) and is a bit faster;
+    # "hermes" runs a free, local Hermes model (via Ollama) that tries every command on your own PC
+    # with zero tokens, and quietly falls back to Claude for anything it can't do.
     "brain": "claude-code",
+    # Local Hermes brain (only used when brain is "hermes")
+    "ollama_host": "http://127.0.0.1:11434",
+    "hermes_model": "hermes3:8b",     # the Ollama model to run; pull it with: ollama pull hermes3:8b
+    "hermes_fallback": "claude-code",  # which brain handles what Hermes can't ("claude-code" or "api")
     # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
     # anything it doesn't understand, it says so instead of asking Claude.
     "use_claude": True,
