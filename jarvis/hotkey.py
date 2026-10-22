@@ -10,6 +10,7 @@ import threading
 log = logging.getLogger("jarvis.hotkey")
 
 user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32   # GetCurrentThreadId lives here, not in user32
 
 MOD_ALT = 0x0001
 MOD_CONTROL = 0x0002
@@ -59,7 +60,7 @@ class HotkeyListener:
         return True
 
     def _run(self, mods: int, vk: int) -> None:
-        self._tid = user32.GetCurrentThreadId()
+        self._tid = kernel32.GetCurrentThreadId()
         if not user32.RegisterHotKey(None, _HOTKEY_ID, mods | MOD_NOREPEAT, vk):
             log.warning("Couldn't register the shortcut %s (another app may already be using it).", self.combo)
             return
@@ -72,6 +73,8 @@ class HotkeyListener:
                         self.on_press()
                     except Exception:
                         log.debug("hotkey callback failed", exc_info=True)
+        except Exception:
+            log.warning("The shortcut %s stopped working unexpectedly.", self.combo, exc_info=True)
         finally:
             user32.UnregisterHotKey(None, _HOTKEY_ID)
 
