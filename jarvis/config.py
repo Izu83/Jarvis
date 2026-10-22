@@ -51,7 +51,13 @@ DEFAULTS = {
     "wake_threshold": 0.5,
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
     "speak_replies": True,
+    "speak_on_shortcut": True,  # speak the reply aloud when you start a command with the Ctrl+Alt+J shortcut
     "tts_voice": "",  # part of a Windows voice name, e.g. "David" or "Zira"; empty = default
+    "input_device": None,       # which microphone to listen on (device index); None = Windows default
+    # How long Jarvis listens. Bigger = waits longer for you, less chance of cutting you off.
+    "silence_seconds": 2.0,       # quiet time that ends a command
+    "max_command_seconds": 40.0,  # hard cap on one command
+    "no_speech_seconds": 8.0,     # give up if no speech after the wake word
     # Phone
     "phone_enabled": True,
     "ntfy_server": "https://ntfy.sh",  # only used to tell the phone the tunnel address

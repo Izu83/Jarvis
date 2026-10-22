@@ -15,7 +15,7 @@ import time
 
 import requests
 
-from . import tools
+from . import tools, usage
 from .brain import (IDLE_RESET_SECONDS, MAX_TOOL_ROUNDS, SYSTEM_TEMPLATE,
                     describe_step, make_brain_named, thread_switch_note)
 from .config import settings
@@ -133,6 +133,7 @@ class HermesBrain:
                     return None   # nothing to say -> let Claude answer properly
                 self.last_thinking = _steps_thoughts(steps)
                 log.info("Hermes answered locally in %.1fs (no tokens).", time.time() - started)
+                usage.record_local()
                 return answer
             for call in calls:
                 fn = call.get("function", {})

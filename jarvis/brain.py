@@ -17,7 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import tools
+from . import tools, usage
 from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.brain")
@@ -344,10 +344,12 @@ class ClaudeCodeBrain:
                 continue
             answer = (event.get("result") or "").strip()
             self.last_thinking = _compose_thoughts(think_text, narration, steps, answer)
-            usage = event.get("usage") or {}
+            u = event.get("usage") or {}
             log.info("tokens: in=%s cached=%s+%s out=%s, model turns=%s",
-                     usage.get("input_tokens"), usage.get("cache_read_input_tokens"),
-                     usage.get("cache_creation_input_tokens"), usage.get("output_tokens"), event.get("num_turns"))
+                     u.get("input_tokens"), u.get("cache_read_input_tokens"),
+                     u.get("cache_creation_input_tokens"), u.get("output_tokens"), event.get("num_turns"))
+            usage.record_claude((u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
+                                + (u.get("cache_creation_input_tokens") or 0), u.get("output_tokens") or 0)
             if event.get("is_error"):
                 log.error("Claude Code error: %s", event.get("result"))
                 return event.get("result") or "Claude Code reported an error (maybe a usage limit)."
@@ -411,6 +413,12 @@ class ApiBrain:
             )
             # Append the full content (incl. thinking blocks) so the conversation stays valid.
             self.history.append({"role": "assistant", "content": response.content})
+            u = getattr(response, "usage", None)
+            if u:
+                usage.record_claude((getattr(u, "input_tokens", 0) or 0)
+                                    + (getattr(u, "cache_read_input_tokens", 0) or 0)
+                                    + (getattr(u, "cache_creation_input_tokens", 0) or 0),
+                                    getattr(u, "output_tokens", 0) or 0)
             for b in response.content:
                 if b.type == "thinking" and getattr(b, "thinking", "").strip():
                     thoughts.append(b.thinking.strip())

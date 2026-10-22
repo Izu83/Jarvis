@@ -773,6 +773,13 @@
       <div class="group">
         <label class="row"><span class="grow">Use Claude for complex commands<span class="sub">Off = only the free built-in commands, never uses your Claude limit</span></span><span class="switch"><input type="checkbox" id="claudeToggle"><span></span></span></label>
       </div>
+      <div class="group-title">Claude usage</div>
+      <div class="group">
+        <div class="row"><span class="grow">Times Jarvis used Claude</span><span class="value" id="uClaude">—</span></div>
+        <div class="row"><span class="grow">Tokens used<span class="sub">input + output, all time</span></span><span class="value" id="uTokens">—</span></div>
+        <div class="row"><span class="grow">Handled locally for free</span><span class="value" id="uLocal">—</span></div>
+        <button class="row btn" id="usageReset">Reset Counter</button>
+      </div>
       <div class="group-title">Desktop</div>
       <div class="group">
         <label class="row"><span class="grow">Talk shortcut<span class="sub">Press Ctrl + Alt + J on your PC to start talking, without saying "Hey Jarvis"</span></span><span class="switch"><input type="checkbox" id="hotkeyToggle"><span></span></span></label>
@@ -894,10 +901,17 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-22.1";   // bump together with version.json
-const JNI = "JNIv6";   // Jarvis · Niko · Izu83 · version 6 — Jarvis's own release name
+const VERSION = "2026-10-22.2";   // bump together with version.json
+const JNI = "JNIv7";   // Jarvis · Niko · Izu83 · version 7 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv7", when: "Oct 22, 2026", title: "Mic, timing & usage controls", notes: [
+    "Settings now shows your Claude usage — how many times Jarvis used Claude, how many tokens, and how much it handled locally for free.",
+    "Pick which microphone Jarvis listens on, right from the tray icon (handy if you have more than one).",
+    "Jarvis waits longer before it stops listening, so you can talk at your own pace without being cut off.",
+    "The 'Hey Jarvis' pop-up looks cleaner, shows only on your main monitor, and has an X to stop — or press Ctrl + Alt + J again to stop listening.",
+    "Choose whether Jarvis speaks its reply aloud when you start a command with Ctrl + Alt + J (tray icon).",
+  ] },
   { v: "JNIv6", when: "Oct 22, 2026", title: "A free local brain + runs in the background", notes: [
     "Jarvis now has its own free brain (Hermes) running right on your PC — most commands cost zero Claude usage and work offline.",
     "It automatically falls back to Claude only for the hard things it can't do locally — seeing your screen, the web, and exact file searches — so answers stay right.",
@@ -1599,6 +1613,10 @@ function onState(data) {
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
+  if (data.usage) { const u = data.usage, n = x => (x || 0).toLocaleString();
+    $("uClaude").textContent = n(u.claude_calls);
+    $("uTokens").textContent = n(u.tokens_total != null ? u.tokens_total : (u.tokens_in || 0) + (u.tokens_out || 0));
+    $("uLocal").textContent = n(u.local_calls); }
   if (data.vapid) vapidKey = data.vapid;
   if (typeof data.notify === "boolean") refreshNotifyToggle(data.notify);
   if (!data.pc) return;
@@ -2105,6 +2123,7 @@ $("notifyTest").onclick = async () => {
 };
 $("claudeToggle").onchange = e => { post({ type: "set", key: "use_claude", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Claude on" : "Claude off \u2014 free commands only", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("hotkeyToggle").onchange = e => { post({ type: "set", key: "hotkey_enabled", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Talk shortcut on \u2014 Ctrl + Alt + J" : "Talk shortcut off", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
+$("usageReset").onclick = () => { post({ type: "usage_reset", id: newId() }).catch(() => {}); toast("Usage counter reset", "check", "var(--green)"); };
 $("deleteAllBtn").onclick = () => { if (!confirm("Delete all chats and groups?")) return; db = { chats: [], groups: [], current: null }; saveDb(); closeSheets(); renderChat(); updateBadges(); };
 $("unpair").onclick = () => {
   if (!confirm("Unpair this phone? You'll need to scan the QR code on your PC again.")) return;

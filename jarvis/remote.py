@@ -157,9 +157,11 @@ class PhoneChannel:
         except Exception:
             log.exception("Couldn't read PC status")
             status = None
+        from . import usage
         self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status,
                        "use_claude": settings["use_claude"],
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
+                       "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs()})
 
     def _later(self, seconds: float, fn, *args) -> None:
@@ -288,6 +290,11 @@ class PhoneChannel:
                 from . import hotkey
                 hotkey.set_enabled(value)
                 log.info("Keyboard shortcut turned %s from the phone.", "on" if value else "off")
+            self.send_state()
+        elif kind == "usage_reset":
+            from . import usage
+            usage.reset()
+            log.info("Usage counters reset from the phone.")
             self.send_state()
         elif kind == "clip_get":
             text = pc.get_clipboard()

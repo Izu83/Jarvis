@@ -201,20 +201,24 @@ def main() -> None:
         _bridge["phone"] = phone   # let tools push files to the phone via the approval bridge
         threading.Thread(target=phone.run, daemon=True, name="phone").start()
 
+    listener = None
     if settings["voice_enabled"] and not args.no_voice:
         from .overlay import OverlayClient
         from .voice import VoiceListener
-        overlay = OverlayClient()
+        overlay = OverlayClient(on_event=lambda e: listener.cancel() if e == "cancel" and listener else None)
         if settings["overlay_enabled"]:
             overlay.start()
 
-        def voice_command(text: str) -> None:
+        def voice_command(text: str, source: str = "wake") -> None:
             overlay.partial(text)   # show the finished command in the pop-up
             overlay.thinking()
+            # Speak the reply unless the user turned off speaking for the Ctrl+Alt+J shortcut.
+            speak_this = settings["speak_replies"] and (source != "hotkey" or settings["speak_on_shortcut"])
 
             def reply(answer: str, thinking: str = "") -> None:
                 overlay.reply(answer)
-                speak.say(answer)
+                if speak_this:
+                    speak.say(answer)
 
             submit(text, reply=reply, via="pc")
 
@@ -222,17 +226,17 @@ def main() -> None:
                                  on_partial=overlay.partial, on_idle=overlay.hide)
         threading.Thread(target=listener.run, daemon=True, name="voice").start()
 
-        from . import hotkey   # a keyboard shortcut (Ctrl+Alt+J) that starts listening without the wake word
+        from . import hotkey   # a keyboard shortcut (Ctrl+Alt+J) that starts/stops listening without the wake word
         hotkey.configure(settings["hotkey"], listener.trigger)
         if settings["hotkey_enabled"]:
             hotkey.set_enabled(True)
 
     # A tray icon lets Jarvis run with no console window (double-click Jarvis.vbs, or start it at login);
-    # right-click it to quit. --text keeps the console for typing, so skip the tray there.
+    # right-click it to pick a mic or quit. --text keeps the console for typing, so skip the tray there.
     if settings["tray_enabled"] and not args.no_tray and not args.text:
         try:
             from .tray import Tray
-            threading.Thread(target=Tray().run, daemon=True, name="tray").start()
+            threading.Thread(target=Tray(listener=listener).run, daemon=True, name="tray").start()
         except Exception:
             log.debug("couldn't start the tray icon", exc_info=True)
 

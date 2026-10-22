@@ -1,24 +1,22 @@
-"""Microphone: wait for "Hey Jarvis", record until you stop talking, transcribe with Whisper."""
+"""Microphone: wait for "Hey Jarvis" (or the Ctrl+Alt+J shortcut), record until you stop talking, transcribe."""
 import collections
 import logging
 import queue
 import re
 import threading
+import time
 import winsound
 
 import numpy as np
 import sounddevice as sd
 
-from .config import settings
+from .config import set_setting, settings
 
 log = logging.getLogger("jarvis.voice")
 
 RATE = 16000
 CHUNK = 1280  # 80 ms, the frame size openWakeWord expects
 PRE_ROLL_CHUNKS = 22  # keep ~1.8 s before the wake word so words right after it aren't lost
-SILENCE_TO_STOP = 1.2  # seconds of quiet that end a command (longer = less chance of cutting you off mid-sentence)
-MAX_COMMAND = 20.0
-NO_SPEECH_TIMEOUT = 6.0
 
 # Vocabulary hint so Whisper spells app names right
 WHISPER_PROMPT = "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3."
@@ -29,18 +27,56 @@ def _beep(freq: int) -> None:
     threading.Thread(target=winsound.Beep, args=(freq, 120), daemon=True).start()
 
 
+def input_devices() -> list[tuple[int, str]]:
+    """Every usable microphone as (device index, name), de-duplicated by name."""
+    out, seen = [], set()
+    try:
+        for i, d in enumerate(sd.query_devices()):
+            name = (d.get("name") or "").strip()
+            if d.get("max_input_channels", 0) > 0 and name and name.lower() not in seen:
+                seen.add(name.lower())
+                out.append((i, name))
+    except Exception:
+        log.debug("couldn't list input devices", exc_info=True)
+    return out
+
+
+def device_name(index) -> str:
+    if index is None:
+        return "Windows default"
+    try:
+        return sd.query_devices(index)["name"]
+    except Exception:
+        return f"device {index}"
+
+
 class VoiceListener:
     def __init__(self, on_command, on_wake=None, on_partial=None, on_idle=None):
-        self.on_command = on_command
-        self.on_wake = on_wake        # wake word heard -> show the pop-up
+        self.on_command = on_command  # (text, source) where source is "wake" or "hotkey"
+        self.on_wake = on_wake        # wake word / shortcut heard -> show the pop-up
         self.on_partial = on_partial  # live transcription as you speak
-        self.on_idle = on_idle        # heard the wake word but no command -> hide the pop-up
+        self.on_idle = on_idle        # heard nothing usable -> hide the pop-up
         self.audio: queue.Queue[np.ndarray] = queue.Queue()
-        self._manual = threading.Event()   # set by the keyboard shortcut to start listening without the wake word
+        self._manual = threading.Event()   # the shortcut asked to start listening now
+        self._active = threading.Event()   # True while actively recording a command
+        self._cancel = threading.Event()   # stop the command currently being recorded
+        self._reopen = threading.Event()   # re-open the audio stream (the mic was changed)
 
     def trigger(self) -> None:
-        """Start listening now, as if the wake word had been heard (used by the Ctrl+Alt+J shortcut)."""
-        self._manual.set()
+        """The Ctrl+Alt+J shortcut: start listening, or — if already listening — stop."""
+        if self._active.is_set():
+            self._cancel.set()
+        else:
+            self._manual.set()
+
+    def cancel(self) -> None:
+        """Stop the command currently being recorded (the pop-up's X button)."""
+        self._cancel.set()
+
+    def set_device(self, index) -> None:
+        """Switch microphone (index, or None for the Windows default) and re-open the stream."""
+        set_setting("input_device", index)
+        self._reopen.set()
 
     def _load_models(self):
         from faster_whisper import WhisperModel
@@ -61,40 +97,67 @@ class VoiceListener:
 
     def run(self) -> None:
         self._load_models()
+        while True:
+            self._reopen.clear()
+            dev = settings["input_device"]
+            try:
+                with sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=CHUNK,
+                                    callback=self._callback, device=dev):
+                    log.info("Listening on %s. Say \"Hey Jarvis, ...\" or press Ctrl+Alt+J.", device_name(dev))
+                    self._wake_loop()
+            except Exception:
+                log.exception("Microphone error; retrying in 2 s (try a different mic in the tray).")
+                time.sleep(2)
+
+    def _wake_loop(self) -> None:
         threshold = settings["wake_threshold"]
         recent = collections.deque(maxlen=PRE_ROLL_CHUNKS)
-        with sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=CHUNK, callback=self._callback):
-            log.info("Listening for the wake word. Say \"Hey Jarvis, ...\"")
-            while True:
-                chunk = self.audio.get()
-                recent.append(chunk)
-                scores = self.wake.predict(chunk)
-                manual = self._manual.is_set()
-                if not manual and max(scores.values()) < threshold:
-                    continue
-                self._manual.clear()
-                _beep(880)
-                if self.on_wake:
-                    try: self.on_wake()
-                    except Exception: log.debug("on_wake failed", exc_info=True)
-                noise = float(np.percentile([_rms(c) for c in recent], 20))
-                audio = self._record(list(recent), noise)
-                self.wake.reset()
-                recent.clear()
-                _drain(self.audio)
-                text = self._transcribe(audio)
-                if text:
-                    _beep(660)
-                    self.on_command(text)
-                else:
-                    log.info("Heard the wake word but no command.")
-                    if self.on_idle:
-                        try: self.on_idle()
-                        except Exception: pass
+        while not self._reopen.is_set():
+            try:
+                chunk = self.audio.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            recent.append(chunk)
+            scores = self.wake.predict(chunk)
+            manual = self._manual.is_set()
+            if not manual and max(scores.values()) < threshold:
+                continue
+            self._manual.clear()
+            source = "hotkey" if manual else "wake"
+            _beep(880)
+            if self.on_wake:
+                try: self.on_wake()
+                except Exception: log.debug("on_wake failed", exc_info=True)
+            self._cancel.clear()
+            self._active.set()
+            noise = float(np.percentile([_rms(c) for c in recent], 20))
+            audio = self._record(list(recent), noise)
+            self._active.clear()
+            self.wake.reset()
+            recent.clear()
+            _drain(self.audio)
+            if self._cancel.is_set():   # stopped by the shortcut or the X button
+                log.info("Listening cancelled.")
+                if self.on_idle:
+                    try: self.on_idle()
+                    except Exception: pass
+                continue
+            text = self._transcribe(audio) if audio.size else ""
+            if text:
+                _beep(660)
+                self.on_command(text, source)
+            else:
+                log.info("Heard the wake word but no command.")
+                if self.on_idle:
+                    try: self.on_idle()
+                    except Exception: pass
 
     def _record(self, pre_roll: list[np.ndarray], noise: float) -> np.ndarray:
-        """Collect audio until the speaker has been quiet for SILENCE_TO_STOP seconds, emitting live partial
-        transcriptions (word-by-word feel) to on_partial while they talk."""
+        """Collect audio until the speaker has been quiet for silence_seconds, emitting live partial
+        transcriptions (word-by-word feel) while they talk. Stops early if cancelled or the mic changes."""
+        silence_stop = settings["silence_seconds"]
+        max_cmd = settings["max_command_seconds"]
+        no_speech = settings["no_speech_seconds"]
         speech_level = max(noise * 2.2, 280.0)   # a bit lower, so softer speech still registers
         chunks = list(pre_roll)
         heard_speech, quiet, total = False, 0.0, 0.0
@@ -111,8 +174,13 @@ class VoiceListener:
             finally:
                 busy[0] = False
 
-        while total < MAX_COMMAND:
-            chunk = self.audio.get()
+        while total < max_cmd:
+            if self._cancel.is_set() or self._reopen.is_set():
+                break
+            try:
+                chunk = self.audio.get(timeout=0.5)
+            except queue.Empty:
+                continue
             chunks.append(chunk)
             total += step
             if _rms(chunk) > speech_level:
@@ -123,11 +191,11 @@ class VoiceListener:
             if self.on_partial and heard_speech and not busy[0] and total - last_partial >= 0.7:
                 last_partial, busy[0] = total, True
                 threading.Thread(target=partial, args=(np.concatenate(chunks),), daemon=True).start()
-            if heard_speech and quiet >= SILENCE_TO_STOP:
+            if heard_speech and quiet >= silence_stop:
                 break
-            if not heard_speech and total >= NO_SPEECH_TIMEOUT:
+            if not heard_speech and total >= no_speech:
                 break
-        return np.concatenate(chunks)
+        return np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.int16)
 
     def _quick_transcribe(self, audio: np.ndarray) -> str:
         """A fast, rough pass for the live pop-up (the accurate pass runs once you stop talking)."""

@@ -1,8 +1,9 @@
 """A system-tray icon (the little arrow in the Windows taskbar) so Jarvis can run with no console window.
 
-Right-click the icon for a menu: open the phone page, open the log, or quit. The icon lives on its own thread
-with a tiny Windows message loop; quitting from it stops the whole process. No extra dependency — this uses
-pywin32, which Jarvis already needs."""
+Right-click the icon for a menu: pick the microphone, toggle whether Jarvis speaks when you use the Ctrl+Alt+J
+shortcut, open the phone page or the log, or quit. The icon lives on its own thread with a tiny Windows message
+loop; quitting from it stops the whole process. No extra dependency — this uses pywin32, which Jarvis already needs.
+"""
 import logging
 import os
 import webbrowser
@@ -12,12 +13,14 @@ import win32api
 import win32con
 import win32gui
 
-from .config import ROOT, settings
+from . import voice
+from .config import ROOT, set_setting, settings
 
 log = logging.getLogger("jarvis.tray")
 
 WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon is clicked
-ID_PHONE, ID_LOG, ID_QUIT = 1023, 1024, 1025
+ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK = 1023, 1024, 1025, 1026
+MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
 def _ensure_ico() -> Path | None:
@@ -39,8 +42,10 @@ def _ensure_ico() -> Path | None:
 
 
 class Tray:
-    def __init__(self):
+    def __init__(self, listener=None):
         self.hwnd = None
+        self.listener = listener     # the VoiceListener, so we can list and switch microphones
+        self._mic_ids = {}           # menu id -> device index (or None for the Windows default)
 
     def _load_icon(self):
         ico = _ensure_ico()
@@ -67,9 +72,27 @@ class Tray:
         log.info("Tray icon added (find it under the ^ arrow in the taskbar).")
         win32gui.PumpMessages()
 
+    def _mic_submenu(self):
+        """A submenu listing microphones, the current one ticked."""
+        sub = win32gui.CreatePopupMenu()
+        self._mic_ids = {}
+        current = settings["input_device"]
+        items = [(None, "Windows default")] + voice.input_devices()
+        for i, (index, name) in enumerate(items):
+            mid = MIC_BASE + i
+            self._mic_ids[mid] = index
+            flags = win32con.MF_STRING | (win32con.MF_CHECKED if index == current else win32con.MF_UNCHECKED)
+            win32gui.AppendMenu(sub, flags, mid, name[:48])
+        return sub
+
     def _on_tray(self, hwnd, msg, wparam, lparam):
         if lparam in (win32con.WM_RBUTTONUP, win32con.WM_LBUTTONUP):
             menu = win32gui.CreatePopupMenu()
+            if self.listener is not None:
+                win32gui.AppendMenu(menu, win32con.MF_POPUP, self._mic_submenu(), "Microphone")
+                speak = win32con.MF_CHECKED if settings["speak_on_shortcut"] else win32con.MF_UNCHECKED
+                win32gui.AppendMenu(menu, win32con.MF_STRING | speak, ID_SPEAK, "Speak reply on Ctrl+Alt+J")
+                win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_PHONE, "Open the phone page")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_LOG, "Open the log")
             win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
@@ -82,7 +105,15 @@ class Tray:
 
     def _on_command(self, hwnd, msg, wparam, lparam):
         cmd = wparam & 0xFFFF
-        if cmd == ID_PHONE:
+        if cmd in self._mic_ids and self.listener is not None:
+            index = self._mic_ids[cmd]
+            log.info("Microphone changed to %s from the tray.", voice.device_name(index))
+            self.listener.set_device(index)
+        elif cmd == ID_SPEAK:
+            new = not settings["speak_on_shortcut"]
+            set_setting("speak_on_shortcut", new)
+            log.info("Speak-on-shortcut turned %s from the tray.", "on" if new else "off")
+        elif cmd == ID_PHONE:
             url = settings["phone_page_url"]
             if url:
                 webbrowser.open(url)
