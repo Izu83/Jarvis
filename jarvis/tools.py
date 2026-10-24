@@ -427,7 +427,8 @@ TOOLS = [
     },
     {
         "name": "send_file_to_phone",
-        "description": "Send a file from the PC to the user's phone, where they get a download button. For "
+        "description": "Send a file from the PC to the user's phone. Pictures and videos show right in the chat; "
+                       "other files get a download button. For "
                        "'send me the file X' type requests. Files up to ~40 MB.",
         "input_schema": {
             "type": "object",
@@ -683,6 +684,7 @@ def _send_message(args: dict) -> str:
 
 def _send_file_to_phone(path: str) -> str:
     import base64
+    import mimetypes
     p = files.resolve(path)
     if not p.is_file():
         raise FileNotFoundError(f"{p} isn't a file.")
@@ -690,7 +692,8 @@ def _send_file_to_phone(path: str) -> str:
     if size > 40 * 1024 * 1024:
         return f"{p.name} is {files.fmt_size(size)}; that's too big to send to the phone (limit 40 MB)."
     data = base64.b64encode(p.read_bytes()).decode()
-    if not approval.push({"kind": "file", "id": "file", "name": p.name, "size": size, "data": data}):
+    mime = mimetypes.guess_type(p.name)[0] or ""   # lets the phone show pictures/videos inline
+    if not approval.push({"kind": "file", "id": "file", "name": p.name, "size": size, "mime": mime, "data": data}):
         return "I couldn't send it: your phone isn't connected right now."
     return f"Sent {p.name} ({files.fmt_size(size)}) to your phone."
 

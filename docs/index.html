@@ -183,6 +183,14 @@
   .filecard .ft { flex: 1; min-width: 0; }
   .filecard .ft b { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .filecard .ft span { font-size: 13px; color: var(--label2); }
+  .mediacard { align-self: flex-start; flex: none; width: min(80%, 340px); border-radius: 20px; overflow: hidden; margin-top: 8px; animation: rise .45s var(--spring) both; }
+  .mediacard img, .mediacard video { display: block; width: 100%; max-height: 60vh; object-fit: contain; background: #000; }
+  .mediacard img { cursor: zoom-in; }
+  .mediacard .mf { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; }
+  .mediacard .ft { flex: 1; min-width: 0; }
+  .mediacard .ft b { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mediacard .ft span { font-size: 12px; color: var(--label2); }
+  .mediacard .dl { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); background: var(--fill); flex: none; }
   .filecard .dl { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); background: var(--fill); flex: none; }
   .warn-banner { position: fixed; z-index: 7; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 58px); max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; animation: drop .5s var(--ios) both; }
   .warn-banner .wic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
@@ -932,7 +940,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-23.1";   // bump together with version.json
+const VERSION = "2026-10-24.2";   // bump together with version.json
 const JNI = "JNIv9";   // Jarvis · Niko · Izu83 · version 9 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -2206,6 +2214,7 @@ function openViewer(shot, index) {
     seg.append(b);
   });
   seg.firstChild.classList.add("on");
+  seg.style.display = shot.monitors.length ? "" : "none";   // a plain picture has no monitors to jump between
   $("viewer").hidden = false;
 }
 (() => {
@@ -2518,10 +2527,18 @@ function showAsk(data) {
 }
 
 // ================= files, warnings, upload, power =================
+const MEDIA_TYPES = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", bmp: "image/bmp",
+  heic: "image/heic", avif: "image/avif", svg: "image/svg+xml",
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+};
 function addFileCard(data) {
   clearHome(); stamp(Date.now());
   const bytes = b64bytes(data.data);
-  const url = URL.createObjectURL(new Blob([bytes]));
+  const ext = (data.name.split(".").pop() || "").toLowerCase();
+  const type = data.mime || MEDIA_TYPES[ext] || "";
+  const url = URL.createObjectURL(new Blob([bytes], type ? { type } : {}));
+  if (type.startsWith("image/") || type.startsWith("video/")) { addMediaCard(data, url, type, bytes.length); return; }
   const card = document.createElement("div");
   card.className = "filecard surface";
   card.innerHTML = `<div class="fic">${icon("doc")}</div><div class="ft"><b></b><span></span></div><a class="dl press" download>${icon("download")}</a>`;
@@ -2532,6 +2549,27 @@ function addFileCard(data) {
   const t = document.createElement("div"); t.className = "time left"; t.textContent = timeLabel(Date.now()); $("log").append(t);
   scrollDown();
   if (document.visibilityState !== "visible") toast("File from your PC: " + data.name, "doc", "var(--blue)");
+}
+// Pictures and videos show right in the chat: tap a picture to zoom, videos play inline.
+function addMediaCard(data, url, type, size) {
+  const card = document.createElement("div");
+  card.className = "mediacard surface";
+  const isVideo = type.startsWith("video/");
+  const el = document.createElement(isVideo ? "video" : "img");
+  el.src = url;
+  if (isVideo) { el.controls = true; el.playsInline = true; el.preload = "metadata"; }
+  else { el.alt = data.name; el.onclick = () => openViewer({ url, monitors: [] }, -1); el.onload = scrollDown; }
+  const foot = document.createElement("div");
+  foot.className = "mf";
+  foot.innerHTML = `<div class="ft"><b></b><span></span></div><a class="dl press" download aria-label="Save">${icon("download")}</a>`;
+  foot.querySelector("b").textContent = data.name;
+  foot.querySelector(".ft span").textContent = fmtBytes(data.size || size);
+  const a = foot.querySelector("a"); a.href = url; a.download = data.name;
+  card.append(el, foot);
+  $("log").append(card);
+  const t = document.createElement("div"); t.className = "time left"; t.textContent = timeLabel(Date.now()); $("log").append(t);
+  scrollDown();
+  if (document.visibilityState !== "visible") toast((isVideo ? "Video" : "Picture") + " from your PC: " + data.name, "doc", "var(--blue)");
 }
 
 function showWarning(data) {
