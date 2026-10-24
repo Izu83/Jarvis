@@ -9,7 +9,10 @@ Everything else â€” apps, windows, PowerShell, media, files, modes, reminders â€
 """
 import json
 import logging
+import os
 import re
+import shutil
+import subprocess
 import threading
 import time
 
@@ -29,7 +32,7 @@ VISION_TOOLS = {"look_at_screen", "mouse_click", "mouse_scroll", "mouse_drag"}
 CLAUDE_HINTS = (
     "look at", "on my screen", "on the screen", "on screen", "see the screen", "read the screen",
     "what do you see", "what's on", "whats on", "screenshot", "take a screenshot",
-    "search the web", "google ", "look it up", "look up ", "on the internet", "online",
+    "search the web", "google ", "look it up", "look up ", "on the internet", "search online", "look online", "find online", "check online",
     "latest news", "the news", "weather", "stock price", "who won", "search for information",
 )
 
@@ -84,6 +87,40 @@ class HermesBrain:
         self.lock = threading.Lock()
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
         log.info("Local Hermes brain ready (model %s via %s). Claude is the fallback.", self.model, self.host)
+        threading.Thread(target=self._ensure_server, daemon=True, name="ollama-start").start()
+
+    def _server_up(self) -> bool:
+        try:
+            requests.get(f"{self.host}/api/tags", timeout=2)
+            return True
+        except requests.RequestException:
+            return False
+
+    def _ensure_server(self) -> bool:
+        """Start the local Ollama server if it isn't running, so Hermes doesn't silently hand everything to Claude."""
+        if self._server_up():
+            return True
+        if not any(h in self.host for h in ("127.0.0.1", "localhost")):
+            return False   # a remote server isn't ours to start
+        exe = shutil.which("ollama") or os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe")
+        if not os.path.exists(exe):
+            log.warning("Ollama isn't installed (%s); Hermes can't run, so Claude handles commands.", exe)
+            return False
+        log.info("Ollama wasn't running; starting it for Hermes.")
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        try:
+            subprocess.Popen([exe, "serve"], creationflags=flags, close_fds=True, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            log.exception("Couldn't start Ollama.")
+            return False
+        for _ in range(30):
+            time.sleep(0.5)
+            if self._server_up():
+                log.info("Ollama is up.")
+                return True
+        log.warning("Started Ollama but it didn't answer in time.")
+        return False
 
     def close(self) -> None:
         if self._fallback is not None:
@@ -117,7 +154,13 @@ class HermesBrain:
 
             start = len(self.history)
             try:
-                answer = self._run(command)
+                try:
+                    answer = self._run(command)
+                except requests.ConnectionError:
+                    del self.history[start:]
+                    if not self._ensure_server():
+                        raise
+                    answer = self._run(command)   # Ollama was down and is back: try locally once more
                 if answer is not None:
                     self._compact(start, command, answer)
                     return answer
