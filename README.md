@@ -145,6 +145,20 @@ Tap **Screens** to get one picture of all three monitors, laid out like your des
 All / Left / Main / Right switch) to zoom in; pinch, drag and double-tap work too. Screenshots go straight from the PC to your phone,
 end-to-end encrypted. Claude never sees them, so they cost no tokens. They expire from the relay after 3 hours.
 
+## Email
+
+"Check my email" lists your unread mail sorted into **important** and **not important** (Gmail's own Important
+marker and inbox tabs, newsletter/no-reply signals, and senders you list in `email_vip`). The plain "check my email"
+is answered locally with no tokens. "Read the one from Anna" opens it; "reply to Anna and say I'll be there" writes
+the reply and shows it on your phone. It's only sent if you tap **Send**. Checking never marks anything as read.
+
+Setup (once):
+1. Gmail: turn on 2-Step Verification, then create an app password at https://myaccount.google.com/apppasswords.
+2. Put `EMAIL_APP_PASSWORD=...` in `.env` and your address in `config.json` as `"email_address"`.
+3. Restart Jarvis.
+
+Outlook, Yahoo and iCloud are detected from the address; for anything else set `email_imap_host` / `email_smtp_host`.
+
 ## Settings (`config.json`)
 
 | Key | What it does |

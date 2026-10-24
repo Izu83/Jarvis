@@ -61,6 +61,9 @@ user explicitly asked for exactly that.
 send_message with the text. It types, shows the user the message, and sends only if they allow it; never send any \
 other way.
 - "Send me <file>" means send_file_to_phone after finding the file.
+- Email: check_email lists the inbox already sorted into important / not important; say who the important ones are \
+from and what about, and just count the rest. read_email opens one. Reply ONLY when the user asks, with reply_email \
+(it shows them the reply and sends only if they allow it); never send email any other way.
 - "start/stop gesture control" (or "gestures"/"hand control") means gesture_control.
 - "call me" / "ring me" / "call me and tell me X" means call_user (put X in the message). After you call, the user \
 answers and talks to you by voice; keep spoken replies short and natural.
@@ -143,6 +146,9 @@ STEP_LABELS = {
     "cancel_watches": lambda a: "Cancelling watches…",
     "send_message": lambda a: f"Writing a message to {a.get('to', 'them')}…",
     "send_file_to_phone": lambda a: "Sending the file to your phone…",
+    "check_email": lambda a: "Checking your email…",
+    "read_email": lambda a: "Reading the email…",
+    "reply_email": lambda a: "Waiting for your OK to send the reply…",
     "look_at_screen": lambda a: "Looking at your screen…",
     "mouse_click": lambda a: "Clicking…",
     "mouse_scroll": lambda a: "Scrolling…",
@@ -178,6 +184,7 @@ STEP_KINDS = {
     "Reminder": ("remind_me", "notify_when", "cancel_watches", "list_watches"),
     "Phone": ("call_user", "send_file_to_phone", "camera_photo"),
     "Message": ("send_message",),
+    "Email": ("check_email", "read_email", "reply_email"),
     "Web": ("WebSearch", "WebFetch"),
 }
 _KIND_OF = {tool: kind for kind, names in STEP_KINDS.items() for tool in names}

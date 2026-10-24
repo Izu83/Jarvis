@@ -6,7 +6,7 @@ import time
 
 import logging
 
-from . import apps, approval, files, gesture, modes, pc, power, screens, spotify, sysinfo, ui, watchers
+from . import apps, approval, files, gesture, mail, modes, pc, power, screens, spotify, sysinfo, ui, watchers
 from . import windows as win
 from .config import settings
 
@@ -426,6 +426,45 @@ TOOLS = [
         },
     },
     {
+        "name": "check_email",
+        "description": "Check the user's email inbox. Returns the newest emails (unread by default), already sorted "
+                       "into IMPORTANT and NOT IMPORTANT with a reason and an id for each. Use for 'check my email', "
+                       "'any important emails?'. Tell the user the important ones (who + what about) and just count "
+                       "the rest unless they ask. Checking does not mark anything as read.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "unread_only": {"type": "boolean", "description": "Default true; false includes already-read mail"},
+                "limit": {"type": "integer", "description": "How many of the newest to look at (default 15, max 50)"},
+            },
+        },
+    },
+    {
+        "name": "read_email",
+        "description": "Read one email in full by its id (from check_email). Use before summarising or replying.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "reply_email",
+        "description": "Reply to an email by its id, ONLY when the user asked you to reply. Write the reply text in "
+                       "the user's voice from what they told you to say (read_email first so it fits). It shows the "
+                       "user the exact reply and sends ONLY if they allow it. Never send email any other way.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "message": {"type": "string", "description": "The reply body (no greeting/quote of the original needed "
+                                                             "beyond what fits; the original is quoted automatically)"},
+                "reply_all": {"type": "boolean", "description": "Also reply to everyone else on the email"},
+            },
+            "required": ["id", "message"],
+        },
+    },
+    {
         "name": "send_file_to_phone",
         "description": "Send a file from the PC to the user's phone. Pictures and videos show right in the chat; "
                        "other files get a download button. For "
@@ -639,6 +678,8 @@ def run(name: str, args: dict) -> str:
         return _send_message(args)
     if name == "send_file_to_phone":
         return _send_file_to_phone(args["path"])
+    if name in ("check_email", "read_email", "reply_email"):
+        return _email(name, args)
     if name == "media_key":
         vk = MEDIA_KEYS[args["key"]]
         for _ in range(max(1, min(int(args.get("times", 1)), 50))):
@@ -680,6 +721,23 @@ def _send_message(args: dict) -> str:
     else:
         ui.press_keys("enter", window)
     return f"Sent to {to}."
+
+
+def _email(name: str, args: dict) -> str:
+    try:
+        if name == "check_email":
+            return mail.summary(args.get("unread_only", True), args.get("limit", 15))
+        if name == "read_email":
+            return mail.read(args["id"])
+        reply = mail.build_reply(args["id"], args["message"], bool(args.get("reply_all")))
+        to = reply["To"] + (f" (cc {reply['Cc']})" if reply["Cc"] else "")
+        if not _confirm("send", f"Send this email to {to}?", f"Subject: {reply['Subject']}\n\n{args['message']}",
+                        "Send"):
+            return DECLINED + " The reply was not sent."
+        mail.send(reply)
+        return f"Reply sent to {to}."
+    except mail.NotSetUp as e:
+        return str(e) + " Tell the user they need to finish the email setup (see the README)."
 
 
 def _send_file_to_phone(path: str) -> str:

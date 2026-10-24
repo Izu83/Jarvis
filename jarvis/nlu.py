@@ -163,6 +163,17 @@ def _camera(m, text):
     return approval.run_tool("camera_photo", {})
 
 
+@simple(r"^(check|read|show)( me)? (my |the )?(e-?mails?|inbox|mail)( please)?[.?!]*$"
+        r"|^(do i have|have i got|did i get|are there|any) (any )?(new |unread |important )?(e-?mails?|mail)"
+        r"( today)?[.?!]*$")
+def _check_email(m, text):
+    from . import mail
+    try:
+        return mail.spoken_summary()
+    except mail.NotSetUp as e:
+        return str(e)
+
+
 @simple(r"^(what'?s|what is) open\b|^list (the )?(open )?(windows|apps)$")
 def _whats_open(m, text):
     wins = win.list_windows()
