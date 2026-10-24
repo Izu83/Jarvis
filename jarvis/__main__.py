@@ -18,7 +18,7 @@ from .windows import enable_dpi_awareness  # noqa: E402
 
 enable_dpi_awareness()  # before anything touches windows
 
-from . import modes, nlu, speak  # noqa: E402
+from . import activity, modes, nlu, speak  # noqa: E402
 from .config import ROOT, secret, settings  # noqa: E402
 
 log = logging.getLogger("jarvis")
@@ -166,6 +166,12 @@ def main() -> None:
                 return "Open the Jarvis app on your phone first, then ask again and I'll send a camera photo."
             ph.send_camera("cam-" + str(int(time.time())))
             return "I've sent a photo from your camera to your phone."
+        if name == "screens_photo":
+            ph = _bridge["phone"]
+            if not (ph and ph.clients):
+                return "Open the Jarvis app on your phone first, then ask again and I'll send your screens."
+            threading.Thread(target=ph.send_screens, args=("scr-" + str(int(time.time())),), daemon=True).start()
+            return "I've sent a picture of your screens to your phone."
         if name == "remind_me":
             msg = watchers.remind(args.get("message", ""), args.get("at", ""), args.get("in_minutes") or 0,
                                   bool(args.get("call")))
@@ -179,41 +185,73 @@ def main() -> None:
     brain = make_brain()
     speak.start()
     jobs: queue.Queue = queue.Queue()
+    working = {"text": None}   # the command being worked on right now, if any
 
-    def submit(text: str, reply=None, chat=None, recent=None, progress=None, via: str = "pc") -> None:
-        jobs.put((text, reply, chat, recent, progress, via))
+    def submit(text: str, reply=None, chat=None, recent=None, progress=None, via: str = "pc",
+               msg_id: str | None = None) -> None:
+        tid = activity.start(text, via=via, chat=chat, msg_id=msg_id, status="queued")
+        busy_with = working["text"]
+        jobs.put((tid, text, reply, chat, recent, progress, via))
+        if busy_with and progress:   # say so, instead of looking like nothing is happening
+            try:
+                progress(f"Waiting for “{busy_with[:40]}” to finish…")
+            except Exception:
+                log.debug("progress callback failed", exc_info=True)
+
+    def run_job(tid, text, reply, chat, recent, progress, via) -> None:
+        current["via"] = via
+        working["text"] = text
+        activity.set_status(tid, "running")
+        log.info("Command: %s", text)
+
+        def step(msg: str, kind: str = "") -> None:   # every step is saved and shown live
+            activity.step(tid, kind or "Step", msg)
+            if progress:
+                try:
+                    progress(msg, kind)
+                except Exception:
+                    log.debug("progress callback failed", exc_info=True)
+
+        mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
+        thinking, ok = "", True
+        try:
+            if mode:
+                step(f"Starting {mode} mode…", "Mode")
+                answer = modes.run(mode)
+            else:
+                answer = nlu.try_handle(text, progress=step)  # common commands, no Claude, no tokens
+                if answer is not None:
+                    log.info("(handled locally, no tokens used)")
+                elif settings["use_claude"]:                   # not understood locally -> Claude
+                    answer = brain.handle(text, chat=chat, recent=recent, progress=step)
+                    thinking = getattr(brain, "last_thinking", "") or ""
+                else:                                          # Claude is switched off: stay free
+                    answer = ("I didn't catch that one, and Claude is switched off to save tokens. "
+                              "Try a simpler command, or turn Claude back on in Settings.")
+        except Exception as e:
+            log.exception("Command failed")
+            answer, ok = f"Something went wrong: {e}", False
+        if not activity.steps_of(tid):   # an instant command: still leave a record of what was done
+            cmd = nlu.clean(text) or text
+            step(cmd[:1].upper() + cmd[1:], "Command")
+        activity.finish(tid, answer, ok=ok)
+        log.info("Jarvis: %s", answer)
+        if reply:
+            reply(answer, thinking, activity.steps_of(tid))
+        else:
+            speak.say(answer)
 
     def worker() -> None:
         while True:
-            text, reply, chat, recent, progress, via = jobs.get()
-            current["via"] = via
-            log.info("Command: %s", text)
-            mode = modes.match(text)  # "work mode" etc. runs instantly, no Claude needed
-            thinking = ""
+            job = jobs.get()
             try:
-                if mode:
-                    answer = modes.run(mode)
-                else:
-                    answer = nlu.try_handle(text, progress=progress)  # common commands, no Claude, no tokens
-                    if answer is not None:
-                        log.info("(handled locally, no tokens used)")
-                    elif settings["use_claude"]:                       # not understood locally -> Claude
-                        answer = brain.handle(text, chat=chat, recent=recent, progress=progress)
-                        thinking = getattr(brain, "last_thinking", "") or ""
-                    else:                                              # Claude is switched off: stay free
-                        answer = ("I didn't catch that one, and Claude is switched off to save tokens. "
-                                  "Try a simpler command, or turn Claude back on in Settings.")
-            except Exception as e:
-                log.exception("Command failed")
-                answer = f"Something went wrong: {e}"
-            log.info("Jarvis: %s", answer)
-            if reply:
-                try:
-                    reply(answer, thinking)
-                except TypeError:   # older reply callbacks take only the text
-                    reply(answer)
-            else:
-                speak.say(answer)
+                run_job(*job)
+            except Exception:
+                # Nothing may kill this thread: if it died, every later command would sit in the queue forever
+                # (the "first command works, the next ones do nothing" bug).
+                log.exception("Delivering a command's result failed; carrying on with the next one.")
+            finally:
+                working["text"] = None
 
     threading.Thread(target=worker, daemon=True, name="worker").start()
 
@@ -237,12 +275,13 @@ def main() -> None:
             # Speak the reply unless the user turned off speaking for the Ctrl+Alt+J shortcut.
             speak_this = settings["speak_replies"] and (source != "hotkey" or settings["speak_on_shortcut"])
 
-            def reply(answer: str, thinking: str = "") -> None:
+            def reply(answer: str, thinking: str = "", steps=None) -> None:
                 overlay.reply(answer)
                 if speak_this:
                     speak.say(answer)
 
-            submit(text, reply=reply, via="pc")
+            # show each step in the pop-up while it works, so it never just sits there
+            submit(text, reply=reply, via="pc", progress=lambda msg, kind="": overlay.step(msg))
 
         listener = VoiceListener(voice_command, on_wake=overlay.show,
                                  on_partial=overlay.partial, on_idle=overlay.hide)
@@ -258,7 +297,10 @@ def main() -> None:
     if settings["tray_enabled"] and not args.no_tray and not args.text:
         try:
             from .tray import Tray
-            threading.Thread(target=Tray(listener=listener).run, daemon=True, name="tray").start()
+            # Quitting from the tray ends the process at once, so stop the Claude Code session first (it would
+            # otherwise keep running in the background).
+            tray = Tray(listener=listener, on_quit=lambda: getattr(brain, "close", lambda: None)())
+            threading.Thread(target=tray.run, daemon=True, name="tray").start()
         except Exception:
             log.debug("couldn't start the tray icon", exc_info=True)
 
@@ -271,7 +313,7 @@ def main() -> None:
                 if line:
                     done = threading.Event()
 
-                    def show(answer: str, thinking: str = "", done=done) -> None:
+                    def show(answer: str, thinking: str = "", steps=None, done=done) -> None:
                         if thinking:
                             print(f"[thinking]\n{thinking}\n")
                         print(f"Jarvis: {answer}")

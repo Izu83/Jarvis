@@ -211,8 +211,9 @@ def read_file(path: str, max_chars: int = 6000) -> str:
         with open(p, "rb") as f:
             if b"\0" in f.read(2048):
                 return f"{p} is a binary file ({fmt_size(size)}); I can only read text files."
-    text = p.read_text(encoding="utf-8", errors="replace")
-    more = f"\n... ({len(text) - max_chars} more characters)" if len(text) > max_chars else ""
+    with open(p, encoding="utf-8", errors="replace") as f:   # only read what we show, even for a huge log
+        text = f.read(max_chars + 1)
+    more = f"\n... (showing the start; the file is {fmt_size(size)})" if len(text) > max_chars else ""
     return f"{p} ({fmt_size(size)}):\n{text[:max_chars]}{more}"
 
 

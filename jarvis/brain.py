@@ -150,12 +150,41 @@ STEP_LABELS = {
     "remind_me": lambda a: "Setting a reminder…",
     "list_watches": lambda a: "Checking your reminders…",
     "clipboard": lambda a: "Using the clipboard…",
+    "camera_photo": lambda a: "Taking a webcam photo…",
+    "send_screens_to_phone": lambda a: "Sending your screens to your phone…",
     "Read": lambda a: "Looking at it…",
     "Glob": lambda a: "Searching files…",
     "Grep": lambda a: "Searching inside files…",
     "WebSearch": lambda a: f"Searching the web for “{a.get('query', '')}”…",
     "WebFetch": lambda a: "Reading a web page…",
 }
+
+
+# The small label on each step pill the phone shows ("Command · Opening Spotify…").
+STEP_KINDS = {
+    "App": ("open_app", "open_target", "gesture_control"),
+    "Window": ("open_folder", "list_windows", "arrange_windows", "window_action"),
+    "Inside app": ("ui_list", "ui_click"),
+    "Keyboard": ("type_text", "press_keys", "clipboard"),
+    "Mouse": ("mouse_click", "mouse_scroll", "mouse_drag"),
+    "Screen": ("look_at_screen", "send_screens_to_phone"),
+    "Files": ("find_folder", "scan_folder", "find_files", "read_file", "disk_usage", "cleanup_suggestions",
+              "create_folder", "write_file", "move_path", "copy_path", "delete_paths", "clear_folder",
+              "empty_recycle_bin", "Read", "Glob", "Grep"),
+    "Command": ("run_powershell",),
+    "System": ("system_info", "lock_pc", "power_action"),
+    "Music": ("play_music", "media_key"),
+    "Mode": ("list_modes", "run_mode", "save_mode", "delete_mode"),
+    "Reminder": ("remind_me", "notify_when", "cancel_watches", "list_watches"),
+    "Phone": ("call_user", "send_file_to_phone", "camera_photo"),
+    "Message": ("send_message",),
+    "Web": ("WebSearch", "WebFetch"),
+}
+_KIND_OF = {tool: kind for kind, names in STEP_KINDS.items() for tool in names}
+
+
+def step_kind(tool: str) -> str:
+    return _KIND_OF.get(tool.removeprefix("mcp__jarvis__"), "Step")
 
 
 def describe_step(tool: str, args: dict) -> str:
@@ -250,7 +279,8 @@ class ClaudeCodeBrain:
         self.proc = subprocess.Popen(
             cmd, cwd=self.workdir, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             env={**os.environ, "MCP_TOOL_TIMEOUT": "300000"},   # tools may wait up to 2 min for permission
-            text=True, encoding="utf-8", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW,
+            # errors="replace": one undecodable byte must not kill the reader thread (every later command would hang)
+            text=True, encoding="utf-8", errors="replace", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW,
         )
         self.events = queue.Queue()
         self.commands = 0
@@ -260,12 +290,18 @@ class ClaudeCodeBrain:
 
     @staticmethod
     def _read(proc: subprocess.Popen, events: queue.Queue) -> None:
-        for line in proc.stdout:
-            try:
-                events.put(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-        events.put(None)  # process ended
+        try:
+            for line in proc.stdout:
+                try:
+                    events.put(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        except Exception:
+            log.exception("Lost the Claude Code output stream")
+        events.put(None)  # process ended (or we can't read it any more)
+
+    def close(self) -> None:
+        self._kill()
 
     def _kill(self) -> None:
         if self.proc and self.proc.poll() is None:
@@ -307,6 +343,20 @@ class ClaudeCodeBrain:
         narration: list[str] = []    # text the model writes while working
         steps: list[str] = []        # the actions it took
         message = {"type": "user", "message": {"role": "user", "content": command}}
+        # Drop anything left over from the previous command (a late event, a stray result). Otherwise this command
+        # would be "answered" by the old result and its own answer would land on the NEXT command, one step behind.
+        stale = 0
+        while True:
+            try:
+                ev = self.events.get_nowait()
+            except queue.Empty:
+                break
+            if ev is None:   # the session died between commands: start a fresh one first
+                self._spawn()
+                break
+            stale += 1
+        if stale:
+            log.info("Dropped %d leftover event(s) from the previous command.", stale)
         try:
             self.proc.stdin.write(json.dumps(message) + "\n")
             self.proc.stdin.flush()
@@ -339,7 +389,7 @@ class ClaudeCodeBrain:
                         step = describe_step(block.get("name", ""), block.get("input") or {})
                         steps.append(step)
                         if progress:
-                            progress(step)
+                            progress(step, step_kind(block.get("name", "")))
             if event.get("type") != "result":
                 continue
             answer = (event.get("result") or "").strip()
@@ -357,6 +407,9 @@ class ClaudeCodeBrain:
 
 
 class ApiBrain:
+    def close(self) -> None:
+        pass
+
     def __init__(self):
         import anthropic
 
@@ -438,7 +491,7 @@ class ApiBrain:
             for call in tool_uses:  # sequential on purpose: launches are detected by watching new windows
                 log.info("tool %s %s", call.name, json.dumps(call.input))
                 if self.progress:
-                    self.progress(describe_step(call.name, call.input))
+                    self.progress(describe_step(call.name, call.input), step_kind(call.name))
                 try:
                     output, is_error = tools.run(call.name, call.input), False
                 except Exception as e:  # report failures to Claude so it can recover

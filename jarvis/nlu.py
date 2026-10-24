@@ -20,6 +20,9 @@ LAYOUTS = {"side by side": "columns", "columns": "columns", "stacked": "rows", "
            "grid": "grid", "maximize": "maximize", "maximized": "maximize", "full screen": "maximize",
            "fullscreen": "maximize", "normal": "auto", "normally": "auto", "organize": "auto", "organized": "auto"}
 ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3, "fourth": 4, "4th": 4}
+# "X and Y", "X, then Y": more than one request. The quick patterns below only ever do one thing, so a compound
+# command goes to Claude, which does every part instead of silently doing just the first.
+COMPOUND = re.compile(r"\b(and|then|also|after that|afterwards|but|before)\b|[,;]", re.I)
 
 
 def clean(text: str) -> str:
@@ -64,17 +67,34 @@ def _volume(key: str, times: int = 3) -> str:
 SIMPLE = []
 
 
-def simple(pattern):
+def simple(pattern, compound_ok: bool = False):
+    """Register a quick pattern. compound_ok=True lets it run even when the text contains "and"/"then"/commas
+    (e.g. a reminder's message: "remind me at 5 to call mom and dad")."""
     def deco(fn):
-        SIMPLE.append((re.compile(pattern, re.I), fn))
+        SIMPLE.append((re.compile(pattern, re.I), fn, compound_ok))
         return fn
     return deco
 
 
+def _is_playing() -> bool | None:
+    """True/False if Windows knows whether something is playing, None if it can't tell."""
+    try:
+        from . import pc
+        info = pc.now_playing()
+    except Exception:
+        return None
+    return None if info is None else bool(info.get("playing"))
+
+
 @simple(r"^(pause|stop|unpause|resume|play)(\s+(the\s+)?(music|song|spotify|it))?$")
 def _play_pause(m, text):
+    # play/pause is a toggle, so check first: "stop" must never START paused music, "resume" never pause it.
+    want_playing = m.group(1).lower() in ("unpause", "resume", "play")
+    playing = _is_playing()
+    if playing is not None and playing == want_playing:
+        return "It's already playing." if playing else "Nothing is playing."
     tools.run("media_key", {"key": "play_pause"})
-    return "Done."
+    return "Resumed." if want_playing else "Paused."
 
 
 @simple(r"^(next|skip)(\s+(song|track|one))?$")
@@ -109,13 +129,16 @@ def _lock(m, text):
     return tools.run("lock_pc", {})
 
 
-@simple(r"\b(disk space|disk usage|how much (space|storage|gb)|free space|storage left)\b")
+@simple(r"\b(disk space|disk usage|free space|storage left|space (is )?left|how full is|"
+        r"how much (space|storage|gb)( is)? (left|free|do i have|is there))\b")
 def _disk(m, text):
     drive = re.search(r"\b([cdef])\s*(?:disk|drive|:)", text.lower())
     return tools.run("disk_usage", {"path": f"{drive.group(1).upper()}:\\" if drive else "C:\\"})
 
 
-@simple(r"\b(clean ?up|free up space|what can i (delete|clean)|clear (cache|space)|junk|temp files)\b")
+@simple(r"^(clean ?up( my)?( (pc|computer|disk|drive|c drive|c disk|space))?|free up (some )?(disk )?space|"
+        r"what can i (delete|clean( up)?|remove)|clear (the )?(cache|caches|junk|temp files|space)|"
+        r"(find|show me|any) junk( files)?)( please)?$")
 def _cleanup(m, text):
     return tools.run("cleanup_suggestions", {}) + "\n\nTell me which of these to clear and I'll ask before deleting."
 
@@ -125,12 +148,16 @@ def _sysinfo(m, text):
     return tools.run("system_info", {})
 
 
-@simple(r"\b(take|show|send)\s*(me\s+)?(a\s+)?(screenshot|screenshots|screens|my screens?)\b")
+@simple(r"^(take|show|send|grab)( me)?( a| the| my)? ?(screenshot|screenshots|screens?|screen ?shot)"
+        r"( of (my|the) (screens?|monitors?|pc|computer))?( please)?$")
 def _screens(m, text):
-    return "Tap Screens at the bottom of the app to see your monitors."
+    from . import approval
+    return approval.run_tool("screens_photo", {})
 
 
-@simple(r"\b(take|send|grab|snap|show me)( me)?( a| the)?\s*(photo|picture|pic|selfie|camera|webcam)( (shot|photo|picture))?\b|^(camera|webcam|selfie)$")
+@simple(r"^(take|send|grab|snap|show)( me)?( a| the)? ?(photo|picture|pic|selfie|shot)( of me)?"
+        r"( (from|with|on|using) (the |my )?(webcam|camera))?( please)?$"
+        r"|^(show|send)( me)? (the |my )?(webcam|camera)( view| photo| picture)?$|^(camera|webcam|selfie)$")
 def _camera(m, text):
     from . import approval
     return approval.run_tool("camera_photo", {})
@@ -152,7 +179,8 @@ def _gesture(m, text):
     return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[action]()
 
 
-@simple(r"^(sleep|go to sleep|restart|reboot|shut ?down|turn off|sign out|log out)( the| my)?( pc| computer)?$")
+@simple(r"^(sleep|go to sleep|restart|reboot|shut ?down|sign out|log out)( the| my)?( pc| computer)?$"
+        r"|^turn off( the| my) (pc|computer)$")
 def _power(m, text):
     t = text.lower()
     action = ("restart" if re.search(r"restart|reboot", t) else "shutdown" if re.search(r"shut ?down|turn off", t)
@@ -219,7 +247,7 @@ def _handle_open(text: str, progress) -> str | None:
     windows, labels, problems = [], [], []
     for piece in pieces:
         if progress:
-            progress(f"Opening {piece.strip().strip('.')[:30]}…")
+            progress(f"Opening {piece.strip().strip('.')[:30]}…", "App")
         msg, w = _target_window(piece, opened)
         if msg is None and w is None:
             return None   # a target we don't understand -> let Claude do the whole thing
@@ -233,7 +261,7 @@ def _handle_open(text: str, progress) -> str | None:
             labels.append(piece.strip().strip("."))
     if monitor is not None and windows:
         if progress:
-            progress(f"Arranging on monitor {monitor}…")
+            progress(f"Arranging on monitor {monitor}…", "Window")
         try:
             win.arrange(windows, monitor, layout)
             where = settings["monitor_names"].get(str(monitor), f"monitor {monitor}")
@@ -267,7 +295,8 @@ _WHEN = r"(?:(?:at|for)\s+(?P<at>\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)|in\s+(?P<at
 @simple(r"^(?:please\s+)?(?:(?P<call>call|ring)\s+me|remind\s+me|notify\s+me|ping\s+me|alert\s+me|"
         r"(?:send|give)\s+me\s+(?:a\s+)?(?:notification|reminder|ping|alert))"
         r"(?:\s+on\s+my\s+phone)?\s+" + _WHEN +
-        r"(?:\s+(?:to|that|about|saying|and\s+(?:say|tell\s+me))\s+(?P<msg>.+?))?(?:\s+please)?[.!]?$")
+        r"(?:\s+(?:to|that|about|saying|and\s+(?:say|tell\s+me))\s+(?P<msg>.+?))?(?:\s+please)?[.!]?$",
+        compound_ok=True)
 def _remind(m, text):
     at, n, unit = m.group("at") or m.group("at2"), m.group("n"), (m.group("unit") or "").lower()
     minutes = 0
@@ -306,8 +335,6 @@ def _watch_cancel(m, text):
         r"[\"'\u201c]?([\w .\-]+?)[\"'\u201d]?(?:\s+(?:in|inside|under|into)\s+(?:the\s+)?(.+?)(?:\s+folder)?)?$")
 def _make_folder(m, text):
     from . import files
-    if re.search(r"\b(and|then|also)\b|,", text, re.I):   # compound command -> let Claude do all the steps
-        return None
     name = m.group(5).strip()
     parent_raw = (m.group(6) or "").strip().lower()
     projects = settings["known_folders"].get("projects", r"D:\Projects")
@@ -343,11 +370,16 @@ def try_handle(text: str, progress=None) -> str | None:
     if not cmd:
         return None
     low = cmd.lower()
+    compound = bool(COMPOUND.search(cmd))
     try:
-        for pattern, fn in SIMPLE:
+        for pattern, fn, compound_ok in SIMPLE:
+            if compound and not compound_ok:
+                continue
             m = pattern.search(cmd)   # match on original case so captured names keep their capitals
             if m:
-                return fn(m, cmd)
+                answer = fn(m, cmd)
+                if answer is not None:
+                    return answer
         if low.startswith("play "):
             r = _play_query(cmd)
             if r is not None:

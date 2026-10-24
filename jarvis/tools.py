@@ -348,6 +348,13 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "send_screens_to_phone",
+        "description": "Send one picture of all the PC's monitors straight to the user's phone (shown in the chat, "
+                       "tap to zoom). Use for 'send me a screenshot', 'show me my screens'. You don't see it; to look at "
+                       "the screen yourself use look_at_screen.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "notify_when",
         "description": "Watch for something to finish/happen on the PC and notify the user when it does, in the "
                        "background. Use for 'tell me when X is done/finished/closes/downloads'. Pick a kind: "
@@ -617,6 +624,8 @@ def run(name: str, args: dict) -> str:
             pc.set_clipboard(args.get("text", ""))
             return "Copied to the clipboard."
         return pc.get_clipboard() or "The clipboard has no text."
+    if name == "send_screens_to_phone":
+        return approval.run_tool("screens_photo", {})
     if name in ("notify_when", "cancel_watches", "call_user", "remind_me", "list_watches", "camera_photo"):
         return approval.run_tool(name, args)   # must run in the main Jarvis process, not this short-lived one
     if name == "gesture_control":

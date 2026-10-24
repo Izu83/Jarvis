@@ -199,22 +199,38 @@
   .jarvis { align-self: flex-start; background: var(--bubble); box-shadow: 0 1px 2px rgba(0,0,0,.06), inset 0 0 0 .5px var(--bubble-line); }
   .surface { background: var(--bubble); box-shadow: 0 8px 24px -12px rgba(0,0,0,.25), inset 0 0 0 .5px var(--bubble-line); }
   #log > * { contain: layout paint; }
-  .me + .jarvis, .jarvis + .me, .step + .me, .shots + .me, .shots + .jarvis { margin-top: 10px; }
+  .me + .jarvis, .jarvis + .me, .pills + .me, .shots + .me, .shots + .jarvis { margin-top: 10px; }
   .jarvis.error { color: var(--red); }
-  .step { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--label2); margin: 5px 6px 0; align-self: flex-start; letter-spacing: -.08px; animation: rise .3s var(--ease) both; }
-  .step .spinner { width: 13px; height: 13px; border-width: 2px; }
-  /* live, collapsible "what Jarvis is doing" log */
-  .worklog { align-self: flex-start; max-width: 90%; margin: 6px 4px 2px; border-radius: 15px; background: var(--card); overflow: hidden; animation: rise .3s var(--ease) both; }
-  .wl-head { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 12px; text-align: left; font-size: 13px; color: var(--label2); }
-  .wl-head .spinner { width: 14px; height: 14px; border-width: 2px; flex: none; }
-  .wl-head .wl-check { width: 15px; height: 15px; color: var(--green); flex: none; }
-  .wl-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .wl-head .chev { width: 15px; height: 15px; color: var(--label3); flex: none; transition: transform .3s var(--ease); }
-  .worklog.open .wl-head .chev { transform: rotate(180deg); }
-  .wl-body { display: none; padding: 1px 12px 10px 33px; }
-  .worklog.open .wl-body { display: block; }
-  .wl-step { font-size: 13px; color: var(--label2); line-height: 1.45; padding: 2px 0; position: relative; animation: rise .25s var(--ease) both; }
-  .wl-step::before { content: ""; position: absolute; left: -15px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  /* ---------- saved step pills ("Command · Opening Spotify…"): what Jarvis did, kept in the chat ---------- */
+  .pills { align-self: flex-start; max-width: 92%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 8px 2px 4px; animation: rise .3s var(--ease) both; }
+  .pill { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 7px 14px 7px 12px; border-radius: 999px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--bubble-line); font-size: 13.5px; line-height: 1.2; text-align: left; animation: rise .25s var(--ease) both; }
+  .pill .pd { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .pill.run .pd { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+  .pill.err .pd { background: var(--red); }
+  .pill svg.i.pi { width: 14px; height: 14px; flex: none; color: var(--orange); stroke-width: 2.2; }
+  .pill .pk { color: var(--label2); flex: none; }
+  .pill .pt { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill.run .pt { font-weight: 500; }
+  .pill.more { color: var(--label2); font-weight: 500; }
+  .pills.open .pill .pt { white-space: normal; }
+  /* floating chips under the top bar: "working" + upcoming reminders */
+  .statusbar { position: fixed; z-index: 6; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 56px); display: flex; justify-content: center; gap: 6px; padding: 0 14px; pointer-events: none; }
+  .statusbar .pill { pointer-events: auto; min-width: 0; flex: 0 1 auto; max-width: 100%; box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 .5px var(--bubble-line); }
+  body.has-bar #log { padding-top: calc(env(safe-area-inset-top) + 100px); }
+  /* activity: Control Center section + the full list */
+  .act-sec { margin-top: 14px; }
+  .act-sec .w-head small button { color: var(--accent); font-size: 13px; }
+  .act-sec .pills { margin: 8px 0 0; max-width: 100%; }
+  .act-list { padding: 4px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .act { border-radius: 20px; background: var(--card); padding: 10px 12px; box-shadow: inset 0 1px 0 var(--rim-lo); }
+  .act > .pill { background: transparent; box-shadow: none; padding: 2px 0; width: 100%; }
+  .act > .pill .when { margin-left: auto; color: var(--label3); font-size: 12px; flex: none; padding-left: 8px; }
+  .act .pills { margin: 6px 0 0 4px; }
+  .act .reply { font-size: 13.5px; color: var(--label2); margin: 6px 4px 0; line-height: 1.4; white-space: pre-wrap; }
+  .act-empty { text-align: center; color: var(--label2); padding: 30px 0; font-size: 15px; }
+  .rem { display: flex; align-items: center; gap: 10px; }
+  .rem svg.i { width: 18px; height: 18px; color: var(--orange); flex: none; }
+  .rem .x-btn { margin-left: auto; }
   @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.96); } }
   .typing { display: inline-flex; gap: 5px; padding: 5px 2px; }
   .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--label2); animation: blink 1.3s infinite; }
@@ -616,6 +632,7 @@
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/></symbol>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
   <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4M6 17v2.5M18 17v2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
   <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.5 3.5h3l1.2 4-2 1.3a12 12 0 0 0 5.2 5.2l1.3-2 4 1.2v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z"/></symbol>
   <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M2.5 13.5c4-4 15-4 19 0M8 11.8V9.5m8 2.3V9.5M4 19.5l16-16"/></symbol>
@@ -645,6 +662,8 @@
   <button class="round glass press" id="newBtn" aria-label="New chat"><svg class="i"><use href="#i-compose"/></svg></button>
   <button class="avatar-btn glass press" id="profileBtn" aria-label="Profile and settings"><img class="avatar" src="avatar.jpg" alt=""></button>
 </header>
+
+<div class="statusbar" id="statusBar" hidden></div>
 
 <!-- pairing -->
 <section id="setup" hidden>
@@ -703,6 +722,10 @@
     <button class="action press" data-power="restart"><span class="ic" style="background:#30b0c7"><svg class="i"><use href="#i-restart"/></svg></span>Restart</button>
     <button class="action press" data-power="shutdown"><span class="ic" style="background:#ff3b30"><svg class="i"><use href="#i-power"/></svg></span>Shut Down</button>
     <button class="action press" id="sendFileBtn"><span class="ic" style="background:#34c759"><svg class="i"><use href="#i-clip-up"/></svg></span>Send File</button>
+  </div>
+  <div class="act-sec" id="actSec" hidden>
+    <div class="w-head"><b>Recent activity</b><small><button class="press" id="actAll">See all</button></small></div>
+    <div class="pills" id="actRecent"></div>
   </div>
 </section>
 </div>
@@ -861,6 +884,14 @@
 </div>
 
 <!-- PC clipboard -->
+<div class="sheet-wrap" id="actSheet" hidden>
+  <div class="sheet glass strong tall" role="dialog" aria-label="Activity">
+    <div class="grabber"></div>
+    <div class="sheet-head"><span style="width:32px"></span><h3>Activity</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-body" id="actBody"></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="clipSheet" hidden>
   <div class="sheet glass strong" role="dialog" aria-label="PC Clipboard">
     <div class="grabber"></div>
@@ -902,9 +933,17 @@
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
 const VERSION = "2026-10-23.1";   // bump together with version.json
-const JNI = "JNIv8";   // Jarvis · Niko · Izu83 · version 8 — Jarvis's own release name
+const JNI = "JNIv9";   // Jarvis · Niko · Izu83 · version 9 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv9", when: "Oct 24, 2026", title: "Every step saved, reminders you can see", notes: [
+    "Fixed: after the first message, later messages could get stuck and never run. Jarvis now keeps going no matter what, re-sends a message if your phone's connection quietly dropped, and fetches answers you missed while the app was closed.",
+    "Everything Jarvis does is saved as small step pills in the chat (like “Files · Searching for invoice…”), so you can always see what it did.",
+    "While it works, a live “Working” chip stays at the top, and the pop-up on your PC shows each step. If it's busy with something else, it tells you it's waiting.",
+    "Reminders show a clock chip at the top with the next time. Tap it to see all of them and cancel any one.",
+    "New Activity list (Control Center → Recent activity → See all) with every command, from your phone or your PC's mic.",
+    "“Send me a screenshot” now sends a picture of your screens straight to the chat, and quick commands no longer grab things meant for Claude.",
+  ] },
   { v: "JNIv8", when: "Oct 23, 2026", title: "A real voice + a smoother pop-up", notes: [
     "Jarvis now talks back in a natural, human-sounding woman's voice — and the 'Hey Jarvis' pop-up reads replies out loud again.",
     "The pop-up slides in and out smoothly instead of snapping on and off.",
@@ -1114,29 +1153,53 @@ function readAloud(text, btn) {
   setSpeaking(btn);
   speechSynthesis.speak(u);
 }
-function stepRow(text) {
-  const el = document.createElement("div");
-  el.className = "worklog open";
-  el.innerHTML = `<button class="wl-head press" aria-label="What Jarvis is doing"><span class="spinner"></span><span class="wl-title"></span>${icon("chevron", "i chev")}</button><div class="wl-body"></div>`;
-  el.querySelector(".wl-title").textContent = text;
-  el.querySelector(".wl-head").onclick = () => { el.classList.toggle("open"); if (el.classList.contains("open")) scrollDown(); };
-  el._lines = [text];
-  const first = document.createElement("div"); first.className = "wl-step"; first.textContent = text;
-  el.querySelector(".wl-body").append(first);
+// --- step pills: each thing Jarvis does is one pill ("Files · Searching for “invoice”…"), kept in the chat
+function pill(kind, text, state = "") {   // state: "" (done) | "run" | "err"
+  const b = document.createElement("div");
+  b.className = "pill" + (state ? " " + state : "");
+  const mark = kind === "Reminder" ? icon("clock", "i pi") : kind === "Watch" ? icon("bell", "i pi") : '<span class="pd"></span>';
+  b.innerHTML = `${mark}<span class="pk"></span><span class="pt"></span>`;
+  b.querySelector(".pk").textContent = kind || "Step";
+  b.querySelector(".pt").textContent = text;
+  return b;
+}
+// steps: [{k, t}]. running: the last one is still going. status: a "Thinking…"-style line with no step yet.
+function fillPills(box, steps, running = false, status = "", failed = false, max = 4) {
+  box.innerHTML = "";
+  const all = steps.map((s, i) => [s.k, s.t, running && i === steps.length - 1 && !status ? "run" : failed && i === steps.length - 1 ? "err" : ""]);
+  if (running && status) all.push(["Jarvis", status, "run"]);
+  const hidden = box.classList.contains("open") || running ? 0 : Math.max(0, all.length - max);
+  all.slice(0, all.length - hidden).forEach(([k, t, st]) => box.append(pill(k, t, st)));
+  if (hidden) {   // long jobs: show the first few, tap to see every step
+    const more = document.createElement("button");
+    more.className = "pill more press"; more.textContent = `+${hidden} more step${hidden > 1 ? "s" : ""}`;
+    more.onclick = () => { box.classList.add("open"); fillPills(box, steps, running, status, failed, max); };
+    box.append(more);
+  }
+  return box;
+}
+function pillsEl(steps, running = false, status = "", failed = false) {
+  const box = document.createElement("div");
+  box.className = "pills";
+  return fillPills(box, steps, running, status, failed);
+}
+function stepRow(text) {   // the live pills for a command that's still running
+  clearHome();
+  const el = pillsEl([], true, text);
   $("log").append(el);
   return el;
 }
-function setStep(p, text) {
-  p.status = text;
-  const wl = p.step;
-  if (!wl?.isConnected) return;
-  wl.querySelector(".wl-title").textContent = text;   // header shows the latest action
-  if (wl._lines[wl._lines.length - 1] === text) return;
-  wl._lines.push(text);
-  const line = document.createElement("div");         // the body keeps the full running list
-  line.className = "wl-step"; line.textContent = text;
-  wl.querySelector(".wl-body").append(line);
-  if (wl.classList.contains("open")) scrollDown();
+function drawSteps(p, failed = false) {
+  if (p.step?.isConnected) { fillPills(p.step, p.steps || [], !p.finished, p.finished ? "" : p.status, failed); scrollDown(); }
+}
+// kind = the step's category from the PC (a real step); no kind = just a status like "Thinking…".
+function setStep(p, text, kind = "") {
+  p.steps ||= [];
+  if (kind) {
+    if (p.steps.at(-1)?.t !== text) p.steps.push({ k: kind, t: text });
+    p.status = "";
+  } else p.status = text;
+  drawSteps(p);
 }
 
 // --- one-picture screenshots
@@ -1204,11 +1267,12 @@ function renderChat() {
   if (!chat.messages.length && ![...pending.values()].some(p => p.chatId === chat.id)) renderHome();
   for (const m of chat.messages) {
     if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts, m.title); if (p) p.card = card; }
+    else if (m.who === "steps") { stamp(m.ts); $("log").append(pillsEl(m.steps || [], false, "", m.failed)); }
     else bubble(m.text, m.who, m.ts, m.error, m.thinking);
   }
   for (const p of pending.values()) {
     if (p.chatId !== chat.id || p.kind !== "cmd") continue;
-    p.el = bubble(null, "jarvis"); p.step = stepRow(p.status || "Sending…");
+    p.step = stepRow(p.status || "Sending…"); drawSteps(p); p.el = bubble(null, "jarvis");
   }
   if (chat.unread) { chat.unread = false; saveDb(); updateBadges(); }
   scrollDown(false);
@@ -1223,7 +1287,7 @@ const relTime = ts => {
   if (s < 7 * 86400) return new Date(ts).toLocaleDateString([], { weekday: "short" });
   return new Date(ts).toLocaleDateString([], { day: "numeric", month: "short" });
 };
-const preview = c => { const m = c.messages.at(-1); return !m ? "No messages yet" : m.who === "shots" ? "Screenshot" : m.text; };
+const preview = c => { const m = c.messages.at(-1); return !m ? "No messages yet" : m.who === "shots" ? "Screenshot" : m.who === "steps" ? "Working…" : m.text; };
 
 function chatRow(c, indent) {
   const wrap = document.createElement("div");
@@ -1404,16 +1468,43 @@ function track(id, entry) {
   entry.timer = setTimeout(() => fail(id, "Your PC didn't answer. Is Jarvis running?"), entry.timeout || 12000);
   pending.set(id, entry);
 }
+// Commands still waiting for an answer survive the app being closed or reloaded (iOS does that a lot), so the
+// answer is never silently dropped: on the next start we pick them up again and ask the PC for what we missed.
+const AWAIT_KEY = "jarvis.awaiting";
+const awaiting = (() => { try { return JSON.parse(load(AWAIT_KEY)) || {}; } catch { return {}; } })();
+function setAwaiting(id, info) { if (info) awaiting[id] = info; else delete awaiting[id]; store(AWAIT_KEY, JSON.stringify(awaiting)); }
+function saveSteps(chat, p, failed = false) {
+  if (chat && p.steps?.length) addMessage(chat, { who: "steps", text: "", steps: p.steps.slice(-40), failed });
+}
 function fail(id, msg) {
   const p = pending.get(id);
   if (!p) return;
-  pending.delete(id); clearTimeout(p.timer);
+  pending.delete(id); clearTimeout(p.timer); clearTimeout(p.ackTimer); setAwaiting(id);
   if (p.tile) tileState(p.tile, "");
   if (p.kind === "quick") { toast(msg, "x", "var(--red)"); return; }
   if (p.kind === "shots") { if (p.card) p.card.querySelector("header span").textContent = msg; return; }
   const chat = chatById(p.chatId);
+  saveSteps(chat, p, true);
   if (chat) addMessage(chat, { who: "jarvis", text: msg, error: true });
-  if (p.chatId === db.current) { p.step?.remove(); if (p.el) { p.el.className = "bubble jarvis error"; p.el.textContent = msg; } }
+  p.finished = true;
+  if (p.chatId === db.current) {
+    if (p.steps?.length) drawSteps(p, true); else p.step?.remove();
+    if (p.el) { p.el.className = "bubble jarvis error"; p.el.textContent = msg; }
+  }
+}
+// No word from the PC within a few seconds of sending usually means the socket died quietly (the phone was asleep).
+// Reconnect and send it again; the PC recognises the repeat, so the command never runs twice.
+async function resend(id) {
+  const p = pending.get(id);
+  if (!p || p.acked) return;
+  if ((p.tries = (p.tries || 0) + 1) > 2) return;   // the normal "didn't answer" timeout takes it from here
+  setStep(p, "Reconnecting…");
+  try { ws?.close(); } catch {}
+  ws = null;
+  if (await ensureConnected()) {
+    try { await post(p.payload); setStep(p, "Delivered"); } catch {}
+  }
+  p.ackTimer = setTimeout(() => resend(id), 7000);
 }
 async function send(text, tile = null, onReply = null) {
   text = text.trim();
@@ -1424,7 +1515,7 @@ async function send(text, tile = null, onReply = null) {
   if (atts.length) { attachments.length = 0; renderAttach(); }
   if (!text) { toast(ready.length > 1 ? `Saved ${ready.length} files on your PC` : "Saved on your PC", "check", "var(--green)"); return true; }
   const chat = current();
-  const recent = chat.messages.filter(m => m.who !== "shots").slice(-6).map(m => ({ who: m.who, text: (m.text || "").slice(0, 250) }));
+  const recent = chat.messages.filter(m => m.who === "me" || m.who === "jarvis").slice(-6).map(m => ({ who: m.who, text: (m.text || "").slice(0, 250) }));
   addMessage(chat, { who: "me", text: text + ready.map(a => "\n\u{1F4CE} " + a.name).join("") });
   const mine = bubble(text, "me");
   if (ready.length) {
@@ -1437,11 +1528,19 @@ async function send(text, tile = null, onReply = null) {
   }
   $("chatTitle").textContent = chat.title;
   const id = newId();
-  track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step: stepRow("Sending…"), status: "Sending…", tile, onReply });
+  const payload = { type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) };
+  const step = stepRow("Sending…");
+  track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step, steps: [], status: "Sending…", tile, onReply, payload, timeout: 30000 });
+  setAwaiting(id, { chat: chat.id, ts: Date.now() });
   if (tile) tileState(tile, "busy");
   scrollDown();
-  try { await post({ type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) }); const p = pending.get(id); if (p && p.status === "Sending…") setStep(p, "Delivered"); }
-  catch { fail(id, "Can't reach your PC right now. Is Jarvis running?"); }
+  try { await post(payload); const p = pending.get(id); if (p && p.status === "Sending…") setStep(p, "Delivered"); }
+  catch {
+    if (!(await ensureConnected())) { fail(id, "Can't reach your PC right now. Is Jarvis running?"); return; }
+    try { await post(payload); } catch { fail(id, "Can't reach your PC right now. Is Jarvis running?"); return; }
+  }
+  const p = pending.get(id);
+  if (p && !p.acked) p.ackTimer = setTimeout(() => resend(id), 6000);
 }
 async function quick(type, extra = {}) {   // Control Center buttons: answered with a toast, not a chat bubble
   const id = newId();
@@ -1545,10 +1644,13 @@ async function ensureConnected(ms = 9000) {
   }
   return !!(ws && ws.readyState === WebSocket.OPEN);
 }
+let lastRx = 0;
 async function onMessage(text) {
     let data;
     try { data = await openJson(text); } catch { return; }
+    lastRx = Date.now();
     if (data.kind === "state") { onState(data); return; }
+    if (data.kind === "activity") { onActivity(data.activity, data.watches); return; }
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
@@ -1559,17 +1661,18 @@ async function onMessage(text) {
     if (data.kind === "uploaded") { onUploaded(data); return; }
     if (data.kind === "upload_progress") return;
     if (data.kind === "ask_done") { if ($("ask-" + data.id)) { $("ask-" + data.id).remove(); toast("Permission request expired", "x", "var(--label2)"); } return; }
-    const p = pending.get(data.id);
+    let p = pending.get(data.id);
+    if (!p && awaiting[data.id] && data.kind === "reply") p = adopt(data.id);   // an answer to a command from before a reload
     if (!p) return;
-    clearTimeout(p.timer);
+    clearTimeout(p.timer); clearTimeout(p.ackTimer); p.acked = true;
     if (!data.done) {
-      setStep(p, data.text === "On it..." ? "Thinking…" : data.text);
+      setStep(p, data.text === "On it..." ? "Thinking…" : data.text, data.step_kind || "");
       if (p.card) p.card.querySelector("header span").textContent = data.text;
       p.timer = setTimeout(() => setStep(p, "Still working…"), 60000);
       return;
     }
     if (p.kind === "shots") return;   // the picture itself completes it
-    pending.delete(data.id);
+    pending.delete(data.id); setAwaiting(data.id);
     if (p.tile) tileState(p.tile, "done");
     if (p.kind === "quick") {
       if (p.onReply) p.onReply(data.text);
@@ -1579,14 +1682,136 @@ async function onMessage(text) {
     }
     const chat = chatById(p.chatId);
     if (!chat) return;
+    if (Array.isArray(data.steps) && data.steps.length) p.steps = data.steps;   // the PC's full list wins
+    p.finished = true;
+    saveSteps(chat, p);
     addMessage(chat, { who: "jarvis", text: data.text, thinking: data.thinking || "" });
-    if (p.chatId === db.current && p.el?.isConnected) { p.step?.remove(); p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addThoughts(p.el, data.thinking); addActions(p.el, Date.now()); scrollDown(); }
+    if (p.chatId === db.current && p.el?.isConnected) {
+      if (p.steps?.length) drawSteps(p); else p.step?.remove();   // the steps stay, now all done
+      p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addThoughts(p.el, data.thinking); addActions(p.el, Date.now()); scrollDown();
+    }
     if (p.onReply) p.onReply(data.text);
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
     if (!$("drawer").hidden) renderSidebar();
 }
 function sync() { post({ type: "sync", id: newId() }).catch(() => {}); }
+// The socket can look open while it's actually dead (iOS freezes it in the background). After coming back, ask for
+// the state and reconnect if nothing arrives.
+function probe() {
+  const t = Date.now();
+  sync();
+  setTimeout(() => {
+    if (lastRx >= t || document.visibilityState !== "visible") return;
+    try { ws?.close(); } catch {}
+    ws = null; connect();
+  }, 4000);
+}
+
+// Re-create the live view for a command sent before the app was closed/reloaded.
+function adopt(id) {
+  const info = awaiting[id];
+  if (!info || pending.has(id) || !chatById(info.chat)) return null;
+  const entry = { chatId: info.chat, kind: "cmd", steps: [], status: "Thinking…", acked: true };
+  entry.timer = setTimeout(() => setStep(entry, "Still working…"), 60000);
+  pending.set(id, entry);
+  if (info.chat === db.current) { entry.step = stepRow(entry.status); entry.el = bubble(null, "jarvis"); scrollDown(); }
+  return entry;
+}
+function restoreAwaiting() {
+  for (const [id, info] of Object.entries(awaiting)) {
+    if (Date.now() - info.ts > 30 * 60 * 1000 || !chatById(info.chat)) { setAwaiting(id); continue; }   // too old to wait for
+    adopt(id);
+  }
+}
+
+// ================= activity: everything Jarvis does, plus reminders =================
+let activity = [], watches = [];
+const fetched = new Set();
+const VIA = { phone: "Phone", pc: "PC" };
+function whenLabel(ms) {
+  const d = new Date(ms), today = new Date().toDateString() === d.toDateString();
+  const tomorrow = new Date(Date.now() + 864e5).toDateString() === d.toDateString();
+  return (today ? "" : tomorrow ? "Tomorrow " : d.toLocaleDateString([], { weekday: "short" }) + " ") + timeLabel(ms);
+}
+function actPill(e) {
+  const kind = e.kind === "reminder" ? "Reminder" : e.kind === "watch" ? "Watch" : VIA[e.via] || "Command";
+  const st = e.status === "running" || e.status === "queued" ? "run" : e.status === "error" ? "err" : "";
+  const live = st === "run" && e.steps?.length ? e.steps.at(-1).t : e.status === "queued" ? "Waiting… " + e.text : e.text;
+  return pill(kind, live, st);
+}
+function onActivity(list, ws_) {
+  if (Array.isArray(list)) activity = list;
+  if (Array.isArray(ws_)) watches = ws_;
+  for (const e of activity) {   // keep live views in step with the PC, and pick up answers we missed
+    if (!e.msg_id) continue;
+    let p = pending.get(e.msg_id);
+    if (!p && awaiting[e.msg_id]) p = adopt(e.msg_id);
+    if (!p || p.kind !== "cmd") continue;
+    if (e.status === "done" || e.status === "error") {
+      if (!fetched.has(e.msg_id)) { fetched.add(e.msg_id); post({ type: "fetch_reply", msg: e.msg_id, id: newId() }).catch(() => fetched.delete(e.msg_id)); }
+    } else if ((e.nsteps || 0) > (p.steps?.length || 0) && e.steps?.length) {
+      p.steps = e.steps.slice(); p.status = ""; drawSteps(p);
+    }
+  }
+  renderStatusBar(); renderActSec();
+  if (!$("actSheet").hidden) renderActSheet();
+}
+function renderStatusBar() {
+  const bar = $("statusBar");
+  bar.innerHTML = "";
+  const running = activity.filter(e => e.status === "running" || e.status === "queued");
+  if (running.length) {
+    const e = running[running.length - 1], b = pill("Working", e.steps?.at(-1)?.t || e.text, "run");
+    b.classList.add("press"); b.onclick = openActivity; bar.append(b);
+  }
+  if (watches.length) {
+    const w = watches[0], more = watches.length > 1 ? `  +${watches.length - 1}` : "";
+    const b = pill(w.when ? "Reminder" : "Watch", (w.when ? whenLabel(w.when) + " · " : "") + w.label + more);
+    b.classList.add("press"); b.onclick = openActivity; bar.append(b);
+  }
+  const show = !!(bar.children.length && cfg);
+  bar.hidden = !show; document.body.classList.toggle("has-bar", show);
+}
+function renderActSec() {
+  const box = $("actRecent"), recent = activity.slice(0, 3);
+  $("actSec").hidden = !recent.length && !watches.length;
+  box.innerHTML = "";
+  for (const w of watches.slice(0, 2)) box.append(pill(w.when ? "Reminder" : "Watch", (w.when ? whenLabel(w.when) + " · " : "") + w.label));
+  for (const e of recent) box.append(actPill(e));
+}
+function renderActSheet() {
+  const body = $("actBody");
+  body.innerHTML = "";
+  if (watches.length) {
+    const t = document.createElement("div"); t.className = "group-title"; t.textContent = "Reminders"; body.append(t);
+    const g = document.createElement("div"); g.className = "group"; body.append(g);
+    for (const w of watches) {
+      const row = document.createElement("div"); row.className = "row rem";
+      row.innerHTML = `${icon(w.when ? "clock" : "bell")}<span class="grow"><b></b><span class="sub"></span></span><button class="x-btn press" aria-label="Cancel">${icon("x")}</button>`;
+      row.querySelector("b").textContent = w.label;
+      row.querySelector(".sub").textContent = w.when ? whenLabel(w.when) + (w.call ? " · calls you" : "") : "When it happens";
+      row.querySelector("button").onclick = () => {
+        post({ type: "cancel_watch", watch: w.id, id: newId() }).then(() => toast("Reminder cancelled", "clock", "var(--orange)"), () => toast("Can't reach your PC right now.", "x", "var(--red)"));
+      };
+      g.append(row);
+    }
+  }
+  const t = document.createElement("div"); t.className = "group-title"; t.textContent = "What Jarvis did"; body.append(t);
+  const list = document.createElement("div"); list.className = "act-list"; body.append(list);
+  if (!activity.length) { list.innerHTML = '<div class="act-empty">Nothing yet. Everything Jarvis does shows up here.</div>'; return; }
+  for (const e of activity) {
+    const card = document.createElement("div"); card.className = "act";
+    const head = actPill(e);
+    const when = document.createElement("span"); when.className = "when"; when.textContent = relTime(e.started); head.append(when);
+    card.append(head);
+    if (e.kind === "command" && e.steps?.length) card.append(pillsEl(e.steps, e.status === "running", "", e.status === "error"));
+    if (e.reply) { const r = document.createElement("div"); r.className = "reply"; r.textContent = e.reply; card.append(r); }
+    list.append(card);
+  }
+}
+function openActivity() { renderActSheet(); openSheet("actSheet"); }
+$("actAll").onclick = openActivity;
 
 // ================= live PC status =================
 function lastSeenText() {
@@ -1623,6 +1848,7 @@ function onState(data) {
     $("uTokens").textContent = n(u.tokens_total != null ? u.tokens_total : (u.tokens_in || 0) + (u.tokens_out || 0));
     $("uLocal").textContent = n(u.local_calls); }
   if (data.vapid) vapidKey = data.vapid;
+  if (data.activity || data.watches) onActivity(data.activity, data.watches);
   if (typeof data.notify === "boolean") refreshNotifyToggle(data.notify);
   if (!data.pc) return;
   pc = data.pc; pcSeen = Date.now(); host = pc.host || host; store("jarvis.lastSeen", String(pcSeen));
@@ -2139,7 +2365,7 @@ document.addEventListener("visibilitychange", () => {
   checkForUpdate();
   if (chatById(db.current)?.unread) renderChat();
   updateBadges();
-  if (!ws || ws.readyState > WebSocket.OPEN) connect(); else sync();
+  if (!ws || ws.readyState > WebSocket.OPEN) connect(); else probe();
   if (!$("sysSheet").hidden) watch();
 });
 
@@ -2466,6 +2692,7 @@ async function start() {
   $("relayName").textContent = "Direct, encrypted";
   loadDb();
   try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
+  restoreAwaiting();
   renderShelf(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
   connect();
   if (/[?&]call=1/.test(location.search)) { window.history.replaceState(null, "", location.pathname); setTimeout(() => Call.open(true, ""), 400); }

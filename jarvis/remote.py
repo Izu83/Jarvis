@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import approval, camera, media, modes, pc, push, screens, sysinfo, tools
+from . import activity, approval, camera, media, modes, pc, push, screens, sysinfo, tools, watchers
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -83,6 +83,10 @@ class PhoneChannel:
         self._watching = False
         self.asks: dict[str, dict] = {}   # permission prompts waiting for an answer
         self.uploads: dict[str, dict] = {}   # files arriving from the phone in pieces
+        self._soon: dict[str, threading.Timer] = {}   # coalesced state / activity updates
+        self._soon_lock = threading.Lock()
+        activity.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
+        watchers.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
 
     # ------------------------------------------------------------ crypto
 
@@ -93,8 +97,14 @@ class PhoneChannel:
         except (InvalidTag, ValueError, json.JSONDecodeError):
             log.warning("Ignored a message that wasn't encrypted with our key.")
             return None
-        if abs(time.time() * 1000 - data.get("ts", 0)) > MAX_AGE_MS or data.get("id") in self.seen:
-            log.warning("Ignored a stale or repeated phone message.")
+        if abs(time.time() * 1000 - data.get("ts", 0)) > MAX_AGE_MS:
+            log.warning("Ignored a stale phone message (is the phone's clock right?).")
+            return None
+        if data.get("id") in self.seen:
+            # The phone re-sends a command when it hears nothing back (its socket had silently died). Don't run it
+            # twice; just tell it where that command is, so it doesn't sit there looking like nothing happened.
+            if data.get("text"):
+                return {"type": "_resent", "id": data.get("id")}
             return None
         self.seen.append(data.get("id"))
         return data
@@ -142,13 +152,44 @@ class PhoneChannel:
             if self.tunnel.url:
                 self._announce(self.tunnel.url)
 
-    def reply(self, msg_id: str, text: str, done: bool = True, kind: str = "reply", thinking: str = "") -> None:
+    def reply(self, msg_id: str, text: str, done: bool = True, kind: str = "reply", thinking: str = "",
+              step_kind: str = "", steps: list | None = None) -> None:
         payload = {"kind": kind, "id": msg_id, "text": text, "done": done}
         if thinking:
             payload["thinking"] = thinking[:6000]
+        if step_kind:
+            payload["step_kind"] = step_kind   # a real step (shown as a pill), not just a status like "On it"
+        if steps is not None:
+            payload["steps"] = steps[-40:]
         self._publish(payload)
         if done:
-            self.send_state()
+            # Never on the caller's thread: this runs on the command worker, and a slow or failing status read
+            # must not hold up (or kill) the next command.
+            self.soon("state", 0.2, self.send_state)
+
+    def soon(self, key: str, delay: float, fn) -> None:
+        """Run fn once after `delay`, on its own thread, folding repeated requests into one."""
+        with self._soon_lock:
+            if key in self._soon:
+                return
+
+            def run():
+                with self._soon_lock:
+                    self._soon.pop(key, None)
+                try:
+                    fn()
+                except Exception:
+                    log.exception("Couldn't send %s to the phone", key)
+
+            t = threading.Timer(delay, run)
+            t.daemon = True
+            self._soon[key] = t
+            t.start()
+
+    def send_activity(self) -> None:
+        """What Jarvis is doing / has done, and the reminders it's holding (cheap: no PC stats)."""
+        self._publish({"kind": "activity", "id": "activity", "activity": activity.summary(),
+                       "watches": watchers.items()})
 
     def send_state(self) -> None:
         """Modes (shown as buttons) and live PC status (the phone's Control Center)."""
@@ -162,7 +203,8 @@ class PhoneChannel:
                        "use_claude": settings["use_claude"],
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "brain": settings["brain"], "usage": usage.summary(),
-                       "vapid": push.public_key(), "notify": push.have_subs()})
+                       "vapid": push.public_key(), "notify": push.have_subs(),
+                       "activity": activity.summary(), "watches": watchers.items()})
 
     def _later(self, seconds: float, fn, *args) -> None:
         threading.Timer(seconds, fn, args).start()
@@ -237,8 +279,22 @@ class PhoneChannel:
 
     def _handle(self, data: dict) -> None:
         kind, msg_id = data.get("type", "cmd"), data.get("id", "")
-        if kind == "sync":
+        if kind == "_resent":
+            entry = activity.by_msg(msg_id)
+            if entry and entry["status"] in ("done", "error"):
+                self.reply(msg_id, entry["reply"] or "Done.", steps=entry["steps"])
+            else:
+                last = (entry or {}).get("steps") or []
+                self.reply(msg_id, last[-1]["t"] if last else "On it...", done=False,
+                           step_kind=last[-1]["k"] if last else "")
+        elif kind == "sync":
             self.send_state()
+        elif kind == "fetch_reply":   # the app reloaded while a command ran: send it the answer it missed
+            entry = activity.by_msg(data.get("msg", ""))
+            if entry and entry["status"] in ("done", "error"):
+                self.reply(entry["msg_id"], entry["reply"] or "Done.", steps=entry["steps"])
+        elif kind == "cancel_watch":
+            watchers.cancel(data.get("watch", ""))
         elif kind == "screens":
             log.info("Phone: screenshots")
             self.send_screens(msg_id)
@@ -316,13 +372,14 @@ class PhoneChannel:
                 text += ("\n\n[The user attached these files from their phone (saved on this PC): "
                          + "; ".join(files) + ". Open them with the Read tool (it shows images) if they "
                          "matter for the request.]")
-            self.on_command(text, lambda text, think="", i=msg_id: self._reply_or_push(i, text, think),
+            self.on_command(text, lambda text, think="", steps=None, i=msg_id: self._reply_or_push(i, text, think, steps),
                             chat=data.get("chat"), recent=data.get("recent"),
-                            progress=lambda text, i=msg_id: self.reply(i, text, done=False), via="phone")
+                            progress=lambda text, k="", i=msg_id: self.reply(i, text, done=False, step_kind=k),
+                            via="phone", msg_id=msg_id)
 
-    def _reply_or_push(self, msg_id: str, text: str, thinking: str = "") -> None:
+    def _reply_or_push(self, msg_id: str, text: str, thinking: str = "", steps: list | None = None) -> None:
         """Final reply to a phone command: if the app has since closed, send it as a notification instead."""
-        self.reply(msg_id, text, thinking=thinking)
+        self.reply(msg_id, text, thinking=thinking, steps=steps)
         if not self.clients and push.have_subs():
             push.send_async("Jarvis", text[:160], "reply", "./")
 
@@ -388,7 +445,7 @@ class PhoneChannel:
             return
         log.info("Saved a file from the phone: %s", dest)
         self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": True, "path": str(dest),
-                       "text": f"Saved {dest.name} to Downloads\\From Phone."})
+                       "text": f"Saved {dest.name} to {folder}."})
 
     def _monitor(self) -> None:
         """Warn the phone when the disk gets low or the GPU runs hot (once per episode, re-armed on recovery)."""
@@ -398,15 +455,17 @@ class PhoneChannel:
             if not self.clients and not push.have_subs():
                 continue
             try:
-                import shutil
-                free_gb = shutil.disk_usage("C:\\").free / 1024**3
                 limit = float(settings.get("warn_disk_gb", 10))
-                if free_gb < limit and "disk" not in warned:
-                    warned.add("disk")
-                    self._alert("warn-disk", "warning", "disk", "Low disk space",
-                                f"Only {free_gb:.1f} GB free on C:. Windows may slow down. Ask me to clean up.")
-                elif free_gb >= limit + 2:
-                    warned.discard("disk")
+                for d in sysinfo.disks():   # every drive, not just C: (phone uploads go to D: by default)
+                    free_gb, tag = d["free"] / 1024**3, "disk-" + d["name"]
+                    if d["total"] < 32 * 1024**3:   # skip USB sticks and small recovery partitions
+                        continue
+                    if free_gb < limit and tag not in warned:
+                        warned.add(tag)
+                        self._alert("warn-" + tag, "warning", "disk", "Low disk space",
+                                    f"Only {free_gb:.1f} GB free on {d['name']}. Ask me to clean up.")
+                    elif free_gb >= limit + 2:
+                        warned.discard(tag)
                 gpus = sysinfo.gpus()
                 temp = gpus[0]["temp"] if gpus and gpus[0].get("temp") is not None else 0
                 hot = float(settings.get("warn_gpu_temp", 85))

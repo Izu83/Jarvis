@@ -17,7 +17,7 @@ import requests
 
 from . import tools, usage
 from .brain import (IDLE_RESET_SECONDS, MAX_TOOL_ROUNDS, SYSTEM_TEMPLATE,
-                    describe_step, make_brain_named, thread_switch_note)
+                    describe_step, make_brain_named, step_kind, thread_switch_note)
 from .config import settings
 
 log = logging.getLogger("jarvis.hermes")
@@ -37,6 +37,11 @@ CLAUDE_HINTS = (
 _FILE_SEARCH = re.compile(
     r"\b(find|search(?! the web)|locate|where'?s|where is|list (?:all |any )?)\b.*"
     r"\b(files?|pdfs?|documents?|folders?|photos?|images?|\.\w{2,4})\b", re.I)
+
+# How many earlier exchanges (command + final answer) the local model sees. Only the plain text is kept: replaying
+# old tool calls made the small model answer a NEW command with "done" from the previous one, without acting.
+KEEP_EXCHANGES = 3
+CHAT_TIMEOUT = 90   # seconds per local model call; slower than this, Claude does the command instead
 
 # A short nudge on top of the shared instructions, aimed at the smaller local model.
 HERMES_NOTE = (
@@ -80,6 +85,10 @@ class HermesBrain:
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
         log.info("Local Hermes brain ready (model %s via %s). Claude is the fallback.", self.model, self.host)
 
+    def close(self) -> None:
+        if self._fallback is not None:
+            self._fallback.close()
+
     def _claude(self):
         if self._fallback is None:
             log.info("Spinning up the Claude fallback brain.")
@@ -95,7 +104,7 @@ class HermesBrain:
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
         with self.lock:
             self.progress = progress
-            if time.time() - self.last_used > IDLE_RESET_SECONDS or len(self.history) > 60 or chat != self.thread:
+            if time.time() - self.last_used > IDLE_RESET_SECONDS or chat != self.thread:
                 self.history = []
                 if chat != self.thread:
                     command = thread_switch_note(recent) + command
@@ -106,16 +115,25 @@ class HermesBrain:
                 log.info("Routing straight to Claude (needs vision/web/exact search): %r", command[:70])
                 return self._to_claude(command, chat, recent, progress)
 
+            start = len(self.history)
             try:
                 answer = self._run(command)
                 if answer is not None:
+                    self._compact(start, command, answer)
                     return answer
                 log.info("Hermes couldn't finish confidently; handing this one to Claude.")
             except requests.RequestException as e:
                 log.info("Local Hermes server unreachable (%s); using Claude for this command.", e)
             except Exception:
                 log.exception("Hermes failed; using Claude for this command.")
+            del self.history[start:]   # don't leave a half-finished exchange in the local history
             return self._to_claude(command, chat, recent, progress)
+
+    def _compact(self, start: int, command: str, answer: str) -> None:
+        """Replace this command's tool chatter with just "user said / Jarvis answered", and keep only a few."""
+        del self.history[start:]
+        self.history += [{"role": "user", "content": command}, {"role": "assistant", "content": answer}]
+        del self.history[:-2 * KEEP_EXCHANGES]
 
     def _run(self, command: str) -> str | None:
         """One local agent loop. Returns the spoken answer, or None if the model gave up, needs vision, or
@@ -146,7 +164,7 @@ class HermesBrain:
                 step = describe_step(name, args)
                 steps.append(step)
                 if self.progress:
-                    self.progress(step)
+                    self.progress(step, step_kind(name))
                 log.info("tool %s %s", name, json.dumps(args)[:400])
                 try:
                     output = tools.run(name, args)
@@ -165,7 +183,7 @@ class HermesBrain:
             "stream": False,
             "keep_alive": "30m",   # keep the model warm in VRAM between commands
             "options": {"temperature": 0.3, "num_ctx": 8192},
-        }, timeout=180)
+        }, timeout=CHAT_TIMEOUT)
         r.raise_for_status()
         return r.json().get("message", {}) or {}
 

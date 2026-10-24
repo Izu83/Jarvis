@@ -25,6 +25,7 @@ PARTIAL = (".crdownload", ".part", ".tmp", ".opdownload", ".download")
 _watches: dict[str, dict] = {}
 _lock = threading.Lock()
 _notifier = None    # set by the app: fn(title, body, call=False)
+_on_change = None   # set by the app: called when watches are added, fire or are cancelled (the phone's clock chip)
 _started = False
 REMINDERS_FILE = ROOT / ".brain" / "reminders.json"   # timed reminders survive a Jarvis restart
 
@@ -32,6 +33,19 @@ REMINDERS_FILE = ROOT / ".brain" / "reminders.json"   # timed reminders survive 
 def set_notifier(fn) -> None:
     global _notifier
     _notifier = fn
+
+
+def set_on_change(fn) -> None:
+    global _on_change
+    _on_change = fn
+
+
+def _changed() -> None:
+    if _on_change:
+        try:
+            _on_change()
+        except Exception:
+            log.debug("watch change callback failed", exc_info=True)
 
 
 def _downloads() -> Path:
@@ -115,8 +129,13 @@ def _loop() -> None:
                     log.debug("watch check failed", exc_info=True)
         if any(w["kind"] == "at" for w in due):
             _save_reminders()
+        if due:
+            _changed()
         for w in due:
             log.info("Watch done: %s", w["label"])
+            from . import activity
+            activity.record(w["label"], kind="reminder" if w["kind"] == "at" else "watch",
+                            reply="Called your phone." if w.get("call") else "Sent you a notification.")
             if not _notifier:
                 continue
             if w["kind"] == "at":
@@ -191,6 +210,7 @@ def remind(message: str, at: str = "", in_minutes: float = 0, call: bool = False
     with _lock:
         _watches[wid] = w
     _save_reminders()
+    _changed()
     hhmm = dt.datetime.fromtimestamp(when).strftime("%H:%M")
     day = "" if dt.datetime.fromtimestamp(when).date() == dt.date.today() else " tomorrow"
     return f"Okay, I'll {'call' if call else 'notify'} you at {hhmm}{day}: {message or 'reminder'}."
@@ -214,6 +234,7 @@ def add(kind: str, label: str, name: str = "", path: str = "", threshold: float 
         w["saw_partial"] = bool(_partials(_downloads()))
     with _lock:
         _watches[wid] = w
+    _changed()
     return f"Okay, I'll let you know: {label}."
 
 
@@ -226,6 +247,7 @@ def clear() -> str:
         n = len(_watches)
         _watches.clear()
     _save_reminders()
+    _changed()
     return f"Cancelled {n} watch(es)." if n else "You have no active watches."
 
 
@@ -239,3 +261,24 @@ def listing() -> str:
         else:
             parts.append(w["label"])
     return "Watching: " + "; ".join(parts)
+
+
+def cancel(wid: str) -> str:
+    """Cancel one watch or reminder (the X next to it on the phone)."""
+    with _lock:
+        w = _watches.pop(wid, None)
+    if not w:
+        return "That reminder isn't active any more."
+    if w["kind"] == "at":
+        _save_reminders()
+    _changed()
+    return f"Cancelled: {w['label']}."
+
+
+def items() -> list[dict]:
+    """Active watches and reminders for the phone, soonest reminder first."""
+    with _lock:
+        ws = list(_watches.values())
+    out = [{"id": w["id"], "kind": w["kind"], "label": w["label"], "call": bool(w.get("call")),
+            "when": int(w["when"] * 1000) if w["kind"] == "at" else None} for w in ws]
+    return sorted(out, key=lambda w: (w["when"] is None, w["when"] or 0))

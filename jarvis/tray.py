@@ -42,8 +42,9 @@ def _ensure_ico() -> Path | None:
 
 
 class Tray:
-    def __init__(self, listener=None):
+    def __init__(self, listener=None, on_quit=None):
         self.hwnd = None
+        self.on_quit = on_quit       # cleanup before the process ends (stops the Claude Code session)
         self.listener = listener     # the VoiceListener, so we can list and switch microphones
         self._mic_ids = {}           # menu id -> device index (or None for the Windows default)
 
@@ -128,5 +129,10 @@ class Tray:
                 win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (hwnd, 0))
             except Exception:
                 pass
+            if self.on_quit:
+                try:
+                    self.on_quit()
+                except Exception:
+                    log.debug("cleanup on quit failed", exc_info=True)
             os._exit(0)   # end the whole process, including the daemon voice/phone threads
         return True

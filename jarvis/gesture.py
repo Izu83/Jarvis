@@ -44,9 +44,15 @@ def _python() -> str | None:
 
 
 def _find_running() -> psutil.Process | None:
-    for p in psutil.process_iter(["cmdline"]):
+    """Gesture-App's own camera.py, not any other program that happens to have a camera.py."""
+    folder = str(app_dir()).lower().rstrip("\\/")
+    for p in psutil.process_iter(["cmdline", "cwd"]):
         try:
-            if any("camera.py" in str(a) for a in (p.info["cmdline"] or [])):
+            args = [str(a) for a in (p.info["cmdline"] or [])]
+            script = next((a for a in args if a.lower().endswith("camera.py")), None)
+            if not script:
+                continue
+            if script.lower().startswith(folder) or (p.info["cwd"] or "").lower().rstrip("\\/") == folder:
                 return p
         except psutil.Error:
             continue

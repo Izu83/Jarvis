@@ -4,7 +4,7 @@ Runs as its OWN process (launched by jarvis), so a GUI hiccup can never slow dow
 one JSON command per line on stdin:
     {"cmd":"show"}                      -> appear, start listening
     {"cmd":"partial","text":"..."}      -> live transcription as you speak
-    {"cmd":"state","state":"thinking"}  -> listening | thinking | speaking
+    {"cmd":"state","state":"thinking"}  -> listening | thinking | speaking (optional "text": the current step)
     {"cmd":"reply","text":"..."}        -> show Jarvis's reply, then auto-hide
     {"cmd":"hide"}                      -> hide
 and writes events back on stdout, one JSON per line:
@@ -35,7 +35,7 @@ MUTED = "#aeb4c2"
 W = 360                  # window width
 PAD = 18                 # screen-edge margin
 COLORS = {"listening": "#3b82f6", "thinking": "#c164f2", "speaking": "#32d365"}
-LABELS = {"listening": "Listening…", "thinking": "Thinking…", "speaking": "Jarvis"}
+LABELS = {"listening": "Listening…", "thinking": "Working…", "speaking": "Jarvis"}
 
 
 def _primary_size():
@@ -195,6 +195,8 @@ class Overlay:
             self._show()
         elif cmd == "state":
             self.state = msg.get("state", self.state)
+            if msg.get("text"):
+                self.text = msg["text"]
             self._show()
         elif cmd == "reply":
             self.state, self.text = "speaking", msg.get("text", "")
@@ -263,6 +265,7 @@ class OverlayClient:
     def show(self):            self._ensure(); self._send({"cmd": "show"})
     def partial(self, text):   self._send({"cmd": "partial", "text": text})
     def thinking(self):        self._send({"cmd": "state", "state": "thinking"})
+    def step(self, text):      self._send({"cmd": "state", "state": "thinking", "text": text})
     def reply(self, text):     self._send({"cmd": "reply", "text": text})
     def hide(self):            self._send({"cmd": "hide"})
 

@@ -10,3 +10,4 @@ config.json
 .brain/
 modes.json
 bin/
+.pytest_cache/

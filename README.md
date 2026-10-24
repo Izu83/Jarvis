@@ -16,8 +16,11 @@ Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─�
 
 1. **Brain login**: Jarvis runs Claude Code in the background, so it uses your Claude Pro/Max plan (no API key
    needed). Log the CLI in once: open a terminal, run `claude`, type `/login`, finish in the browser, then `/exit`.
-   *Alternative:* set `"brain": "api"` in `config.json` and put a paid key from
-   https://console.anthropic.com/settings/keys into `.env` as `ANTHROPIC_API_KEY=`.
+   *Alternatives* (set `"brain"` in `config.json`):
+   - `"hermes"`: a free local model through [Ollama](https://ollama.com) (`ollama pull hermes3:8b`). It does most
+     commands on your PC with zero tokens and hands anything that needs vision, the web or an exact file search to
+     Claude (`hermes_fallback`).
+   - `"api"`: a paid key from https://console.anthropic.com/settings/keys in `.env` as `ANTHROPIC_API_KEY=`.
 2. **Dependencies** (already done on this PC):
    ```
    py -3.13 -m venv .venv
@@ -34,15 +37,29 @@ the page and code contain no secrets. Your key lives only in `.env` (git-ignored
 ## Running
 
 ```
-run.bat            # voice + phone
-run.bat --text     # also type commands in the console (handy for testing)
-run.bat --no-voice # phone only
+run.bat                # voice + phone, with a tray icon
+run.bat --text         # also type commands in the console (handy for testing)
+run.bat --no-voice     # phone only
+run.bat --startup      # start Jarvis hidden at every login (--startup-off to stop)
 ```
 
-Say **"Hey Jarvis"**, wait for the beep (or just keep talking), give the command, then pause. A second, lower
-beep means it heard you; it replies out loud. Everything is logged to `jarvis.log`.
+Or double-click `Jarvis.vbs` to run it in the background with no console window, just a tray icon under the ^ arrow
+in the taskbar (right-click it to pick a microphone, open the log or quit). Only one Jarvis runs at a time.
 
-To start Jarvis automatically at login: press `Win+R`, type `shell:startup`, and put a shortcut to `run.bat` there.
+Say **"Hey Jarvis"** or press **Ctrl+Alt+J**, give the command, then pause. A pop-up in the top-right of the main
+monitor shows what it heard live, then each step while it works, then the reply, which it also speaks in a natural
+voice (Microsoft's free neural voices via edge-tts; the built-in Windows voice when offline). Everything is logged to
+`jarvis.log`.
+
+## How a command is handled
+
+1. **Modes** ("work mode") run instantly with no AI.
+2. **Quick commands** (media keys, volume, "open X and Y on monitor 3", reminders, lock, power, screenshots/webcam to
+   the phone) are understood by a free local parser (`nlu.py`). Anything with more than one part ("X and then Y") or
+   that it isn't sure about goes to the brain, so nothing is half-done.
+3. **The brain** (Claude Code, the API, or Hermes) does everything else with the tools in `tools.py`.
+
+Commands run one at a time. If you send another while Jarvis is busy, it shows that it's waiting for the first one.
 
 ## Things you can say
 
@@ -76,6 +93,14 @@ which you can also edit by hand.
   skip and volume; live CPU and memory with the busiest app; send your phone's clipboard to the PC or see the PC's
   clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
+- **Step pills**: everything Jarvis does for a command appears as a small pill in the chat ("Files · Searching for
+  invoice…"), live while it works and saved afterwards. A **Working** chip at the top shows the current step even for
+  commands you gave by voice on the PC.
+- **Reminders**: a clock chip at the top shows the next reminder. Tap it for all reminders and watches; cancel any one.
+- **Activity**: Control Center → Recent activity → See all lists every command (phone or PC mic), its steps and
+  the answer. Kept on the PC in `.brain/activity.json`.
+- **Never lost**: if the phone's connection silently dropped, the app reconnects and re-sends (the PC never runs it
+  twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again.
 
 ## Smarter: acting inside apps
 
@@ -96,9 +121,16 @@ Jarvis can look through your files (list folders with sizes, search by name, rea
 disk space, suggest what's safe to clean) and organise them (create, write, move, rename, copy). For anything else
 it can run a PowerShell command.
 
-**Deleting, clearing, emptying the Recycle Bin, overwriting a file and running commands always ask you first.**
-If the command came from the phone, an Allow / Don't Allow alert appears in the app (keep it open); otherwise a
-Windows dialog pops up and Jarvis says so out loud. No answer within 2 minutes counts as no. Normal deletes go to the
+How much Jarvis asks first is the `autonomy` setting:
+
+| `autonomy` | Asks before |
+|---|---|
+| `full` (default) | only power actions (sleep/restart/shutdown/sign out) and sending messages |
+| `risky_only` | also deleting, clearing and emptying the Recycle Bin |
+| `ask` | also running commands and overwriting files |
+
+When it asks: from the phone, an Allow / Don't Allow alert appears in the app (keep it open); otherwise a Windows
+dialog pops up and Jarvis says so out loud. No answer within 2 minutes counts as no. Normal deletes go to the
 Recycle Bin; "permanently" (or clearing temp/cache folders) frees the space for real. Windows, Program Files,
 ProgramData, drive roots and your main user folders themselves can't be deleted at all.
 
@@ -122,17 +154,31 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 | `model` / `effort` | Model and effort for the `api` brain |
 | `monitor_names` | What you call each monitor, by Windows number (1 = right vertical, 2 = main, 3 = left) |
 | `known_folders` | Named shortcuts, e.g. `"projects": "D:\\Projects"` |
+| `ollama_host`, `hermes_model`, `hermes_fallback` | The local Hermes brain and which brain backs it up |
+| `use_claude` | `false` = only free local commands, never Claude (also a switch in the phone's Settings) |
+| `autonomy` | `full`, `risky_only` or `ask` (see *Files and permissions*) |
 | `wake_threshold` | Lower (e.g. `0.35`) if "Hey Jarvis" isn't detected; raise if it triggers by itself |
-| `whisper_model` | `base.en` (default, fast) or `small.en` (slower, try if words get misheard) |
-| `speak_replies`, `tts_voice` | Spoken answers on the PC, and which Windows voice to use |
+| `whisper_model` | `small.en` (default), `base.en` (faster, mishears more) or `medium.en` (slowest, best) |
+| `silence_seconds`, `max_command_seconds`, `no_speech_seconds` | How long it listens before ending a command |
+| `input_device` | Which microphone (also in the tray menu); `null` = Windows default |
+| `hotkey`, `hotkey_enabled`, `speak_on_shortcut` | The talk shortcut (default Ctrl+Alt+J) and whether replies to it are spoken |
+| `overlay_enabled`, `tray_enabled` | The "Hey Jarvis" pop-up and the tray icon |
+| `speak_replies`, `tts_engine`, `edge_voice`, `tts_voice` | Spoken answers: `edge` (natural, online) or `windows` (offline) and the voice |
 | `voice_enabled`, `phone_enabled` | Turn either input off |
+| `upload_folder` | Where files from the phone are saved (default `From Phone` on the Jarvis drive) |
+| `warn_disk_gb`, `warn_gpu_temp` | When the phone gets a low-disk / hot-GPU warning |
+| `gesture_app`, `gesture_python` | The Gesture-App folder and the Python that runs it (also used for webcam photos) |
 
 ## Code map
 
 | File | Role |
 |---|---|
 | `jarvis/__main__.py` | Starts the voice, phone and worker threads |
-| `jarvis/brain.py` | System prompt + the two brains (Claude Code CLI, or the API tool loop) |
+| `jarvis/brain.py` | System prompt + the Claude brains (Claude Code CLI, or the API tool loop) |
+| `jarvis/hermes.py` | The free local Hermes brain (Ollama) with Claude as the fallback |
+| `jarvis/nlu.py` | Free local parser for quick commands |
+| `jarvis/activity.py` | The saved log of every command and its steps (the phone's pills and Activity list) |
+| `jarvis/watchers.py` | Reminders and "tell me when…" watches |
 | `jarvis/mcp_server.py` | Gives Claude Code the Jarvis tools |
 | `jarvis/tools.py` | The actions Claude can take (schemas + implementations) |
 | `jarvis/windows.py` | Win32: monitors, window lookup, moving and tiling |
@@ -148,6 +194,12 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 | `jarvis/files.py` | Scanning, searching, reading, organising and deleting files (with safety checks) |
 | `jarvis/approval.py` | Asking you before anything destructive (phone alert or Windows dialog) |
 | `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
+| `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
+| `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
+| `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |
+| `jarvis/autostart.py` | `--startup` / `--startup-off` |
+| `tests/` | `pytest` tests for the parts that don't need Windows (parser, reminders, activity, modes) |
 | `docs/` | The phone page served by GitHub Pages |
 
 ## How the phone connects
@@ -165,7 +217,15 @@ https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-w
 
 - Everything between phone and PC is AES-256-GCM encrypted end to end; Cloudflare and ntfy.sh only see
   ciphertext. Messages older than 2 minutes, replays, and anything not encrypted with your key are ignored.
-- Jarvis can only do what's in `tools.py` (open/arrange/close windows, media keys). It deliberately has no
-  "run any command" tool, so even a leaked key can't do much more than open apps.
+- Jarvis is built to do anything on this PC: it can run PowerShell, change and delete files, see the screen and
+  send you files. With the default `autonomy: full` it does most of that without asking, so your pairing key is
+  effectively the key to the PC. Keep the pairing link private.
 - If your phone is lost, run `run.bat --pair` after deleting `JARVIS_TOPIC`/`JARVIS_KEY` from `.env` to rotate keys.
 - Windows of apps running as administrator can't be moved unless Jarvis also runs as administrator.
+
+## Tests
+
+```
+.venv\Scripts\pip install pytest
+.venv\Scripts\python -m pytest tests
+```
