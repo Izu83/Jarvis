@@ -44,6 +44,19 @@ def _edge_say(text: str, out: str) -> bool:
         return False
 
 
+def synth(text: str) -> bytes | None:
+    """The same neural voice as MP3 bytes, for the phone to play (its own browser voices sound robotic)."""
+    fd, out = tempfile.mkstemp(suffix=".mp3", prefix="jarvis_phone_")
+    os.close(fd)
+    try:
+        return open(out, "rb").read() if _edge_say(text, out) else None
+    finally:
+        try:
+            os.remove(out)
+        except OSError:
+            pass
+
+
 class _Sapi:
     """The offline fallback: a pyttsx3/SAPI engine, created lazily on the worker thread (which is COM-initialised)."""
     def __init__(self):

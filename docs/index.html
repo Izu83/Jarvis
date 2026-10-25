@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -940,7 +940,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-24.2";   // bump together with version.json
+const VERSION = "2026-10-25.1";   // bump together with version.json
 const JNI = "JNIv9";   // Jarvis · Niko · Izu83 · version 9 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1150,16 +1150,56 @@ function pickVoice() {
   return voices.find(v => v.lang.startsWith(lang) && /premium|enhanced|siri|samantha|daniel|natural/i.test(v.name))
     || voices.find(v => v.lang.startsWith(lang)) || null;
 }
+// Jarvis's own voice: the PC makes the speech with the same neural voice as its desktop pop-up and sends the MP3.
+// One <audio> element is reused for everything: iOS only lets a page play sound from an element that was first
+// started by a tap, so it's unlocked on the first touch and every later reply can play through it.
+const Voice = {
+  el: new Audio(), pending: new Map(), token: 0, unlocked: false,
+  unlock() {
+    if (this.unlocked) return;
+    this.unlocked = true;
+    this.el.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+    this.el.play().catch(() => { this.unlocked = false; });
+  },
+  stop() {
+    this.token++;
+    try { this.el.pause(); } catch {}
+    try { speechSynthesis?.cancel(); } catch {}
+  },
+  // Speak text; onend runs once when it finishes, fails or is stopped by a newer speak().
+  async speak(text, onend = () => {}) {
+    this.stop();
+    const token = this.token;
+    let ended = false; const end = () => { if (!ended) { ended = true; onend(); } };
+    const fallback = () => {   // the phone's own voice, only if the PC can't make the audio
+      if (token !== this.token || !window.speechSynthesis) { end(); return; }
+      const u = new SpeechSynthesisUtterance(text); u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
+      u.onend = u.onerror = end; speechSynthesis.speak(u);
+    };
+    const req = newId();
+    const audio = await new Promise(resolve => {
+      const timer = setTimeout(() => { this.pending.delete(req); resolve(null); }, 12000);
+      this.pending.set(req, d => { clearTimeout(timer); resolve(d); });
+      post({ type: "tts", id: newId(), req, text }).catch(() => { clearTimeout(timer); this.pending.delete(req); resolve(null); });
+    });
+    if (token !== this.token) { end(); return; }   // stopped while the PC was making it
+    if (!audio) { fallback(); return; }
+    const url = URL.createObjectURL(new Blob([b64bytes(audio)], { type: "audio/mpeg" }));
+    this.el.onended = this.el.onerror = () => { URL.revokeObjectURL(url); if (token === this.token) end(); };
+    this.el.onpause = () => { if (token !== this.token) end(); };
+    this.el.src = url;
+    this.el.play().catch(() => { URL.revokeObjectURL(url); fallback(); });
+  },
+  onAudio(data) { const fn = this.pending.get(data.req); if (fn) { this.pending.delete(data.req); fn(data.error ? null : data.data); } },
+};
+document.addEventListener("pointerdown", () => Voice.unlock(), { capture: true });
+
 function readAloud(text, btn) {
-  if (!window.speechSynthesis) { toast("Reading aloud isn't available here", "x", "var(--orange)"); return; }
   const again = speakingBtn === btn;
-  speechSynthesis.cancel(); setSpeaking(null);
+  Voice.stop(); setSpeaking(null);
   if (again) return;   // second tap stops it
-  const u = new SpeechSynthesisUtterance(text);
-  u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
-  u.onend = u.onerror = () => { if (speakingBtn === btn) setSpeaking(null); };
   setSpeaking(btn);
-  speechSynthesis.speak(u);
+  Voice.speak(text, () => { if (speakingBtn === btn) setSpeaking(null); });
 }
 // --- step pills: each thing Jarvis does is one pill ("Files · Searching for “invoice”…"), kept in the chat
 function pill(kind, text, state = "") {   // state: "" (done) | "run" | "err"
@@ -1663,6 +1703,7 @@ async function onMessage(text) {
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
     if (data.kind === "file" && data.data) { addFileCard(data); return; }
+    if (data.kind === "tts") { Voice.onAudio(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
     if (data.kind === "ask") { showAsk(data); return; }
@@ -2167,9 +2208,9 @@ $("mic").onclick = () => {
   try { rec.start(); } catch {}
 };
 function speakText(t) {   // "Read replies aloud" setting
-  if (!$("speakToggle").checked || !window.speechSynthesis) return;
-  speechSynthesis.cancel(); setSpeaking(null);
-  const u = new SpeechSynthesisUtterance(t); u.voice = pickVoice(); speechSynthesis.speak(u);
+  if (!$("speakToggle").checked) return;
+  setSpeaking(null);
+  Voice.speak(t);
 }
 
 // ================= screenshot viewer: pinch, drag, double-tap, tap a monitor =================
@@ -2445,13 +2486,9 @@ const Call = {
   speak(text, done) {
     if (!this.live) return;
     this.setState("speaking"); $("callTranscript").textContent = text;
-    if (!window.speechSynthesis) { setTimeout(() => done && done(), 400); return; }
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text); u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
     let fired = false; const finish = () => { if (fired) return; fired = true; clearTimeout(guard); if (this.live) done && done(); };
-    u.onend = u.onerror = finish;
-    const guard = setTimeout(finish, 2500 + text.split(/\s+/).length * 360);   // never get stuck if onend doesn't fire
-    speechSynthesis.speak(u);
+    const guard = setTimeout(finish, 14000 + text.split(/\s+/).length * 400);   // never get stuck if playback never ends
+    Voice.speak(text, finish);
   },
   abort() { this.recognizing = false; try { if (this.rec) { this.rec.onend = null; this.rec.abort(); } } catch {} this.rec = null; },
   holdStart(e) {
@@ -2482,7 +2519,7 @@ const Call = {
     $("callScreen").hidden = true;   // first, so the screen goes away even if something below throws
     $("callTalk").classList.remove("on");
     this.abort();
-    try { speechSynthesis?.cancel(); } catch {}
+    Voice.stop();
     this.stopRing();
     this.state = "idle"; $("callScreen").dataset.state = "idle";
   },

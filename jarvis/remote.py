@@ -232,6 +232,13 @@ class PhoneChannel:
         self._publish({"kind": "image", "id": msg_id, "monitors": [], "title": "Camera",
                        "data": base64.b64encode(jpeg).decode()})
 
+    def send_voice(self, req: str, text: str) -> None:
+        """Speak text with the PC pop-up's neural voice and send the MP3 to the phone (no tokens)."""
+        from . import speak
+        audio = speak.synth(text[:4000]) if text.strip() else None
+        self._publish({"kind": "tts", "id": "tts", "req": req,
+                       **({"data": base64.b64encode(audio).decode()} if audio else {"error": True})})
+
     def send_art(self, art_id: str) -> None:
         jpeg = media.art(art_id)
         if jpeg:
@@ -303,6 +310,9 @@ class PhoneChannel:
             self.send_camera(msg_id)
         elif kind == "watch":
             self.watch()
+        elif kind == "tts":   # the phone wants a reply read aloud in Jarvis's own voice
+            threading.Thread(target=self.send_voice, args=(data.get("req", ""), data.get("text", "")),
+                             daemon=True, name="phone-tts").start()
         elif kind == "answer":
             entry = self.asks.get(data.get("ask", ""))
             if entry:
