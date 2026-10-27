@@ -115,24 +115,14 @@
   .swatch.custom svg.i { width: 15px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); pointer-events: none; }
 
   /* ---------- header ---------- */
-  .top { position: fixed; z-index: 5; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 14px 26px; pointer-events: none; background: transparent; }
-  .top::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--base);
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-    -webkit-mask: linear-gradient(to bottom, #000 calc(100% - 42px), transparent); mask: linear-gradient(to bottom, #000 calc(100% - 42px), transparent); }
-  .top > * { pointer-events: auto; }
   .round { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; }
   .avatar { border-radius: 50%; object-fit: cover; display: block; flex: none; }
-  .avatar-btn { width: 40px; height: 40px; border-radius: 50%; padding: 2px; flex: none; }
-  .avatar-btn img { width: 36px; height: 36px; }
-  .title-pill { flex: 1; min-width: 0; height: 40px; border-radius: 20px; padding: 0 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; line-height: 1.1; }
-  .title-pill b { font-size: 15px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.24px; }
-  .title-pill small { font-size: 11px; color: var(--label2); display: flex; align-items: center; gap: 5px; letter-spacing: .06px; margin-top: 2px; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label3); transition: .3s; flex: none; }
   .dot.ok { background: var(--green); } .dot.warn { background: var(--orange); } .dot.bad { background: var(--red); }
   .badge-dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--base); }
 
   /* ---------- conversation ---------- */
-  #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 64px) 14px var(--dock-h, 170px); display: flex; flex-direction: column; gap: 3px; }
+  #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 14px) 14px var(--dock-h, 220px); display: flex; flex-direction: column; gap: 3px; }
   .home { margin: 0; padding: 8px 2px 8px; display: flex; flex-direction: column; gap: 16px; }
   .hello { display: flex; align-items: center; gap: 14px; padding: 0 4px; }
   .hello .ring { width: 62px; height: 62px; border-radius: 50%; padding: 3px; background: conic-gradient(from 200deg, #5ac8fa, #0a84ff, #bf5af2, #5ac8fa); flex: none; }
@@ -192,7 +182,7 @@
   .mediacard .ft span { font-size: 12px; color: var(--label2); }
   .mediacard .dl { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); background: var(--fill); flex: none; }
   .filecard .dl { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); background: var(--fill); flex: none; }
-  .warn-banner { position: fixed; z-index: 7; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 58px); max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; animation: drop .5s var(--ios) both; }
+  .warn-banner { position: fixed; z-index: 7; left: 12px; right: 12px; bottom: calc(var(--dock-h, 220px) - 6px); max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; animation: rise .5s var(--ios) both; }
   .warn-banner .wic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
   .warn-banner.warning .wic { background: var(--orange); } .warn-banner.danger .wic { background: var(--red); } .warn-banner.success .wic { background: var(--green); }
   .warn-banner .wt { flex: 1; min-width: 0; }
@@ -222,9 +212,21 @@
   .pill.more { color: var(--label2); font-weight: 500; }
   .pills.open .pill .pt { white-space: normal; }
   /* floating chips under the top bar: "working" + upcoming reminders */
-  .statusbar { position: fixed; z-index: 6; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 56px); display: flex; justify-content: center; gap: 6px; padding: 0 14px; pointer-events: none; }
-  .statusbar .pill { pointer-events: auto; min-width: 0; flex: 0 1 auto; max-width: 100%; box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 .5px var(--bubble-line); }
-  body.has-bar #log { padding-top: calc(env(safe-area-inset-top) + 100px); }
+  .statusbar { display: flex; justify-content: center; gap: 6px; padding: 0 4px 10px; }
+  .statusbar .pill { min-width: 0; flex: 0 1 auto; max-width: 100%; box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 .5px var(--bubble-line); }
+  /* the tab bar at the very bottom */
+  .tabbar { display: flex; justify-content: space-around; align-items: flex-start; margin: 10px -10px 0; padding: 7px 4px 0; border-top: .5px solid var(--sep); }
+  .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--label2); padding: 0 2px; }
+  .tab .ti { position: relative; width: 28px; height: 28px; display: grid; place-items: center; }
+  .tab svg.i { width: 25px; height: 25px; stroke-width: 1.9; }
+  .tab .ti .avatar { width: 27px; height: 27px; box-shadow: 0 0 0 1.5px var(--sep); }
+  .tab .tl { font-size: 10.5px; font-weight: 500; letter-spacing: .1px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab.on { color: var(--accent); }
+  .tab .badge-dot { top: -1px; right: -3px; }
+  .tab .badge-dot.live { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+  .tab .ti .dot { position: absolute; right: -2px; bottom: 1px; width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--base); }
+  /* the chat's title scrolls with the conversation instead of sitting in a bar */
+  .chat-head { align-self: center; max-width: 80%; margin: 2px 0 6px; font-size: 13px; font-weight: 600; color: var(--label2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* activity: Control Center section + the full list */
   .act-sec { margin-top: 14px; }
   .act-sec .w-head small button { color: var(--accent); font-size: 13px; }
@@ -258,7 +260,7 @@
   .desk .hot span { position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 600; color: #fff; background: rgba(0,0,0,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding: 2px 7px; border-radius: 8px; letter-spacing: 0; }
   .desk.loading { aspect-ratio: 2.6; display: grid; place-items: center; }
   .expired { padding: 4px 4px 2px; font-size: 14px; color: var(--label2); }
-  .lost { position: fixed; z-index: 6; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 58px); max-width: 520px; margin: 0 auto; border-radius: 24px; padding: 16px; text-align: left; animation: drop .5s var(--ios) both; }
+  .lost { position: fixed; z-index: 6; left: 12px; right: 12px; bottom: calc(var(--dock-h, 220px) - 6px); max-width: 520px; margin: 0 auto; border-radius: 24px; padding: 16px; text-align: left; animation: rise .5s var(--ios) both; }
   @keyframes drop { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
   .lost b { display: flex; align-items: center; gap: 8px; font-size: 17px; }
   .lost b .dot { width: 9px; height: 9px; background: var(--orange); }
@@ -564,7 +566,7 @@
   @keyframes countdown { to { transform: scaleX(0); } }
 
   /* Dynamic Island-style toast */
-  .toast { position: fixed; z-index: 50; left: 50%; top: calc(env(safe-area-inset-top) + 10px); transform: translateX(-50%); height: 44px; border-radius: 22px; padding: 0 18px 0 12px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; background: rgba(10,10,14,.9); color: #fff; box-shadow: 0 10px 30px -8px rgba(0,0,0,.5); white-space: nowrap; max-width: calc(100vw - 32px); animation: island .55s var(--spring) both; }
+  .toast { position: fixed; z-index: 50; left: 50%; bottom: calc(var(--dock-h, 220px) - 6px); transform: translateX(-50%); height: 44px; border-radius: 22px; padding: 0 18px 0 12px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; background: rgba(10,10,14,.9); color: #fff; box-shadow: 0 10px 30px -8px rgba(0,0,0,.5); white-space: nowrap; max-width: calc(100vw - 32px); animation: island .55s var(--spring) both; }
   .toast .ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--green); flex: none; }
   .toast .ic svg.i { width: 15px; height: 15px; stroke-width: 2.6; }
   .toast { cursor: pointer; }
@@ -661,17 +663,6 @@
 
 <div class="ambient" aria-hidden="true"></div>
 
-<header class="top" id="top" hidden>
-  <button class="round glass press" id="menuBtn" aria-label="Chats"><svg class="i"><use href="#i-sidebar"/></svg><span class="badge-dot" id="menuBadge" hidden></span></button>
-  <button class="title-pill glass press" id="titlePill" aria-label="Control Center">
-    <b id="chatTitle">New chat</b>
-    <small><span class="dot" id="dot"></span><span id="status">Connecting…</span></small>
-  </button>
-  <button class="round glass press" id="newBtn" aria-label="New chat"><svg class="i"><use href="#i-compose"/></svg></button>
-  <button class="avatar-btn glass press" id="profileBtn" aria-label="Profile and settings"><img class="avatar" src="avatar.jpg" alt=""></button>
-</header>
-
-<div class="statusbar" id="statusBar" hidden></div>
 
 <!-- pairing -->
 <section id="setup" hidden>
@@ -739,6 +730,7 @@
 </div>
 
 <footer class="dock" id="dock" hidden>
+  <div class="statusbar" id="statusBar" hidden></div>
   <div class="shelf" id="shelf"></div>
   <div class="attach" id="attach" hidden></div>
   <div class="bar">
@@ -755,6 +747,14 @@
       <button id="send" aria-label="Send" disabled><svg class="i"><use href="#i-up"/></svg></button>
     </div>
   </div>
+  <!-- iOS-style tab bar: everything you navigate to lives down here, nothing at the top of the screen -->
+  <nav class="tabbar" id="tabbar" aria-label="Jarvis">
+    <button class="tab press" id="menuBtn" aria-label="Chats"><span class="ti"><svg class="i"><use href="#i-chat"/></svg><span class="badge-dot" id="menuBadge" hidden></span></span><span class="tl">Chats</span></button>
+    <button class="tab press" id="titlePill" aria-label="Your PC"><span class="ti"><svg class="i"><use href="#i-display"/></svg><span class="dot" id="dot"></span></span><span class="tl" id="status">Connecting…</span></button>
+    <button class="tab press" id="newBtn" aria-label="New chat"><span class="ti"><svg class="i"><use href="#i-compose"/></svg></span><span class="tl">New</span></button>
+    <button class="tab press" id="actTab" aria-label="Activity"><span class="ti"><svg class="i"><use href="#i-clock"/></svg><span class="badge-dot live" id="actBadge" hidden></span></span><span class="tl">Activity</span></button>
+    <button class="tab press" id="profileBtn" aria-label="Profile and settings"><span class="ti"><img class="avatar" src="avatar.jpg" alt=""></span><span class="tl">You</span></button>
+  </nav>
 </footer>
 
 <!-- chats sidebar -->
@@ -941,9 +941,16 @@
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
 const VERSION = "2026-10-25.1";   // bump together with version.json
-const JNI = "JNIv9";   // Jarvis · Niko · Izu83 · version 9 — Jarvis's own release name
+const JNI = "JNIv10";   // Jarvis · Niko · Izu83 · version 10 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv10", when: "Oct 27, 2026", title: "Everything at your thumb + a two-brain local team", notes: [
+    "New look: nothing at the top any more. A tab bar at the bottom, like most iPhone apps: Chats, Your PC, New, Activity and You.",
+    "The Working and Reminder chips, warnings and little notices all show up down by the message box now.",
+    "On your PC, the free local brain is now a team: Hermes does quick commands, Qwen3 thinks through the bigger ones and takes over when Hermes gets stuck, and Claude only gets what neither can do.",
+    "You can see who's on it in the step pills (“Brain · Qwen3 is thinking it through…”), and Qwen3's thinking shows up as Jarvis's thoughts.",
+    "Jarvis downloads Qwen3 by itself the first time, and the local models now get enough memory to read all their instructions, so they make fewer mistakes.",
+  ] },
   { v: "JNIv9", when: "Oct 24, 2026", title: "Every step saved, reminders you can see", notes: [
     "Fixed: after the first message, later messages could get stuck and never run. Jarvis now keeps going no matter what, re-sends a message if your phone's connection quietly dropped, and fetches answers you missed while the app was closed.",
     "Everything Jarvis does is saved as small step pills in the chat (like “Files · Searching for invoice…”), so you can always see what it did.",
@@ -1307,11 +1314,18 @@ function renderHome() {
   $("log").append(home);
   updateReleaseDot();
 }
+// The chat's name sits at the top of the conversation and scrolls away with it (no fixed bar up there).
+function setChatTitle(chat) {
+  let el = $("chatTitle");
+  if (!chat.messages.length) { el?.remove(); return; }
+  if (!el) { el = document.createElement("div"); el.className = "chat-head"; el.id = "chatTitle"; $("log").prepend(el); }
+  el.textContent = chat.title || "New chat";
+}
 function renderChat() {
   const chat = current();
   clearHome();
   $("log").innerHTML = ""; lastStamp = 0;
-  $("chatTitle").textContent = chat.title || "New chat";
+  setChatTitle(chat);
   if (!chat.messages.length && ![...pending.values()].some(p => p.chatId === chat.id)) renderHome();
   for (const m of chat.messages) {
     if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts, m.title); if (p) p.card = card; }
@@ -1323,7 +1337,8 @@ function renderChat() {
     p.step = stepRow(p.status || "Sending…"); drawSteps(p); p.el = bubble(null, "jarvis");
   }
   if (chat.unread) { chat.unread = false; saveDb(); updateBadges(); }
-  scrollDown(false);
+  if ($("home")) requestAnimationFrame(() => { $("log").scrollTop = 0; });   // a new chat opens on the greeting
+  else scrollDown(false);
 }
 
 // ================= sidebar =================
@@ -1464,7 +1479,7 @@ function actionSheet(title, items) {
 }
 function chatMenu(c) {
   actionSheet(c.title || "New chat", [
-    { label: "Rename", run: () => { const t = prompt("Rename chat", c.title); if (t?.trim()) { c.title = t.trim(); saveDb(); renderSidebar(); if (c.id === db.current) $("chatTitle").textContent = c.title; } } },
+    { label: "Rename", run: () => { const t = prompt("Rename chat", c.title); if (t?.trim()) { c.title = t.trim(); saveDb(); renderSidebar(); if (c.id === db.current) setChatTitle(c); } } },
     { label: "Move to Group", run: () => moveMenu(c) },
     { label: "Delete Chat", danger: true, run: () => deleteChat(c) },
   ]);
@@ -1574,7 +1589,7 @@ async function send(text, tile = null, onReply = null) {
     }
     mine.prepend(box);
   }
-  $("chatTitle").textContent = chat.title;
+  setChatTitle(chat);
   const id = newId();
   const payload = { type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) };
   const step = stepRow("Sending…");
@@ -1820,7 +1835,8 @@ function renderStatusBar() {
     b.classList.add("press"); b.onclick = openActivity; bar.append(b);
   }
   const show = !!(bar.children.length && cfg);
-  bar.hidden = !show; document.body.classList.toggle("has-bar", show);
+  bar.hidden = !show;
+  $("actBadge").hidden = !running.length;   // a live dot on the Activity tab while Jarvis works
 }
 function renderActSec() {
   const box = $("actRecent"), recent = activity.slice(0, 3);
@@ -1875,7 +1891,8 @@ function renderStatus(relayOk = true) {
   const pcOnline = Date.now() - pcSeen < 45000;
   const seen = lastSeenText();
   const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : (seen ? "PC offline · " + seen : "Finding your PC…"), "warn"] : pcOnline ? ["PC online", "ok"] : [seen ? "PC offline · " + seen : "PC offline", "bad"];
-  $("status").textContent = text;
+  $("status").textContent = cls === "ok" ? "Your PC" : cls === "warn" ? "Connecting…" : "Offline";   // short: it's a tab label
+  $("titlePill").setAttribute("aria-label", "Your PC: " + text);
   for (const id of ["dot", "pcDot", "meDot", "profDot"]) { const el = $(id); if (el) el.className = "dot " + cls; }
   $("pcState").textContent = pcOnline && pc ? "Up " + uptime(pc.uptime) : text;
   const where = (host ? host + " · " : "") + text;
@@ -2316,6 +2333,7 @@ $("search").oninput = renderSidebar;
 $("profileBtn").onclick = () => openSheet("sheet");
 $("meRow").onclick = () => { closeDrawer(); openSheet("sheet"); };
 $("titlePill").onclick = openControl;
+$("actTab").onclick = openActivity;
 $("versionLabel").textContent = VERSION;
 $("jniLabel").textContent = JNI;
 $("versionRow").onclick = openNews;
@@ -2761,7 +2779,7 @@ async function start() {
     try { key = await crypto.subtle.importKey("raw", b64d(cfg.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
     catch { store("jarvis.pairing"); cfg = null; }
   }
-  for (const id of ["top", "log", "dock"]) $(id).hidden = !cfg;
+  for (const id of ["log", "dock"]) $(id).hidden = !cfg;
   $("setup").hidden = !!cfg;
   if (!cfg) return;
   $("relayName").textContent = "Direct, encrypted";

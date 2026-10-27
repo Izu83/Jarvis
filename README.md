@@ -17,9 +17,12 @@ Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─�
 1. **Brain login**: Jarvis runs Claude Code in the background, so it uses your Claude Pro/Max plan (no API key
    needed). Log the CLI in once: open a terminal, run `claude`, type `/login`, finish in the browser, then `/exit`.
    *Alternatives* (set `"brain"` in `config.json`):
-   - `"hermes"`: a free local model through [Ollama](https://ollama.com) (`ollama pull hermes3:8b`). It does most
-     commands on your PC with zero tokens and hands anything that needs vision, the web or an exact file search to
-     Claude (`hermes_fallback`).
+   - `"hermes"`: free local models through [Ollama](https://ollama.com), working as a team: **Hermes**
+     (`hermes3:8b`) does quick one-step commands, **Qwen3** (`qwen3:8b`) thinks through multi-step requests and
+     questions and takes over when Hermes gets stuck, and Claude (`hermes_fallback`) only gets what neither can do
+     (screen vision, the web, exact file searches). Install Ollama once; Jarvis starts it and downloads both models
+     by itself the first time (about 10 GB; or run `ollama pull hermes3:8b` and `ollama pull qwen3:8b`). The phone's
+     step pills show which one is working ("Brain · Qwen3 is thinking it through…").
    - `"api"`: a paid key from https://console.anthropic.com/settings/keys in `.env` as `ANTHROPIC_API_KEY=`.
 2. **Dependencies** (already done on this PC):
    ```
@@ -89,15 +92,17 @@ which you can also edit by hand.
 - **Chats and groups**: the sidebar button (top left) lists your chats. Each chat has its own memory, so Jarvis
   doesn't mix up conversations. Tap the folder button to make a group; press and hold a chat or group to rename,
   move or delete it. Search finds chats by title or message text.
-- **Control Center**: shown on every new chat, or tap the title at the top. Spotify now playing with play/pause,
+- **Control Center**: shown on every new chat, or tap **Your PC** in the tab bar. Spotify now playing with play/pause,
   skip and volume; live CPU and memory with the busiest app; send your phone's clipboard to the PC or see the PC's
   clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
+- **Everything at the bottom**: like most iPhone apps there's no bar at the top. The tab bar at the bottom has
+  Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
 - **Step pills**: everything Jarvis does for a command appears as a small pill in the chat ("Files · Searching for
-  invoice…"), live while it works and saved afterwards. A **Working** chip at the top shows the current step even for
+  invoice…"), live while it works and saved afterwards. A **Working** chip above the message box shows the current step even for
   commands you gave by voice on the PC.
-- **Reminders**: a clock chip at the top shows the next reminder. Tap it for all reminders and watches; cancel any one.
-- **Activity**: Control Center → Recent activity → See all lists every command (phone or PC mic), its steps and
+- **Reminders**: a clock chip above the message box shows the next reminder. Tap it for all reminders and watches; cancel any one.
+- **Activity**: the Activity tab (or Control Center → Recent activity) lists every command (phone or PC mic), its steps and
   the answer. Kept on the PC in `.brain/activity.json`.
 - **Never lost**: if the phone's connection silently dropped, the app reconnects and re-sends (the PC never runs it
   twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again.
@@ -169,6 +174,8 @@ Outlook, Yahoo and iCloud are detected from the address; for anything else set `
 | `monitor_names` | What you call each monitor, by Windows number (1 = right vertical, 2 = main, 3 = left) |
 | `known_folders` | Named shortcuts, e.g. `"projects": "D:\\Projects"` |
 | `ollama_host`, `hermes_model`, `hermes_fallback` | The local Hermes brain and which brain backs it up |
+| `qwen_model` | Qwen3, Hermes's teammate for multi-step commands (`qwen3:8b`; `qwen3:4b` for less VRAM, `qwen3:14b` for more; `""` = Hermes alone) |
+| `local_auto_pull`, `local_ctx` | Download missing local models automatically; the local models' context window (16k) |
 | `use_claude` | `false` = only free local commands, never Claude (also a switch in the phone's Settings) |
 | `autonomy` | `full`, `risky_only` or `ask` (see *Files and permissions*) |
 | `wake_threshold` | Lower (e.g. `0.35`) if "Hey Jarvis" isn't detected; raise if it triggers by itself |
@@ -189,7 +196,7 @@ Outlook, Yahoo and iCloud are detected from the address; for anything else set `
 |---|---|
 | `jarvis/__main__.py` | Starts the voice, phone and worker threads |
 | `jarvis/brain.py` | System prompt + the Claude brains (Claude Code CLI, or the API tool loop) |
-| `jarvis/hermes.py` | The free local Hermes brain (Ollama) with Claude as the fallback |
+| `jarvis/hermes.py` | The free local brain: Hermes + Qwen3 (Ollama) as a team, with Claude as the fallback |
 | `jarvis/nlu.py` | Free local parser for quick commands |
 | `jarvis/activity.py` | The saved log of every command and its steps (the phone's pills and Activity list) |
 | `jarvis/watchers.py` | Reminders and "tell me when…" watches |

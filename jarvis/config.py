@@ -19,6 +19,11 @@ DEFAULTS = {
     "ollama_host": "http://127.0.0.1:11434",
     "hermes_model": "hermes3:8b",     # the Ollama model to run; pull it with: ollama pull hermes3:8b
     "hermes_fallback": "claude-code",  # which brain handles what Hermes can't ("claude-code" or "api")
+    # Qwen3 works with Hermes: Hermes does quick one-step commands, Qwen3 thinks through multi-step ones and takes
+    # over when Hermes gets stuck. "" = Hermes alone. Bigger/smaller: "qwen3:14b" (needs ~12 GB VRAM), "qwen3:4b".
+    "qwen_model": "qwen3:8b",
+    "local_auto_pull": True,   # download missing local models through Ollama automatically (a few GB, once)
+    "local_ctx": 16384,        # context window for the local models (Jarvis's tool list alone is ~6.5k tokens)
     # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
     # anything it doesn't understand, it says so instead of asking Claude.
     "use_claude": True,

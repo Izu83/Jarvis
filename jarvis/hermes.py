@@ -1,11 +1,13 @@
-"""A free, local brain: a Hermes model served by Ollama on this PC, using the same tools as the Claude brains.
+"""A free, local brain: two models served by Ollama on this PC, working as a team, with Claude as the backstop.
 
-It tries to handle the whole command locally (zero tokens, works offline). Three things make sure it only keeps
-what it's actually good at, and hands the rest to Claude so nothing is wrong or lost:
-- Up front, commands that clearly need screen vision, the web, or an exact file search go straight to Claude.
-- Mid-task, if the local model reaches for the screen or mouse (which need vision), Claude takes over.
-- At the end, an empty or unconfirmed answer is dropped in favour of Claude rather than guessed.
-Everything else — apps, windows, PowerShell, media, files, modes, reminders — Hermes does itself, free and offline.
+- Hermes (hermes3:8b) is the quick one: simple, single-action commands ("open Spotify", "mute") go to it first.
+- Qwen3 (qwen3:8b) is the thinker: it reasons before acting (its thinking shows up as Jarvis's thoughts), so
+  multi-step requests, questions and anything Hermes gets stuck on go to it.
+- Claude only gets what neither can do: screen vision, the web, exact file searches, or a local failure.
+
+So a command goes:  simple -> Hermes -> (stuck) Qwen3 -> (stuck) Claude;  complex -> Qwen3 -> (stuck) Claude.
+Both models are downloaded automatically the first time if they're missing (`local_auto_pull`). Set "qwen_model"
+to "" to run Hermes alone, as before.
 """
 import json
 import logging
@@ -41,10 +43,18 @@ _FILE_SEARCH = re.compile(
     r"\b(find|search(?! the web)|locate|where'?s|where is|list (?:all |any )?)\b.*"
     r"\b(files?|pdfs?|documents?|folders?|photos?|images?|\.\w{2,4})\b", re.I)
 
+# A command counts as "complex" (Qwen3 first) when it has several parts, is long, or asks for thinking.
+_COMPLEX = re.compile(
+    r"\b(and|then|also|after that|afterwards|but|before|if|unless)\b|[,;]|"
+    r"\b(why|how (do|does|can|could|should|would|much|many)|explain|analy[sz]e|summari[sz]e|compare|review|"
+    r"plan|figure out|work out|decide|write|draft|organi[sz]e|sort|clean up|tidy|which|what should)\b", re.I)
+COMPLEX_WORDS = 14
+
 # How many earlier exchanges (command + final answer) the local model sees. Only the plain text is kept: replaying
 # old tool calls made the small model answer a NEW command with "done" from the previous one, without acting.
 KEEP_EXCHANGES = 3
-CHAT_TIMEOUT = 90   # seconds per local model call; slower than this, Claude does the command instead
+CHAT_TIMEOUT = 90    # seconds per Hermes call; slower than this, the next brain in line takes the command
+THINK_TIMEOUT = 180  # Qwen3 thinks first, so it gets longer
 
 # A short nudge on top of the shared instructions, aimed at the smaller local model.
 HERMES_NOTE = (
@@ -52,6 +62,18 @@ HERMES_NOTE = (
     "find_files (never disk_usage); to measure folder/disk sizes use disk_usage; to see what's open use "
     "list_windows. Never say you did something unless a tool result confirms it. Always finish with one short "
     "spoken sentence that states the ACTUAL result from the tools, not a vague 'I have provided that'.")
+
+QWEN_NOTE = (
+    "\n\nYou are the local planner. Think the request through briefly, then act with your tools step by step until "
+    "EVERY part is done; don't stop after the first step. Use a tool result before you claim anything. If a tool "
+    "fails, try one sensible alternative. Finish with a short plain answer (no markdown) that states what actually "
+    "happened, or for a question, a complete and specific answer.")
+
+_THINK_TAGS = re.compile(r"<think>(.*?)</think>", re.S)
+
+
+def is_complex(command: str) -> bool:
+    return bool(_COMPLEX.search(command)) or len(command.split()) > COMPLEX_WORDS
 
 
 def _ollama_tools() -> list[dict]:
@@ -77,8 +99,17 @@ class HermesBrain:
     def __init__(self):
         self.host = settings["ollama_host"].rstrip("/")
         self.model = settings["hermes_model"]
+        # the team: key -> (Ollama model, display name, thinks first?)
+        self.team = {"hermes": (self.model, "Hermes", False)}
+        if settings.get("qwen_model"):
+            self.team["qwen"] = (settings["qwen_model"], "Qwen3", True)
         self.tools = _ollama_tools()
-        self.system = SYSTEM_TEMPLATE.format(environment=tools.environment_description()) + HERMES_NOTE
+        base = SYSTEM_TEMPLATE.format(environment=tools.environment_description())
+        self.systems = {"hermes": base + HERMES_NOTE, "qwen": base + QWEN_NOTE}
+        self.installed: set[str] = set()   # models Ollama has (refreshed now and then)
+        self._checked = 0.0
+        self._pulling: set[str] = set()
+        self._no_think = False             # an Ollama too old for "think": Qwen3 then thinks inline
         self.history: list = []
         self.thread = None
         self.progress = None
@@ -86,8 +117,78 @@ class HermesBrain:
         self.last_thinking = ""
         self.lock = threading.Lock()
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
-        log.info("Local Hermes brain ready (model %s via %s). Claude is the fallback.", self.model, self.host)
-        threading.Thread(target=self._ensure_server, daemon=True, name="ollama-start").start()
+        log.info("Local brain ready: %s via %s. Claude is the fallback.",
+                 " + ".join(f"{name} ({m})" for m, name, _ in self.team.values()), self.host)
+        threading.Thread(target=self._prepare, daemon=True, name="ollama-start").start()
+
+    # ------------------------------------------------------------ models
+
+    def _prepare(self) -> None:
+        if self._ensure_server():
+            self._ensure_models()
+
+    def _refresh_installed(self, force: bool = False) -> None:
+        if not force and time.time() - self._checked < 60:
+            return
+        try:
+            tags = requests.get(f"{self.host}/api/tags", timeout=3).json().get("models", [])
+            self.installed = {t.get("name", "") for t in tags} | {t.get("model", "") for t in tags}
+            self._checked = time.time()
+        except (requests.RequestException, ValueError):
+            pass
+
+    def _has(self, model: str) -> bool:
+        names = self.installed
+        return model in names or f"{model}:latest" in names
+
+    def _ensure_models(self) -> None:
+        """Download any team model Ollama doesn't have yet (in the background; a few GB each, once)."""
+        self._refresh_installed(force=True)
+        if not settings.get("local_auto_pull", True):
+            return
+        for model, name, _ in self.team.values():
+            if not self._has(model) and model not in self._pulling:
+                self._pulling.add(model)
+                threading.Thread(target=self._pull, args=(model, name), daemon=True, name=f"pull-{name}").start()
+
+    def _pull(self, model: str, name: str) -> None:
+        log.info("Downloading %s (%s) for the local brain; it joins in when the download finishes.", name, model)
+        last = -10
+        try:
+            with requests.post(f"{self.host}/api/pull", json={"model": model, "stream": True},
+                               stream=True, timeout=(10, 600)) as r:
+                r.raise_for_status()
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    ev = json.loads(line)
+                    if ev.get("error"):
+                        raise RuntimeError(ev["error"])
+                    if ev.get("total") and ev.get("completed"):
+                        pct = int(ev["completed"] * 100 / ev["total"])
+                        if pct >= last + 10:
+                            last = pct
+                            log.info("  %s: %d%%", name, pct)
+            log.info("%s is installed and ready.", name)
+        except Exception as e:
+            log.warning("Couldn't download %s (%s): %s. Run `ollama pull %s` yourself.", name, model, e, model)
+        finally:
+            self._pulling.discard(model)
+            self._refresh_installed(force=True)
+
+    def _ready(self, key: str) -> bool:
+        if key not in self.team:
+            return False
+        self._refresh_installed()
+        return self._has(self.team[key][0])
+
+    def _plan(self, command: str) -> list[str]:
+        """Which local models try this command, in order."""
+        order = ["qwen"] if is_complex(command) else ["hermes", "qwen"]
+        ready = [k for k in order if self._ready(k)]
+        if not ready and self._ready("hermes"):   # complex but Qwen3 isn't there (yet): Hermes has a go
+            ready = ["hermes"]
+        return ready
 
     def _server_up(self) -> bool:
         try:
@@ -139,6 +240,7 @@ class HermesBrain:
         return answer
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
+        original = command   # routed on what the user said, not on the conversation note added below
         with self.lock:
             self.progress = progress
             if time.time() - self.last_used > IDLE_RESET_SECONDS or chat != self.thread:
@@ -152,25 +254,41 @@ class HermesBrain:
                 log.info("Routing straight to Claude (needs vision/web/exact search): %r", command[:70])
                 return self._to_claude(command, chat, recent, progress)
 
-            start = len(self.history)
-            try:
+            plan = self._plan(original)
+            if not plan and self._ensure_server():   # Ollama was down: it's up now, look again
+                self._refresh_installed(force=True)
+                plan = self._plan(original)
+            tried = []
+            for key in plan:
+                name = self.team[key][1]
+                if tried:
+                    self._say(f"{tried[-1]} got stuck, so {name} is taking over…")
+                elif key == "qwen":
+                    self._say(f"{name} is thinking it through…")
+                start = len(self.history)
                 try:
-                    answer = self._run(command)
-                except requests.ConnectionError:
-                    del self.history[start:]
-                    if not self._ensure_server():
-                        raise
-                    answer = self._run(command)   # Ollama was down and is back: try locally once more
-                if answer is not None:
-                    self._compact(start, command, answer)
-                    return answer
-                log.info("Hermes couldn't finish confidently; handing this one to Claude.")
-            except requests.RequestException as e:
-                log.info("Local Hermes server unreachable (%s); using Claude for this command.", e)
-            except Exception:
-                log.exception("Hermes failed; using Claude for this command.")
-            del self.history[start:]   # don't leave a half-finished exchange in the local history
+                    answer = self._run(key, command)
+                    if answer is not None:
+                        self._compact(start, command, answer)
+                        return answer
+                    log.info("%s couldn't finish confidently.", name)
+                except requests.RequestException as e:
+                    log.info("%s didn't answer (%s).", name, e)
+                except Exception:
+                    log.exception("%s failed.", name)
+                del self.history[start:]   # don't leave a half-finished exchange in the local history
+                tried.append(name)
+            if tried:
+                self._say("Handing this one to Claude…")
             return self._to_claude(command, chat, recent, progress)
+
+    def _say(self, text: str) -> None:
+        """A step pill showing which brain is on it, so you can see the team at work."""
+        if self.progress:
+            try:
+                self.progress(text, "Brain")
+            except Exception:
+                log.debug("progress callback failed", exc_info=True)
 
     def _compact(self, start: int, command: str, answer: str) -> None:
         """Replace this command's tool chatter with just "user said / Jarvis answered", and keep only a few."""
@@ -178,55 +296,73 @@ class HermesBrain:
         self.history += [{"role": "user", "content": command}, {"role": "assistant", "content": answer}]
         del self.history[:-2 * KEEP_EXCHANGES]
 
-    def _run(self, command: str) -> str | None:
-        """One local agent loop. Returns the spoken answer, or None if the model gave up, needs vision, or
-        produced nothing confident — in which case the caller falls back to Claude."""
+    def _run(self, key: str, command: str) -> str | None:
+        """One local agent loop with one team member. Returns the spoken answer, or None if the model gave up,
+        needs vision, or produced nothing confident — in which case the next brain in line takes over."""
+        model, name, think = self.team[key]
         self.history.append({"role": "user", "content": command})
         steps: list[str] = []
+        thoughts: list[str] = []
         started = time.time()
         for _ in range(MAX_TOOL_ROUNDS):
-            msg = self._chat()
+            msg = self._chat(key, model, think)
+            thought = (msg.pop("thinking", "") or "").strip()
+            content = msg.get("content") or ""
+            inline = _THINK_TAGS.findall(content)   # thinking written into the text (older Ollama)
+            if inline:
+                thought = (thought + "\n" + "\n".join(t.strip() for t in inline)).strip()
+                msg["content"] = content = _THINK_TAGS.sub("", content)
+            if thought:
+                thoughts.append(thought)
             self.history.append(msg)
             calls = msg.get("tool_calls") or []
             if not calls:
-                answer = (msg.get("content") or "").strip()
+                answer = content.strip()
                 if not answer:
-                    return None   # nothing to say -> let Claude answer properly
-                self.last_thinking = _steps_thoughts(steps)
-                log.info("Hermes answered locally in %.1fs (no tokens).", time.time() - started)
+                    return None   # nothing to say -> the next brain answers properly
+                self.last_thinking = "\n\n".join(thoughts + ([_steps_thoughts(steps)] if steps else []))
+                log.info("%s answered locally in %.1fs (no tokens).", name, time.time() - started)
                 usage.record_local()
                 return answer
             for call in calls:
                 fn = call.get("function", {})
-                name = fn.get("name", "")
-                if name in VISION_TOOLS:
-                    log.info("Hermes reached for %s (needs to see the screen); handing to Claude.", name)
+                tool = fn.get("name", "")
+                if tool in VISION_TOOLS:
+                    log.info("%s reached for %s (needs to see the screen); handing to Claude.", name, tool)
                     return None
                 raw = fn.get("arguments", {})
                 args = raw if isinstance(raw, dict) else _loads(raw)
-                step = describe_step(name, args)
+                step = describe_step(tool, args)
                 steps.append(step)
                 if self.progress:
-                    self.progress(step, step_kind(name))
-                log.info("tool %s %s", name, json.dumps(args)[:400])
+                    self.progress(step, step_kind(tool))
+                log.info("[%s] tool %s %s", name, tool, json.dumps(args)[:400])
                 try:
-                    output = tools.run(name, args)
+                    output = tools.run(tool, args)
                 except Exception as e:
-                    log.exception("tool %s failed", name)
+                    log.exception("tool %s failed", tool)
                     output = f"Error: {e}"
                 log.info("  -> %s", str(output)[:300])
                 self.history.append({"role": "tool", "content": str(output)})
         return None   # ran out of rounds -> let Claude take over
 
-    def _chat(self) -> dict:
-        r = requests.post(f"{self.host}/api/chat", json={
-            "model": self.model,
-            "messages": [{"role": "system", "content": self.system}, *self.history],
+    def _chat(self, key: str, model: str, think: bool) -> dict:
+        body = {
+            "model": model,
+            "messages": [{"role": "system", "content": self.systems[key]}, *self.history],
             "tools": self.tools,
             "stream": False,
             "keep_alive": "30m",   # keep the model warm in VRAM between commands
-            "options": {"temperature": 0.3, "num_ctx": 8192},
-        }, timeout=CHAT_TIMEOUT)
+            # The tool list alone is ~6.5k tokens, so a small window silently cut off the instructions.
+            "options": {"temperature": 0.6 if think else 0.3, "num_ctx": int(settings.get("local_ctx", 16384))},
+        }
+        if think and not self._no_think:
+            body["think"] = True
+        r = requests.post(f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT if think else CHAT_TIMEOUT)
+        if r.status_code == 400 and "think" in body:   # this Ollama doesn't know "think": ask again without it
+            self._no_think = True
+            body.pop("think")
+            r = requests.post(f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT)
         r.raise_for_status()
         return r.json().get("message", {}) or {}
 
