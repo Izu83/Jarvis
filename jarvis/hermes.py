@@ -70,6 +70,7 @@ QWEN_NOTE = (
     "happened, or for a question, a complete and specific answer.")
 
 _THINK_TAGS = re.compile(r"<think>(.*?)</think>", re.S)
+_MARKDOWN = re.compile(r"\*\*|__|`|^#+\s*", re.M)   # the answer is spoken, so no **bold** read out loud
 
 
 def is_complex(command: str) -> bool:
@@ -317,7 +318,7 @@ class HermesBrain:
             self.history.append(msg)
             calls = msg.get("tool_calls") or []
             if not calls:
-                answer = content.strip()
+                answer = _MARKDOWN.sub("", content).strip()
                 if not answer:
                     return None   # nothing to say -> the next brain answers properly
                 self.last_thinking = "\n\n".join(thoughts + ([_steps_thoughts(steps)] if steps else []))
