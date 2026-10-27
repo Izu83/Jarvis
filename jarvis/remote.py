@@ -199,7 +199,13 @@ class PhoneChannel:
             log.exception("Couldn't read PC status")
             status = None
         from . import usage
-        self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status,
+        try:
+            from .hermes import local_status
+            local = local_status()
+        except Exception:
+            log.exception("Couldn't check the local models")
+            local = []
+        self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status, "local": local,
                        "use_claude": settings["use_claude"],
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "brain": settings["brain"], "usage": usage.summary(),

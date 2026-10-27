@@ -77,6 +77,43 @@ def is_complex(command: str) -> bool:
     return bool(_COMPLEX.search(command)) or len(command.split()) > COMPLEX_WORDS
 
 
+_status_cache: tuple[float, list] = (0.0, [])
+
+
+def local_status() -> list[dict]:
+    """Is each local model online? For the phone's Settings: [{name, model, role, state}], where state is
+    "loaded" (in the GPU, answers right away), "ready" (installed, loads on first use), "missing" (not downloaded),
+    "offline" (Ollama isn't running) or "off" (the local brain isn't in use). Cached for a few seconds."""
+    global _status_cache
+    if time.time() - _status_cache[0] < 5:
+        return _status_cache[1]
+    team = [("Hermes", settings["hermes_model"], "Quick one-step commands")]
+    if settings.get("qwen_model"):
+        team.append(("Qwen3", settings["qwen_model"], "Thinks through multi-step requests"))
+    installed, loaded, up = set(), set(), False
+    if settings["brain"] == "hermes":
+        host = settings["ollama_host"].rstrip("/")
+        try:
+            for path, names in (("/api/tags", installed), ("/api/ps", loaded)):
+                for m in requests.get(f"{host}{path}", timeout=1.5).json().get("models", []):
+                    names.update({m.get("name", ""), m.get("model", "")})
+            up = True
+        except (requests.RequestException, ValueError):
+            pass
+
+    def state(model: str) -> str:
+        if settings["brain"] != "hermes":
+            return "off"
+        if not up:
+            return "offline"
+        has = lambda names: model in names or f"{model}:latest" in names
+        return "loaded" if has(loaded) else "ready" if has(installed) else "missing"
+
+    result = [{"name": n, "model": m, "role": r, "state": state(m)} for n, m, r in team]
+    _status_cache = (time.time(), result)
+    return result
+
+
 def _ollama_tools() -> list[dict]:
     """Jarvis's tools in the shape Ollama/OpenAI want: {type, function:{name, description, parameters}}."""
     out = []

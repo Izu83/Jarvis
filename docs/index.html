@@ -215,7 +215,7 @@
   .statusbar { display: flex; justify-content: center; gap: 6px; padding: 0 4px 10px; }
   .statusbar .pill { min-width: 0; flex: 0 1 auto; max-width: 100%; box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 .5px var(--bubble-line); }
   /* the tab bar at the very bottom */
-  .tabbar { display: flex; justify-content: space-around; align-items: flex-start; margin: 10px -10px 0; padding: 7px 4px 0; border-top: .5px solid var(--sep); }
+  .tabbar { display: flex; justify-content: space-around; align-items: flex-start; margin: 8px -10px 0; padding: 6px 4px 0; border-top: .5px solid var(--sep); }
   .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--label2); padding: 0 2px; }
   .tab .ti { position: relative; width: 28px; height: 28px; display: grid; place-items: center; }
   .tab svg.i { width: 25px; height: 25px; stroke-width: 1.9; }
@@ -319,7 +319,9 @@
   .widget.offline .np, .widget.offline .controls, .widget.offline .stats { opacity: .4; pointer-events: none; }
 
   /* ---------- dock ---------- */
-  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 48px 10px calc(env(safe-area-inset-bottom) + 10px); background: transparent; }
+  /* the tab bar sits just above the home indicator. --vgap is how far short of the screen bottom iOS stops the page
+     in Home Screen mode (an iOS bug); that space already clears the indicator, so it comes off the padding. */
+  .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 48px 10px max(6px, calc(env(safe-area-inset-bottom) - 8px - var(--vgap, 0px))); background: transparent; }
   .dock::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--base);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     -webkit-mask: linear-gradient(to top, #000 calc(100% - 46px), transparent); mask: linear-gradient(to top, #000 calc(100% - 46px), transparent); }
@@ -450,6 +452,8 @@
   .row .grow { flex: 1; padding: 13px 0; min-width: 0; }
   .row .sub { display: block; font-size: 13px; color: var(--label2); margin-top: 2px; line-height: 17px; letter-spacing: -.08px; }
   .row .value { color: var(--label2); }
+  .row .value.lstate { display: flex; align-items: center; gap: 6px; font-size: 15px; }
+  .row .value.lstate .dot { width: 8px; height: 8px; }
   .row.btn { justify-content: center; color: var(--blue); }
   .row.btn:active, button.row:active { background: var(--sep); }
   .danger { color: var(--red) !important; }
@@ -800,6 +804,9 @@
       <div class="group-title">Modes</div>
       <div class="group" id="modeList"></div>
       <div class="group-foot">Create or change a mode by asking, e.g. "Make a gaming mode with Discord on the vertical monitor and Steam on the main one."</div>
+      <div class="group-title">Local brain</div>
+      <div class="group" id="localList"><div class="row"><span class="grow">Waiting for your PC…</span></div></div>
+      <div class="group-foot">Free models on your PC. Green = online; "in memory" means it answers right away, otherwise the first command takes a few extra seconds to load it.</div>
       <div class="group-title">Tokens</div>
       <div class="group">
         <label class="row"><span class="grow">Use Claude for complex commands<span class="sub">Off = only the free built-in commands, never uses your Claude limit</span></span><span class="switch"><input type="checkbox" id="claudeToggle"><span></span></span></label>
@@ -940,7 +947,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-25.1";   // bump together with version.json
+const VERSION = "2026-10-27.2";   // bump together with version.json
 const JNI = "JNIv10";   // Jarvis · Niko · Izu83 · version 10 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -950,6 +957,8 @@ const RELEASES = [
     "On your PC, the free local brain is now a team: Hermes does quick commands, Qwen3 thinks through the bigger ones and takes over when Hermes gets stuck, and Claude only gets what neither can do.",
     "You can see who's on it in the step pills (“Brain · Qwen3 is thinking it through…”), and Qwen3's thinking shows up as Jarvis's thoughts.",
     "Jarvis downloads Qwen3 by itself the first time, and the local models now get enough memory to read all their instructions, so they make fewer mistakes.",
+    "The tab bar sits lower, right above the home bar.",
+    "Settings › Local brain shows whether Hermes and Qwen3 are online on your PC, and whether they are already loaded and ready to answer.",
   ] },
   { v: "JNIv9", when: "Oct 24, 2026", title: "Every step saved, reminders you can see", notes: [
     "Fixed: after the first message, later messages could get stuck and never run. Jarvis now keeps going no matter what, re-sends a message if your phone's connection quietly dropped, and fetches answers you missed while the app was closed.",
@@ -1905,6 +1914,15 @@ function ring(el, pct) {
   el.style.strokeDasharray = c; el.style.strokeDashoffset = c * (1 - Math.min(100, pct) / 100);
   el.style.stroke = levelColor(pct);
 }
+// Settings › Local brain: is Hermes / Qwen3 online on the PC?
+const LOCAL_STATE = { loaded: ["ok", "Online · in memory"], ready: ["ok", "Online"], missing: ["warn", "Not downloaded"],
+                      offline: ["bad", "Offline"], off: ["", "Not in use"] };
+function renderLocal(list) {
+  $("localList").innerHTML = list.length ? list.map(m => { const [cls, label] = LOCAL_STATE[m.state] || ["", m.state];
+    return `<div class="row"><span class="grow">${esc(m.name)}<span class="sub">${esc(m.model)} · ${esc(m.role)}</span></span>` +
+           `<span class="value lstate"><span class="dot ${cls}"></span>${label}</span></div>`; }).join("")
+    : `<div class="row"><span class="grow">No local models set up</span></div>`;
+}
 function onState(data) {
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
@@ -1913,6 +1931,7 @@ function onState(data) {
     $("uClaude").textContent = n(u.claude_calls);
     $("uTokens").textContent = n(u.tokens_total != null ? u.tokens_total : (u.tokens_in || 0) + (u.tokens_out || 0));
     $("uLocal").textContent = n(u.local_calls); }
+  if (Array.isArray(data.local)) renderLocal(data.local);
   if (data.vapid) vapidKey = data.vapid;
   if (data.activity || data.watches) onActivity(data.activity, data.watches);
   if (typeof data.notify === "boolean") refreshNotifyToggle(data.notify);
@@ -2210,6 +2229,17 @@ function submit() {
   const v = text.value; text.value = ""; autosize(); send(v);
 }
 new ResizeObserver(() => document.documentElement.style.setProperty("--dock-h", $("dock").offsetHeight + 16 + "px")).observe($("dock"));
+// Home Screen mode on iOS can stop the page short of the screen bottom, leaving the tab bar floating high: measure it.
+function fitBottom() {
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const typing = /^(TEXTAREA|INPUT)$/.test((document.activeElement || {}).tagName || "");
+  const full = innerWidth > innerHeight ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+  const gap = standalone && !typing ? Math.max(0, Math.min(120, full - innerHeight)) : 0;
+  document.documentElement.style.setProperty("--vgap", gap + "px");
+}
+fitBottom();
+addEventListener("resize", fitBottom);
+addEventListener("focusout", () => setTimeout(fitBottom, 300));
 
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, listening = false;

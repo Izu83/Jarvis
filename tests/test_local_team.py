@@ -113,3 +113,29 @@ def test_qwen_not_downloaded_yet_hermes_tries(team):
     brain, fake, handle, steps = team(["hermes3:8b"], {"hermes3:8b": [say("Done both.")]})
     assert handle("open spotify and discord") == "Done both."
     assert fake.chats == [("hermes3:8b", False)]
+
+
+def test_local_status(monkeypatch):
+    """Settings' "Local brain" rows: loaded in the GPU, installed, missing, or Ollama not running."""
+    for k, v in {"brain": "hermes", "hermes_model": "hermes3:8b", "qwen_model": "qwen3:8b"}.items():
+        monkeypatch.setitem(hermes.settings, k, v)
+    answers = {"/api/tags": ["hermes3:8b"], "/api/ps": ["hermes3:8b"]}
+    monkeypatch.setattr(hermes.requests, "get", lambda url, timeout=None:
+                        Resp({"models": [{"name": m} for m in answers[url[url.index("/api"):]]]}))
+    monkeypatch.setattr(hermes, "_status_cache", (0.0, []))
+    assert [m["state"] for m in hermes.local_status()] == ["loaded", "missing"]
+
+    answers["/api/tags"].append("qwen3:8b")
+    answers["/api/ps"].clear()
+    monkeypatch.setattr(hermes, "_status_cache", (0.0, []))
+    assert [m["state"] for m in hermes.local_status()] == ["ready", "ready"]
+
+    def down(url, timeout=None):
+        raise hermes.requests.ConnectionError("refused")
+    monkeypatch.setattr(hermes.requests, "get", down)
+    monkeypatch.setattr(hermes, "_status_cache", (0.0, []))
+    assert [m["state"] for m in hermes.local_status()] == ["offline", "offline"]
+
+    monkeypatch.setitem(hermes.settings, "brain", "claude-code")
+    monkeypatch.setattr(hermes, "_status_cache", (0.0, []))
+    assert [m["state"] for m in hermes.local_status()] == ["off", "off"]
