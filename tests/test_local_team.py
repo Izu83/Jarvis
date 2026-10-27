@@ -9,7 +9,7 @@ from jarvis import hermes
 class FakeOllama:
     """Answers /api/tags and /api/chat. `script[model]` is a list of replies (messages) handed out in order."""
     def __init__(self, installed, script):
-        self.installed, self.script, self.chats = installed, script, []
+        self.installed, self.script, self.chats, self.bodies = installed, script, [], []
 
     def get(self, url, timeout=None):
         return Resp({"models": [{"name": m, "model": m} for m in self.installed]})
@@ -17,6 +17,7 @@ class FakeOllama:
     def post(self, url, json=None, timeout=None, **kw):
         assert url.endswith("/api/chat")
         self.chats.append((json["model"], json.get("think", False)))
+        self.bodies.append(json)
         replies = self.script.get(json["model"]) or [{"role": "assistant", "content": ""}]
         return Resp({"message": dict(replies.pop(0))})
 
@@ -94,8 +95,8 @@ def test_qwen_takes_over_when_hermes_is_stuck(team):
     assert [m for m, _ in fake.chats] == ["hermes3:8b", "qwen3:8b"]
     assert ("Brain", "Hermes got stuck, so Qwen3 is taking over…") in steps
     assert "hmm" in brain.last_thinking and not brain.claude_got
-    # the next command must not see the failed attempt, only the clean exchange
-    assert [m["role"] for m in brain.history] == ["user", "assistant"]
+    # Qwen3 starts clean: it doesn't see Hermes's failed attempt
+    assert [m["role"] for m in fake.bodies[1]["messages"]] == ["system", "user"]
 
 
 def test_claude_when_both_are_stuck(team):
@@ -166,3 +167,49 @@ def test_local_brain_is_told_the_last_file_sent(team, monkeypatch, tmp_path):
     monkeypatch.setattr(hermes.requests, "post", lambda url, json=None, **kw: seen.append(json) or real_post(url, json=json, **kw))
     handle("forward that recording")
     assert str(clip) in seen[0]["messages"][-1]["content"]
+
+
+def test_local_brain_sees_the_shared_conversation(team, monkeypatch, tmp_path):
+    """A follow-up ("close it") reaches Hermes with the earlier exchange, even one another brain handled."""
+    from jarvis import memory
+    monkeypatch.setattr(memory, "CONV_PATH", tmp_path / "conv.json")
+    monkeypatch.setattr(memory, "FACTS_PATH", tmp_path / "facts.json")
+    monkeypatch.setattr(memory, "_conv", {})
+    memory.record(None, "open spotify", "Opened Spotify.", ["Opening Spotify…"])
+    memory.remember("The user's sister is Ana; her email is ana@example.com")
+    brain, fake, handle, steps = team(["hermes3:8b"], {"hermes3:8b": [say("Closed Spotify.")]})
+    assert handle("close it") == "Closed Spotify."
+    system, *rest = fake.bodies[0]["messages"]
+    assert "User (just now): open spotify" in system["content"] and "Jarvis did: Opening Spotify" in system["content"]
+    assert "ana@example.com" in system["content"]
+    assert [m["content"] for m in rest] == ["close it"]   # the new request is the only user message
+
+
+@pytest.mark.parametrize("text, followup", [
+    ("close it", True), ("do that again", True), ("send it to her", True), ("what's my sister's email?", True),
+    ("open spotify", False), ("mute", False), ("open discord", False),
+])
+def test_follow_ups_go_to_qwen_when_there_is_a_conversation(team, monkeypatch, text, followup):
+    monkeypatch.setattr(hermes.memory, "background", lambda *a, **k: "The conversation so far: ...")
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"hermes3:8b": [say("Done.")],
+                                                                   "qwen3:8b": [say("Done.")]})
+    handle(text)
+    assert fake.chats[0][0] == ("qwen3:8b" if followup else "hermes3:8b")
+
+
+def test_no_conversation_means_hermes_for_short_commands(team, monkeypatch):
+    monkeypatch.setattr(hermes.memory, "background", lambda *a, **k: "")
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"hermes3:8b": [say("Closed it.")]})
+    assert handle("close it") == "Closed it." and fake.chats[0][0] == "hermes3:8b"
+
+
+def test_tool_call_written_as_text_is_run(team, monkeypatch):
+    ran = []
+    monkeypatch.setattr(hermes.tools, "run", lambda name, args: ran.append((name, args)) or "Closed.", raising=False)
+    monkeypatch.setattr(hermes.memory, "background", lambda *a, **k: "")
+    brain, fake, handle, steps = team(["hermes3:8b"], {"hermes3:8b": [
+        say('{\n  "arguments": {"action": "close", "window": "Spotify"},\n  "name": "window_action"\n}'),
+        say("Closed Spotify. Is there anything else you would like me to do?")]})
+    monkeypatch.setattr(hermes.tools, "TOOLS", [{"name": "window_action"}], raising=False)
+    assert handle("close spotify") == "Closed Spotify."
+    assert ran == [("window_action", {"action": "close", "window": "Spotify"})]

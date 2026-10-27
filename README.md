@@ -158,12 +158,25 @@ end-to-end encrypted. Claude never sees them, so they cost no tokens. They expir
 "Check my email" lists your unread mail sorted into **important** and **not important** (Gmail's own Important
 marker and inbox tabs, newsletter/no-reply signals, and senders you list in `email_vip`). The plain "check my email"
 is answered locally with no tokens. "Read the one from Anna" opens it; "reply to Anna and say I'll be there" writes
-the reply and shows it on your phone. It's only sent if you tap **Send**. Checking never marks anything as read.
+the reply and shows it on your phone. "Email Ana and tell her I'm running late" or "send my CV to boris@work.com"
+writes a new email (attachments too). Names are looked up in what Jarvis remembers and in your past emails, and an
+address found that way is remembered. Every email is shown to you first and only sent if you tap **Send**, whatever
+the autonomy setting. Checking never marks anything as read.
 
 Setup (once):
 1. Gmail: turn on 2-Step Verification, then create an app password at https://myaccount.google.com/apppasswords.
-2. Put `EMAIL_APP_PASSWORD=...` in `.env` and your address in `config.json` as `"email_address"`.
+2. Run `run.bat --email`, type your address and paste the app password (it's hidden as you type; Jarvis checks it
+   signs in, then saves it in `.env` as `EMAIL_APP_PASSWORD` and the address in `config.json`).
 3. Restart Jarvis.
+
+## Memory
+
+Every command and answer (and the steps taken) is kept per chat in `.brain/conversation.json`, whichever part of
+Jarvis handled it: a quick local shortcut, Hermes, Qwen3 or Claude. Each brain is shown the same recent conversation
+(the last 10 exchanges of the past 12 hours), so follow-ups like "close it", "do it again" or "send that to Ana" work,
+also after a restart or when Claude's session is swapped for a fresh one. "Remember that…" saves a fact for good in
+`.brain/memory.json` (people, email addresses, preferences); Jarvis also saves clearly useful facts by itself, and
+"forget…" removes them.
 
 Outlook, Yahoo and iCloud are detected from the address; for anything else set `email_imap_host` / `email_smtp_host`.
 

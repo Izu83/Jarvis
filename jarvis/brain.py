@@ -17,7 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import tools, usage
+from . import memory, tools, usage
 from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.brain")
@@ -62,8 +62,10 @@ send_message with the text. It types, shows the user the message, and sends only
 other way.
 - "Send me <file>" means send_file_to_phone after finding the file.
 - Email: check_email lists the inbox already sorted into important / not important; say who the important ones are \
-from and what about, and just count the rest. read_email opens one. Reply ONLY when the user asks, with reply_email \
-(it shows them the reply and sends only if they allow it); never send email any other way.
+from and what about, and just count the rest. read_email opens one. Reply ONLY when the user asks, with reply_email. \
+"Email Ana / send an email to X saying Y" means send_email: write it in the user's voice, `to` can be a name (it's \
+looked up), attach files by path when asked (find them first). Both show the user the email and send ONLY if they \
+allow it; never send email any other way. If the address can't be found, ask the user for it.
 - "start/stop gesture control" (or "gestures"/"hand control") means gesture_control.
 - "call me" / "ring me" / "call me and tell me X" means call_user (put X in the message). After you call, the user \
 answers and talks to you by voice; keep spoken replies short and natural.
@@ -81,6 +83,13 @@ see part of it".
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
+Memory: you are in an ongoing conversation. Messages may start with a bracketed note of what you remember about the \
+user and the conversation so far (some of it handled by other parts of Jarvis): use it. Resolve follow-ups ("do it \
+again", "close it", "send that to Ana", "the other one", "what did I just ask") from it instead of asking or \
+guessing, and never act as if the conversation just started. Don't repeat earlier steps unless the user asks. When \
+the user tells you something worth keeping (people, email addresses, preferences, "remember that…"), save it with \
+remember; forget removes facts.
+
 This PC:
 {environment}"""
 
@@ -93,17 +102,10 @@ def _drives() -> list[str]:
     return [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
 
 
-# Long idle gap = new conversation, so old context can't confuse new commands.
+# After a long idle gap the Claude session is swapped for a fresh one (so its context doesn't pile up); the fresh one
+# is given the recent conversation from memory.py, so nothing the user said is forgotten.
 IDLE_RESET_SECONDS = 300
 MAX_TOOL_ROUNDS = 12
-
-
-def thread_switch_note(recent: list | None) -> str:
-    """The phone has separate chats; when the user switches, tell Claude which earlier messages count."""
-    if not recent:
-        return "[New conversation. Earlier messages in this session are unrelated.]\n\n"
-    lines = [f"{'User' if m.get('who') == 'me' else 'Jarvis'}: {str(m.get('text', ''))[:300]}" for m in recent[-6:]]
-    return "[Switched conversation. Only these earlier messages belong to it:\n" + "\n".join(lines) + "]\n\n"
 
 
 STEP_LABELS = {
@@ -149,6 +151,9 @@ STEP_LABELS = {
     "check_email": lambda a: "Checking your email…",
     "read_email": lambda a: "Reading the email…",
     "reply_email": lambda a: "Waiting for your OK to send the reply…",
+    "send_email": lambda a: "Waiting for your OK to send the email…",
+    "remember": lambda a: "Remembering that…",
+    "forget": lambda a: "Forgetting that…",
     "look_at_screen": lambda a: "Looking at your screen…",
     "mouse_click": lambda a: "Clicking…",
     "mouse_scroll": lambda a: "Scrolling…",
@@ -184,7 +189,8 @@ STEP_KINDS = {
     "Reminder": ("remind_me", "notify_when", "cancel_watches", "list_watches"),
     "Phone": ("call_user", "send_file_to_phone", "camera_photo"),
     "Message": ("send_message",),
-    "Email": ("check_email", "read_email", "reply_email"),
+    "Email": ("check_email", "read_email", "reply_email", "send_email"),
+    "Memory": ("remember", "forget"),
     "Web": ("WebSearch", "WebFetch"),
 }
 _KIND_OF = {tool: kind for kind, names in STEP_KINDS.items() for tool in names}
@@ -292,6 +298,8 @@ class ClaudeCodeBrain:
         self.events = queue.Queue()
         self.commands = 0
         self.thread = None  # which chat the session's context belongs to
+        self.seen = 0.0     # when this session last answered: exchanges after that were handled by someone else
+        self.facts_seen = 0.0
         threading.Thread(target=self._read, args=(self.proc, self.events), daemon=True).start()
         log.info("Claude Code session started (pid %s).", self.proc.pid)
 
@@ -330,18 +338,24 @@ class ClaudeCodeBrain:
         with self.lock:
             if self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION:
                 self._restart()
-            if chat != self.thread:
-                command = thread_switch_note(recent) + command
-                self.thread = chat
+            command = self._with_memory(command, chat, recent, fresh=self.commands == 0 or chat != self.thread)
             self.commands += 1
             started = time.time()
             self.last_thinking = ""
             try:
                 answer = self._ask(command, progress)
             finally:
-                self.last_used = time.time()
+                self.last_used = self.seen = time.time()
             log.info("answered in %.1fs", time.time() - started)
             return answer
+
+    def _with_memory(self, command: str, chat, recent, fresh: bool) -> str:
+        """Put what this session doesn't know yet in front of the command: the facts and the recent conversation
+        for a fresh session, or just what other brains handled since it last answered."""
+        stamp = memory.facts_stamp()
+        note = memory.context(chat, self.seen, recent, fresh, with_facts=fresh or stamp != self.facts_seen)
+        self.thread, self.facts_seen = chat, stamp
+        return note + command
 
     def _ask(self, command: str, progress=None) -> str:
         # On the Pro plan the CLI strips raw thinking text, so Jarvis's "thoughts" are built from its running
@@ -427,17 +441,19 @@ class ApiBrain:
         self.thread = None
         self.progress = None
         self.last_used = 0.0
+        self.seen = 0.0
+        self.facts_seen = 0.0
         self.last_thinking = ""
         self.lock = threading.Lock()
+
+    _with_memory = ClaudeCodeBrain._with_memory
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
         with self.lock:
             self.progress = progress
             if time.time() - self.last_used > IDLE_RESET_SECONDS or len(self.history) > 60 or chat != self.thread:
                 self.history = []
-                if chat != self.thread:
-                    command = thread_switch_note(recent) + command
-                self.thread = chat
+            command = self._with_memory(command, chat, recent, fresh=not self.history)
             self.last_used = time.time()
             anthropic = self.anthropic
             try:
@@ -455,6 +471,8 @@ class ApiBrain:
             except anthropic.APIConnectionError:
                 self.history = []
                 return "I can't reach the Claude API. Check the internet connection."
+            finally:
+                self.last_used = self.seen = time.time()
 
     def _run(self, command: str) -> str:
         self.history.append({"role": "user", "content": command})

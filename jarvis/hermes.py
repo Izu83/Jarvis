@@ -20,9 +20,8 @@ import time
 
 import requests
 
-from . import outbox, tools, usage
-from .brain import (IDLE_RESET_SECONDS, MAX_TOOL_ROUNDS, SYSTEM_TEMPLATE,
-                    describe_step, make_brain_named, step_kind, thread_switch_note)
+from . import memory, outbox, tools, usage
+from .brain import MAX_TOOL_ROUNDS, SYSTEM_TEMPLATE, describe_step, make_brain_named, step_kind
 from .config import settings
 
 log = logging.getLogger("jarvis.hermes")
@@ -50,9 +49,17 @@ _COMPLEX = re.compile(
     r"plan|figure out|work out|decide|write|draft|organi[sz]e|sort|clean up|tidy|which|what should)\b", re.I)
 COMPLEX_WORDS = 14
 
-# How many earlier exchanges (command + final answer) the local model sees. Only the plain text is kept: replaying
-# old tool calls made the small model answer a NEW command with "done" from the previous one, without acting.
-KEEP_EXCHANGES = 3
+# A follow-up leans on the conversation ("close it", "send that to her", "do it again") and a question may be about
+# what Jarvis remembers ("what's my sister's email?"). Hermes can't keep track of a conversation (tested: it closed
+# the wrong app and made up an address), Qwen3 can, so with any conversation or saved facts around these go to Qwen3.
+_FOLLOWUP = re.compile(
+    r"\b(it|its|it's|that|this|these|those|them|they|he|she|him|her|his|again|same|other|another|instead|too|"
+    r"also|back|last|previous|earlier|before|one)\b|^(and|also|now|then|so|ok|okay|no|yes)\b|"
+    r"^(what|who|where|when|which|did|do you|have you|remember)\b|\?\s*$", re.I)
+
+# Earlier exchanges reach the local models as a written transcript in the system message (from memory.py, shared
+# with Claude), never as replayed chat turns: replaying old tool calls made the small model answer a NEW command
+# with "done" from the previous one, without acting.
 CHAT_TIMEOUT = 90    # seconds per Hermes call; slower than this, the next brain in line takes the command
 THINK_TIMEOUT = 180  # Qwen3 thinks first, so it gets longer
 
@@ -67,9 +74,14 @@ QWEN_NOTE = (
     "\n\nYou are the local planner. Think the request through briefly, then act with your tools step by step until "
     "EVERY part is done; don't stop after the first step. Use a tool result before you claim anything. If a tool "
     "fails, try one sensible alternative. Finish with a short plain answer (no markdown) that states what actually "
-    "happened, or for a question, a complete and specific answer.")
+    "happened, or for a question, a complete and specific answer. Talk to the user as \"you\" (\"your sister\"), "
+    "never \"the user\".")
 
 _THINK_TAGS = re.compile(r"<think>(.*?)</think>", re.S)
+# Hermes sometimes writes its tool call as text ('{"name": "window_action", "arguments": {...}}') instead of making it.
+_TEXT_CALL = re.compile(r"^\s*(?:<tool_call>|```(?:json)?)?\s*(\{.*\}|\[.*\])\s*(?:</tool_call>|```)?\s*$", re.S)
+# "Is there anything else you would like me to do?" adds nothing when spoken.
+_FILLER = re.compile(r"\s*(Is there anything else[^.?!]*|Let me know if (you need|there's)[^.?!]*)[.?!]+\s*$", re.I)
 # An answer that only promises ("Sure, I will send it") without a tool having run did nothing: hand it over.
 _PROMISE = re.compile(r"\b(I will|I'll|let me|I am going to|I'm going to|please wait|one moment)\b", re.I)
 # Giving up after a tool failed ("Apologies… could you provide the correct path?"): the next brain tries instead.
@@ -153,8 +165,7 @@ class HermesBrain:
         self._checked = 0.0
         self._pulling: set[str] = set()
         self._no_think = False             # an Ollama too old for "think": Qwen3 then thinks inline
-        self.history: list = []
-        self.thread = None
+        self.background = ""   # facts + the recent conversation, for the command being handled
         self.progress = None
         self.last_used = 0.0
         self.last_thinking = ""
@@ -225,9 +236,9 @@ class HermesBrain:
         self._refresh_installed()
         return self._has(self.team[key][0])
 
-    def _plan(self, command: str) -> list[str]:
+    def _plan(self, command: str, followup: bool = False) -> list[str]:
         """Which local models try this command, in order."""
-        order = ["qwen"] if is_complex(command) else ["hermes", "qwen"]
+        order = ["qwen"] if followup or is_complex(command) else ["hermes", "qwen"]
         ready = [k for k in order if self._ready(k)]
         if not ready and self._ready("hermes"):   # complex but Qwen3 isn't there (yet): Hermes has a go
             ready = ["hermes"]
@@ -277,35 +288,30 @@ class HermesBrain:
         return self._fallback
 
     def _to_claude(self, command, chat, recent, progress) -> str:
+        # Claude gets the conversation from memory.py itself, including what the local models handled.
         answer = self._claude().handle(command, chat=chat, recent=recent, progress=progress)
         self.last_thinking = getattr(self._claude(), "last_thinking", "") or ""
-        # Claude keeps its own history, but the local models need to know what just happened too, or a follow-up
-        # like "send it again" reaches them with no idea what "it" is.
-        self.history = [{"role": "user", "content": command}, {"role": "assistant", "content": answer}]
         return answer
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
         original = command   # routed on what the user said, not on the conversation note added below
         with self.lock:
             self.progress = progress
-            if time.time() - self.last_used > IDLE_RESET_SECONDS or chat != self.thread:
-                self.history = []
-                if chat != self.thread:
-                    command = thread_switch_note(recent) + command
-                self.thread = chat
             self.last_used = time.time()
 
-            if _needs_claude(command):
+            if _needs_claude(original):
                 log.info("Routing straight to Claude (needs vision/web/exact search): %r", command[:70])
                 return self._to_claude(command, chat, recent, progress)
 
             sent = outbox.last_sent()
             if sent:   # so "send it again" / "send the video" means this file, not a made-up path
                 command += f"\n\n[The last file Jarvis sent to the phone: {sent}]"
-            plan = self._plan(original)
+            self.background = memory.background(chat, phone_recent=recent)
+            followup = bool(self.background) and bool(_FOLLOWUP.search(original))
+            plan = self._plan(original, followup)
             if not plan and self._ensure_server():   # Ollama was down: it's up now, look again
                 self._refresh_installed(force=True)
-                plan = self._plan(original)
+                plan = self._plan(original, followup)
             tried = []
             for key in plan:
                 name = self.team[key][1]
@@ -313,18 +319,15 @@ class HermesBrain:
                     self._say(f"{tried[-1]} got stuck, so {name} is taking over…")
                 elif key == "qwen":
                     self._say(f"{name} is thinking it through…")
-                start = len(self.history)
                 try:
                     answer = self._run(key, command)
                     if answer is not None:
-                        self._compact(start, command, answer)
                         return answer
                     log.info("%s couldn't finish confidently.", name)
                 except requests.RequestException as e:
                     log.info("%s didn't answer (%s).", name, e)
                 except Exception:
                     log.exception("%s failed.", name)
-                del self.history[start:]   # don't leave a half-finished exchange in the local history
                 tried.append(name)
             if tried:
                 self._say("Handing this one to Claude…")
@@ -338,23 +341,17 @@ class HermesBrain:
             except Exception:
                 log.debug("progress callback failed", exc_info=True)
 
-    def _compact(self, start: int, command: str, answer: str) -> None:
-        """Replace this command's tool chatter with just "user said / Jarvis answered", and keep only a few."""
-        del self.history[start:]
-        self.history += [{"role": "user", "content": command}, {"role": "assistant", "content": answer}]
-        del self.history[:-2 * KEEP_EXCHANGES]
-
     def _run(self, key: str, command: str) -> str | None:
         """One local agent loop with one team member. Returns the spoken answer, or None if the model gave up,
         needs vision, or produced nothing confident — in which case the next brain in line takes over."""
         model, name, think = self.team[key]
-        self.history.append({"role": "user", "content": command})
+        turn = [{"role": "user", "content": command}]   # this command's messages (tool calls and results)
         steps: list[str] = []
         thoughts: list[str] = []
         failed = False   # did the latest tool call fail?
         started = time.time()
         for _ in range(MAX_TOOL_ROUNDS):
-            msg = self._chat(key, model, think)
+            msg = self._chat(key, model, think, turn)
             thought = (msg.pop("thinking", "") or "").strip()
             content = msg.get("content") or ""
             inline = _THINK_TAGS.findall(content)   # thinking written into the text (older Ollama)
@@ -363,10 +360,10 @@ class HermesBrain:
                 msg["content"] = content = _THINK_TAGS.sub("", content)
             if thought:
                 thoughts.append(thought)
-            self.history.append(msg)
-            calls = msg.get("tool_calls") or []
+            turn.append(msg)
+            calls = msg.get("tool_calls") or _text_calls(content)
             if not calls:
-                answer = _MARKDOWN.sub("", content).strip()
+                answer = _FILLER.sub("", _MARKDOWN.sub("", content)).strip()
                 if not answer:
                     return None   # nothing to say -> the next brain answers properly
                 if (not steps and _PROMISE.search(answer)) or (failed and _GAVE_UP.search(answer)):
@@ -396,13 +393,17 @@ class HermesBrain:
                     output = f"Error: {e}"
                 log.info("  -> %s", str(output)[:300])
                 failed = str(output).startswith("Error")
-                self.history.append({"role": "tool", "content": str(output)})
+                turn.append({"role": "tool", "content": str(output)})
         return None   # ran out of rounds -> let Claude take over
 
-    def _chat(self, key: str, model: str, think: bool) -> dict:
+    def _chat(self, key: str, model: str, think: bool, turn: list) -> dict:
+        system = self.systems[key]
+        if self.background:
+            system += ("\n\n" + self.background + "\n\nThe user's latest message is the NEW request: do that one. "
+                       "The conversation above is already done; don't redo it unless asked.")
         body = {
             "model": model,
-            "messages": [{"role": "system", "content": self.systems[key]}, *self.history],
+            "messages": [{"role": "system", "content": system}, *turn],
             "tools": self.tools,
             "stream": False,
             "keep_alive": "30m",   # keep the model warm in VRAM between commands
@@ -418,6 +419,24 @@ class HermesBrain:
             r = requests.post(f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT)
         r.raise_for_status()
         return r.json().get("message", {}) or {}
+
+
+def _text_calls(content: str) -> list[dict]:
+    """Tool calls the model wrote out as JSON text instead of making them, in the usual tool_calls shape."""
+    m = _TEXT_CALL.match(content or "")
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(1))
+    except ValueError:
+        return []
+    names = {t["name"] for t in tools.TOOLS}
+    out = []
+    for c in data if isinstance(data, list) else [data]:
+        if isinstance(c, dict) and c.get("name") in names:
+            args = c.get("arguments", c.get("parameters", {}))
+            out.append({"function": {"name": c["name"], "arguments": args if isinstance(args, dict) else _loads(args)}})
+    return out
 
 
 def _loads(raw) -> dict:

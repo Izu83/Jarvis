@@ -1,12 +1,14 @@
 """The actions Claude can take on this PC: JSON schemas + the Python that runs them."""
 import ctypes
 import json
+import re
 import subprocess
 import time
 
 import logging
 
-from . import apps, approval, files, gesture, mail, modes, pc, power, screens, spotify, sysinfo, ui, watchers
+from . import (apps, approval, files, gesture, mail, memory, modes, pc, power, screens, spotify, sysinfo, ui,
+               watchers)
 from . import windows as win
 from .config import settings
 
@@ -465,6 +467,52 @@ TOOLS = [
         },
     },
     {
+        "name": "send_email",
+        "description": "Write and send a NEW email from the user's own email account, when they ask you to email "
+                       "someone. Write it in the user's voice from what they said (a short greeting and sign-off are "
+                       "fine). `to` may be an email address or a person's name: names are looked up in what you "
+                       "remember and in the user's past emails. It shows the user the exact email and sends ONLY if "
+                       "they allow it. Never leave placeholders like [Your Name]: sign with the user's name if you know "
+                       "it, otherwise leave the name out. To answer an email they received, use reply_email instead.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "array", "items": {"type": "string"},
+                       "description": "Recipients: email addresses, or people's names when the address isn't known"},
+                "subject": {"type": "string"},
+                "message": {"type": "string", "description": "The email body, plain text"},
+                "cc": {"type": "array", "items": {"type": "string"}},
+                "attachments": {"type": "array", "items": {"type": "string"},
+                                "description": "Full paths of files on this PC to attach (25 MB total at most)"},
+            },
+            "required": ["to", "subject", "message"],
+        },
+    },
+    {
+        "name": "remember",
+        "description": "Save a fact for good, so you know it in every later conversation: people and their email "
+                       "addresses or numbers, the user's preferences, names of their things, how they like tasks "
+                       "done. Use it when the user says 'remember…', and also on your own when they mention "
+                       "something clearly worth keeping (a person's name with their email address). One short, "
+                       "self-contained sentence per fact, written about the user (\"The user's sister is called ...; "
+                       "her email address is ...\"), with the real details the user gave.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"fact": {"type": "string"}},
+            "required": ["fact"],
+        },
+    },
+    {
+        "name": "forget",
+        "description": "Delete saved facts that mention these words, when the user says to forget something or a "
+                       "saved fact is wrong (then remember the right one).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"about": {"type": "string", "description": "Words the fact contains, e.g. 'Ana email'"}},
+            "required": ["about"],
+        },
+    },
+    {
         "name": "send_file_to_phone",
         "description": "Send a file from the PC to the user's phone. Pictures and videos show right in the chat; "
                        "other files get a download button. For "
@@ -678,8 +726,12 @@ def run(name: str, args: dict) -> str:
         return _send_message(args)
     if name == "send_file_to_phone":
         return _send_file_to_phone(args["path"])
-    if name in ("check_email", "read_email", "reply_email"):
+    if name in ("check_email", "read_email", "reply_email", "send_email"):
         return _email(name, args)
+    if name == "remember":
+        return memory.remember(args["fact"])
+    if name == "forget":
+        return memory.forget(args["about"])
     if name == "media_key":
         vk = MEDIA_KEYS[args["key"]]
         for _ in range(max(1, min(int(args.get("times", 1)), 50))):
@@ -729,6 +781,8 @@ def _email(name: str, args: dict) -> str:
             return mail.summary(args.get("unread_only", True), args.get("limit", 15))
         if name == "read_email":
             return mail.read(args["id"])
+        if name == "send_email":
+            return _send_email(args)
         reply = mail.build_reply(args["id"], args["message"], bool(args.get("reply_all")))
         to = reply["To"] + (f" (cc {reply['Cc']})" if reply["Cc"] else "")
         if not _confirm("send", f"Send this email to {to}?", f"Subject: {reply['Subject']}\n\n{args['message']}",
@@ -738,6 +792,41 @@ def _email(name: str, args: dict) -> str:
         return f"Reply sent to {to}."
     except mail.NotSetUp as e:
         return str(e) + " Tell the user they need to finish the email setup (see the README)."
+
+
+def _send_email(args: dict) -> str:
+    def addresses(names) -> tuple[list[str], list[str]]:
+        out, learned = [], []
+        for n in ([names] if isinstance(names, str) else names or []):
+            addr, searched = mail.resolve(n, memory.lookup_address(n))
+            out.append(addr)
+            if searched:   # found in past emails: keep it, so next time needs no search
+                learned.append(f"{n.strip()}'s email address is {addr}")
+        return out, learned
+    try:
+        to, learned = addresses(args["to"])
+        cc, learned_cc = addresses(args.get("cc"))
+    except mail.NoAddress as e:
+        return str(e)
+    if not to:
+        return "Who should the email go to? Ask the user."
+    if re.search(r"\[[^\]]*\b(name|your|recipient|date|time)\b[^\]]*\]", args["message"], re.I):
+        return ("Error: the email still has a placeholder in [brackets]. Fill it in with the real details or leave it "
+                "out (sign with the user's name only if you know it), then call send_email again.")
+    paths = [files.resolve(a) for a in args.get("attachments") or []]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        return "These attachments aren't files: " + "; ".join(missing) + ". Find the right paths first."
+    msg = mail.build_new(to, args.get("subject", ""), args["message"], cc, paths)
+    head = f"To: {msg['To']}" + (f"\nCc: {msg['Cc']}" if cc else "") + f"\nSubject: {msg['Subject']}"
+    if paths:
+        head += "\nAttached: " + ", ".join(f"{p.name} ({files.fmt_size(p.stat().st_size)})" for p in paths)
+    if not _confirm("send", f"Send this email to {msg['To']}?", f"{head}\n\n{args['message'].strip()}", "Send"):
+        return DECLINED + " The email was not sent."
+    mail.send(msg)
+    for fact in learned + learned_cc:
+        memory.remember(fact)
+    return f"Email sent to {msg['To']}" + (f" (cc {msg['Cc']})" if cc else "") + f": {msg['Subject']}."
 
 
 def _send_file_to_phone(path: str) -> str:

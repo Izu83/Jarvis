@@ -947,7 +947,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-27.3";   // bump together with version.json
+const VERSION = "2026-10-27.4";   // bump together with version.json
 const JNI = "JNIv10";   // Jarvis · Niko · Izu83 · version 10 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -960,6 +960,9 @@ const RELEASES = [
     "The tab bar sits lower, right above the home bar.",
     "Settings › Local brain shows whether Hermes and Qwen3 are online on your PC, and whether they are already loaded and ready to answer.",
     "Pictures and videos Jarvis sends you no longer need the app open: the PC keeps them until your phone has them, sends a notification, and they arrive the moment you open Jarvis. They stay saved in the chat afterwards.",
+    "Jarvis remembers the conversation now: Hermes, Qwen3 and Claude share one memory, so follow-ups like “close it”, “do it again” or “send that to Ana” work, even after a restart.",
+    "Say “remember that…” and Jarvis keeps it for good (people, email addresses, what you like). “Forget…” removes it.",
+    "Jarvis can write and send new emails from your Gmail, with attachments, and find people's addresses by name. It always shows you the email and only sends it when you tap Send.",
   ] },
   { v: "JNIv9", when: "Oct 24, 2026", title: "Every step saved, reminders you can see", notes: [
     "Fixed: after the first message, later messages could get stuck and never run. Jarvis now keeps going no matter what, re-sends a message if your phone's connection quietly dropped, and fetches answers you missed while the app was closed.",

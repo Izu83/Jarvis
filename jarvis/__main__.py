@@ -18,7 +18,7 @@ from .windows import enable_dpi_awareness  # noqa: E402
 
 enable_dpi_awareness()  # before anything touches windows
 
-from . import activity, modes, nlu, speak  # noqa: E402
+from . import activity, memory, modes, nlu, speak  # noqa: E402
 from .config import ROOT, secret, settings  # noqa: E402
 
 log = logging.getLogger("jarvis")
@@ -40,6 +40,37 @@ def pair() -> None:
     print("The link contains your private key: don't share it. Re-pair any time with: python -m jarvis --pair")
     if not settings["phone_page_url"]:
         print("\nNOTE: set \"phone_page_url\" in config.json to your GitHub Pages URL first, then run --pair again.")
+
+
+def email_setup() -> None:
+    """Connect Jarvis to an email account: asks for the address and an app password (typed hidden, saved in .env)."""
+    import getpass
+    import imaplib
+
+    from . import mail
+    from .config import set_secret, set_setting
+
+    print("Jarvis signs in with an APP PASSWORD, never your normal password.")
+    print("Gmail: turn on 2-Step Verification, then make one at https://myaccount.google.com/apppasswords\n")
+    current = settings.get("email_address", "")
+    address = input(f"Email address [{current}]: ").strip() or current
+    if not address:
+        print("No address given; nothing changed.")
+        return
+    password = getpass.getpass("App password (hidden as you type or paste): ").replace(" ", "").strip()
+    if not password:
+        print("No password given; nothing changed.")
+        return
+    try:
+        imap = imaplib.IMAP4_SSL(mail._hosts(address)[0], timeout=mail.TIMEOUT)
+        imap.login(address, password)
+        imap.logout()
+    except Exception as e:
+        print(f"Couldn't sign in with that ({e}). Check the address and the app password, then try again.")
+        return
+    set_setting("email_address", address)
+    set_secret("EMAIL_APP_PASSWORD", password)
+    print(f"Signed in. Jarvis can now read and send email as {address}. Restart Jarvis to use it.")
 
 
 _singleton_handle = None
@@ -64,6 +95,7 @@ def main() -> None:
     parser.add_argument("--no-phone", action="store_true", help="don't listen for phone commands")
     parser.add_argument("--no-tray", action="store_true", help="don't show the taskbar tray icon")
     parser.add_argument("--pair", action="store_true", help="show the link/QR code that connects your phone")
+    parser.add_argument("--email", action="store_true", help="connect your email account (app password)")
     parser.add_argument("--startup", action="store_true", help="start Jarvis hidden at login from now on")
     parser.add_argument("--startup-off", action="store_true", help="stop starting Jarvis at login")
     args = parser.parse_args()
@@ -83,6 +115,9 @@ def main() -> None:
 
     if args.pair:
         pair()
+        return
+    if args.email:
+        email_setup()
         return
 
     # Only one Jarvis at a time. A named mutex is held for the life of the process; a second copy (however it
@@ -201,6 +236,7 @@ def main() -> None:
     def run_job(tid, text, reply, chat, recent, progress, via) -> None:
         current["via"] = via
         working["text"] = text
+        started = time.time()
         activity.set_status(tid, "running")
         log.info("Command: %s", text)
 
@@ -235,6 +271,8 @@ def main() -> None:
             cmd = nlu.clean(text) or text
             step(cmd[:1].upper() + cmd[1:], "Command")
         activity.finish(tid, answer, ok=ok)
+        # every exchange goes into the shared memory, so the next command (whichever brain gets it) knows about it
+        memory.record(chat, text, answer, [s["t"] for s in activity.steps_of(tid)], started)
         log.info("Jarvis: %s", answer)
         if reply:
             reply(answer, thinking, activity.steps_of(tid))

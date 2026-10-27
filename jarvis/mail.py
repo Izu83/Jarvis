@@ -236,3 +236,96 @@ def send(msg: EmailMessage) -> None:
     with smtplib.SMTP_SSL(host, 465, timeout=TIMEOUT) as smtp:
         smtp.login(address, password)
         smtp.send_message(msg)
+
+
+_ADDRESS = re.compile(r"^[\w.+-]+@[\w-]+(\.[\w-]+)+$")
+MAX_ATTACH = 24 * 1024 * 1024   # Gmail refuses messages over 25 MB
+
+
+class NoAddress(Exception):
+    """Couldn't work out who the email is for (the message says why, for the brain to ask the user)."""
+
+
+def _all_mail(imap) -> str:
+    """The folder that holds every message (Gmail's "All Mail", whatever it's called in the account's language)."""
+    try:
+        typ, rows = imap.list()
+        for row in rows or []:
+            line = row.decode(errors="replace")
+            if r"\All" in line:
+                return line.rsplit(' "/" ', 1)[-1].strip()
+    except imaplib.IMAP4.error:
+        pass
+    return "INBOX"
+
+
+def find_address(name: str) -> list[str]:
+    """Email addresses of people called `name` that the user has emailed with (newest first)."""
+    address, password = _account()
+    words = [w for w in re.findall(r"\w+", name.lower()) if w not in ("my", "the", "to", "mr", "mrs", "ms")]
+    if not words:
+        return []
+    imap = imaplib.IMAP4_SSL(_hosts(address)[0], timeout=TIMEOUT)
+    try:
+        imap.login(address, password)
+        folder = _all_mail(imap)
+        imap.select(folder if folder.startswith('"') else f'"{folder}"', readonly=True)
+        if "gmail" in _hosts(address)[0]:
+            uids = _search(imap, "X-GM-RAW", '"' + " ".join(f"(from:{w} OR to:{w})" for w in words) + '"')
+        else:
+            uids = _search(imap, "OR", "FROM", words[0], "TO", words[0])
+        found: list[str] = []
+        for uid in reversed(uids[-30:]):
+            typ, data = imap.uid("FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM TO CC)])")
+            raw = b"".join(p[1] for p in data if isinstance(p, tuple)) if typ == "OK" else b""
+            msg = email.message_from_bytes(raw)
+            for who, addr in email.utils.getaddresses([_dec(v) for f in ("From", "To", "Cc") for v in msg.get_all(f, [])]):
+                hay = (who + " " + addr).lower()
+                if addr and addr.lower() != address.lower() and all(w in hay for w in words) and addr not in found:
+                    found.append(addr)
+        return found
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+
+
+def resolve(recipient: str, saved=None) -> tuple[str, bool]:
+    """'ana@x.com' as is; a name -> an address from `saved` (what Jarvis remembers) or past emails.
+    Returns (address, found_by_searching_mail). Raises NoAddress when it isn't clear who's meant."""
+    recipient = recipient.strip().strip("<>")
+    if _ADDRESS.match(recipient):
+        return recipient, False
+    if saved:
+        return saved, False
+    found = find_address(recipient)
+    if len(found) == 1:
+        return found[0], True
+    if found:
+        raise NoAddress(f"More than one address matches {recipient!r}: {', '.join(found[:5])}. Ask the user which one.")
+    raise NoAddress(f"I don't know {recipient}'s email address and found none in the mailbox. Ask the user for it.")
+
+
+def build_new(to: list[str], subject: str, text: str, cc: list[str] | None = None,
+              attachments: list | None = None) -> EmailMessage:
+    """A new email from the user's address. `attachments`: file paths (Path objects)."""
+    import mimetypes
+    address, _ = _account()
+    msg = EmailMessage()
+    msg["From"] = address
+    msg["To"] = ", ".join(to)
+    if cc:
+        msg["Cc"] = ", ".join(cc)
+    msg["Subject"] = subject.strip() or "(no subject)"
+    msg["Date"] = email.utils.formatdate(localtime=True)
+    msg["Message-ID"] = email.utils.make_msgid(domain=address.rsplit("@", 1)[-1])
+    msg.set_content(text.strip() + "\n")
+    total = 0
+    for path in attachments or []:
+        total += path.stat().st_size
+        if total > MAX_ATTACH:
+            raise ValueError("The attachments are over 25 MB together; email can't carry that much.")
+        kind = (mimetypes.guess_type(path.name)[0] or "application/octet-stream").split("/", 1)
+        msg.add_attachment(path.read_bytes(), maintype=kind[0], subtype=kind[1], filename=path.name)
+    return msg
