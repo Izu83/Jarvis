@@ -947,7 +947,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-27.2";   // bump together with version.json
+const VERSION = "2026-10-27.3";   // bump together with version.json
 const JNI = "JNIv10";   // Jarvis · Niko · Izu83 · version 10 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -959,6 +959,7 @@ const RELEASES = [
     "Jarvis downloads Qwen3 by itself the first time, and the local models now get enough memory to read all their instructions, so they make fewer mistakes.",
     "The tab bar sits lower, right above the home bar.",
     "Settings › Local brain shows whether Hermes and Qwen3 are online on your PC, and whether they are already loaded and ready to answer.",
+    "Pictures and videos Jarvis sends you no longer need the app open: the PC keeps them until your phone has them, sends a notification, and they arrive the moment you open Jarvis. They stay saved in the chat afterwards.",
   ] },
   { v: "JNIv9", when: "Oct 24, 2026", title: "Every step saved, reminders you can see", notes: [
     "Fixed: after the first message, later messages could get stuck and never run. Jarvis now keeps going no matter what, re-sends a message if your phone's connection quietly dropped, and fetches answers you missed while the app was closed.",
@@ -1338,6 +1339,7 @@ function renderChat() {
   if (!chat.messages.length && ![...pending.values()].some(p => p.chatId === chat.id)) renderHome();
   for (const m of chat.messages) {
     if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts, m.title); if (p) p.card = card; }
+    else if (m.who === "file") drawFile(m);
     else if (m.who === "steps") { stamp(m.ts); $("log").append(pillsEl(m.steps || [], false, "", m.failed)); }
     else bubble(m.text, m.who, m.ts, m.error, m.thinking);
   }
@@ -1359,7 +1361,7 @@ const relTime = ts => {
   if (s < 7 * 86400) return new Date(ts).toLocaleDateString([], { weekday: "short" });
   return new Date(ts).toLocaleDateString([], { day: "numeric", month: "short" });
 };
-const preview = c => { const m = c.messages.at(-1); return !m ? "No messages yet" : m.who === "shots" ? "Screenshot" : m.who === "steps" ? "Working…" : m.text; };
+const preview = c => { const m = c.messages.at(-1); return !m ? "No messages yet" : m.who === "shots" ? "Screenshot" : m.who === "steps" ? "Working…" : m.who === "file" ? fileKind(m.mime) + ": " + m.name : m.text; };
 
 function chatRow(c, indent) {
   const wrap = document.createElement("div");
@@ -1726,7 +1728,7 @@ async function onMessage(text) {
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
-    if (data.kind === "file" && data.data) { addFileCard(data); return; }
+    if (data.kind === "file" && data.data) { data.fid ? receiveFile(data) : addFileCard(data); return; }
     if (data.kind === "tts") { Voice.onAudio(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
@@ -2617,6 +2619,73 @@ const MEDIA_TYPES = {
   heic: "image/heic", avif: "image/avif", svg: "image/svg+xml",
   mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
 };
+// Files from the PC are saved on this phone (IndexedDB) and kept in the chat, so a video Jarvis sent while the app
+// was closed is waiting here when you open it. The PC keeps re-sending until we confirm with "got_file".
+const FILES_KEPT = 15;   // the newest files stay saved on the phone; older ones show as "no longer saved"
+const fileKind = mime => (mime || "").startsWith("video/") ? "Video" : (mime || "").startsWith("image/") ? "Picture" : "File";
+let fileDb;
+function filesDb() {
+  return fileDb ||= new Promise((resolve, reject) => {
+    let req;
+    try { req = indexedDB.open("jarvis-files", 1); } catch (e) { reject(e); return; }   // storage blocked
+    req.onupgradeneeded = () => req.result.createObjectStore("files", { keyPath: "fid" });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => { fileDb = null; reject(req.error); };
+  });
+}
+async function fileStore(mode, fn) {
+  const db = await filesDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("files", mode), out = fn(tx.objectStore("files"));
+    tx.oncomplete = () => resolve(out && out.result); tx.onerror = () => reject(tx.error);
+  });
+}
+async function receiveFile(data) {
+  const ack = () => post({ type: "got_file", id: newId(), fid: data.fid }).catch(() => {});
+  const seen = new Set(JSON.parse(load("jarvis.gotFiles") || "[]"));
+  if (seen.has(data.fid)) { ack(); return; }   // the PC sent it again before it heard our confirmation
+  const type = data.mime || MEDIA_TYPES[(data.name.split(".").pop() || "").toLowerCase()] || "";
+  const blob = new Blob([b64bytes(data.data)], type ? { type } : {});
+  try {
+    await fileStore("readwrite", st => st.put({ fid: data.fid, name: data.name, mime: type, blob, ts: Date.now() }));
+    const all = await fileStore("readonly", st => st.getAll());
+    all.sort((a, b) => b.ts - a.ts).slice(FILES_KEPT).forEach(f => fileStore("readwrite", st => st.delete(f.fid)).catch(() => {}));
+  } catch { fileUrls.set(data.fid, URL.createObjectURL(blob)); }   // no storage (private mode): keep it for now
+  store("jarvis.gotFiles", JSON.stringify([...seen, data.fid].slice(-100)));
+  ack();
+  const chat = chatById(data.chat) || current();
+  const m = { who: "file", fid: data.fid, name: data.name, size: data.size || blob.size, mime: type, ts: Date.now() };
+  addMessage(chat, m);
+  if (chat.id === db.current) { clearHome(); drawFile(m); scrollDown(); }
+  else { chat.unread = true; saveDb(); updateBadges(); if (!$("drawer").hidden) renderSidebar(); }
+  if (document.visibilityState !== "visible" || chat.id !== db.current) toast(fileKind(type) + " from your PC: " + data.name, "doc", "var(--blue)");
+}
+const fileUrls = new Map();   // fid -> object URL, made once per file
+function drawFile(m) {
+  stamp(m.ts);
+  const media = /^(image|video)\//.test(m.mime || "");
+  const card = document.createElement("div");
+  card.className = (media ? "mediacard" : "filecard") + " surface";
+  const foot = `<div class="ft"><b></b><span></span></div><a class="dl press" download aria-label="Save">${icon("download")}</a>`;
+  card.innerHTML = media ? `<div class="mf">${foot}</div>` : `<div class="fic">${icon("doc")}</div>${foot}`;
+  card.querySelector("b").textContent = m.name;
+  card.querySelector(".ft span").textContent = fmtBytes(m.size || 0);
+  $("log").append(card);
+  const show = url => {
+    const a = card.querySelector("a"); a.href = url; a.download = m.name;
+    if (!media) return;
+    const isVideo = m.mime.startsWith("video/");
+    const el = document.createElement(isVideo ? "video" : "img");
+    if (isVideo) { el.controls = true; el.playsInline = true; el.preload = "metadata"; }
+    else { el.alt = m.name; el.onclick = () => openViewer({ url, monitors: [] }, -1); el.onload = () => scrollDown(false); }
+    el.src = url; card.prepend(el);
+  };
+  if (fileUrls.has(m.fid)) { show(fileUrls.get(m.fid)); return; }
+  fileStore("readonly", st => st.get(m.fid)).then(f => {
+    if (!f) throw 0;
+    const url = URL.createObjectURL(f.blob); fileUrls.set(m.fid, url); show(url);
+  }).catch(() => { card.classList.add("gone"); card.querySelector(".ft span").textContent = "No longer saved on this phone"; card.querySelector("a").remove(); });
+}
 function addFileCard(data) {
   clearHome(); stamp(Date.now());
   const bytes = b64bytes(data.data);

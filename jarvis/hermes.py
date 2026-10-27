@@ -20,7 +20,7 @@ import time
 
 import requests
 
-from . import tools, usage
+from . import outbox, tools, usage
 from .brain import (IDLE_RESET_SECONDS, MAX_TOOL_ROUNDS, SYSTEM_TEMPLATE,
                     describe_step, make_brain_named, step_kind, thread_switch_note)
 from .config import settings
@@ -70,6 +70,11 @@ QWEN_NOTE = (
     "happened, or for a question, a complete and specific answer.")
 
 _THINK_TAGS = re.compile(r"<think>(.*?)</think>", re.S)
+# An answer that only promises ("Sure, I will send it") without a tool having run did nothing: hand it over.
+_PROMISE = re.compile(r"\b(I will|I'll|let me|I am going to|I'm going to|please wait|one moment)\b", re.I)
+# Giving up after a tool failed ("Apologies… could you provide the correct path?"): the next brain tries instead.
+_GAVE_UP = re.compile(r"\b(apolog|sorry|confusion|could you (please )?(provide|give|tell)|correct (file )?path|"
+                      r"seems (there|that) (might|may) (have been|be)|recheck)", re.I)
 _MARKDOWN = re.compile(r"\*\*|__|`|^#+\s*", re.M)   # the answer is spoken, so no **bold** read out loud
 
 
@@ -272,9 +277,11 @@ class HermesBrain:
         return self._fallback
 
     def _to_claude(self, command, chat, recent, progress) -> str:
-        self.history = []   # Claude keeps its own history; start this command clean
         answer = self._claude().handle(command, chat=chat, recent=recent, progress=progress)
         self.last_thinking = getattr(self._claude(), "last_thinking", "") or ""
+        # Claude keeps its own history, but the local models need to know what just happened too, or a follow-up
+        # like "send it again" reaches them with no idea what "it" is.
+        self.history = [{"role": "user", "content": command}, {"role": "assistant", "content": answer}]
         return answer
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
@@ -292,6 +299,9 @@ class HermesBrain:
                 log.info("Routing straight to Claude (needs vision/web/exact search): %r", command[:70])
                 return self._to_claude(command, chat, recent, progress)
 
+            sent = outbox.last_sent()
+            if sent:   # so "send it again" / "send the video" means this file, not a made-up path
+                command += f"\n\n[The last file Jarvis sent to the phone: {sent}]"
             plan = self._plan(original)
             if not plan and self._ensure_server():   # Ollama was down: it's up now, look again
                 self._refresh_installed(force=True)
@@ -341,6 +351,7 @@ class HermesBrain:
         self.history.append({"role": "user", "content": command})
         steps: list[str] = []
         thoughts: list[str] = []
+        failed = False   # did the latest tool call fail?
         started = time.time()
         for _ in range(MAX_TOOL_ROUNDS):
             msg = self._chat(key, model, think)
@@ -358,6 +369,9 @@ class HermesBrain:
                 answer = _MARKDOWN.sub("", content).strip()
                 if not answer:
                     return None   # nothing to say -> the next brain answers properly
+                if (not steps and _PROMISE.search(answer)) or (failed and _GAVE_UP.search(answer)):
+                    log.info("%s promised or gave up without doing it (%r); handing over.", name, answer[:80])
+                    return None
                 self.last_thinking = "\n\n".join(thoughts + ([_steps_thoughts(steps)] if steps else []))
                 log.info("%s answered locally in %.1fs (no tokens).", name, time.time() - started)
                 usage.record_local()
@@ -381,6 +395,7 @@ class HermesBrain:
                     log.exception("tool %s failed", tool)
                     output = f"Error: {e}"
                 log.info("  -> %s", str(output)[:300])
+                failed = str(output).startswith("Error")
                 self.history.append({"role": "tool", "content": str(output)})
         return None   # ran out of rounds -> let Claude take over
 

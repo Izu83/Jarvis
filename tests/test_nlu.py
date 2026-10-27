@@ -73,3 +73,20 @@ def test_reminder_parses_minutes(ran):
     nlu.try_handle("remind me in 20 minutes to check the oven")
     name, args = ran[0]
     assert name == "remind_me" and args["in_minutes"] == 20 and args["message"] == "Check the oven"
+
+
+@pytest.mark.parametrize("text", ["send it again", "okay send me the video", "send it", "resend that please",
+                                  "can you send me the file again"])
+def test_send_it_again_resends_the_last_file(ran, monkeypatch, tmp_path, text):
+    from jarvis import outbox
+    clip = tmp_path / "site.webm"
+    clip.write_bytes(b"v")
+    monkeypatch.setattr(outbox, "last_sent", lambda: str(clip))
+    nlu.try_handle(text)
+    assert ran == [("send_file_to_phone", {"path": str(clip)})]
+
+
+def test_send_it_with_nothing_sent_goes_to_the_brain(ran, monkeypatch):
+    from jarvis import outbox
+    monkeypatch.setattr(outbox, "last_sent", lambda: None)
+    assert nlu.try_handle("send me the video") is None and ran == []

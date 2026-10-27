@@ -107,7 +107,8 @@ which you can also edit by hand.
 - **Activity**: the Activity tab (or Control Center → Recent activity) lists every command (phone or PC mic), its steps and
   the answer. Kept on the PC in `.brain/activity.json`.
 - **Never lost**: if the phone's connection silently dropped, the app reconnects and re-sends (the PC never runs it
-  twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again.
+  twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again. Files Jarvis sends (pictures, videos) wait on
+  the PC until the phone confirms it has them (`.brain/outbox.json`, 3 days), and stay saved in the chat on the phone.
 
 ## Smarter: acting inside apps
 

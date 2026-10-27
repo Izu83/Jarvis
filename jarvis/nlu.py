@@ -163,6 +163,17 @@ def _camera(m, text):
     return approval.run_tool("camera_photo", {})
 
 
+@simple(r"^((ok(ay)?|yes|yeah|yep|please|so|now|just|can you|could you|pls)[,.]? )*(re-?send|send)( me)?"
+        r"( it| that| this| them| the (video|file|picture|photo|pic|clip|recording|screenshot))"
+        r"( again| over| now| here| to (me|my phone))*( please| pls)?[.?!]*$")
+def _resend(m, text):
+    from . import outbox
+    path = outbox.last_sent()
+    if not path:
+        return None   # nothing sent lately: the brain works out what "it" is
+    return tools.run("send_file_to_phone", {"path": path})
+
+
 @simple(r"^(check|read|show)( me)? (my |the )?(e-?mails?|inbox|mail)( please)?[.?!]*$"
         r"|^(do i have|have i got|did i get|are there|any) (any )?(new |unread |important )?(e-?mails?|mail)"
         r"( today)?[.?!]*$")

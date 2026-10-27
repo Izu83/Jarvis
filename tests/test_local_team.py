@@ -139,3 +139,30 @@ def test_local_status(monkeypatch):
     monkeypatch.setitem(hermes.settings, "brain", "claude-code")
     monkeypatch.setattr(hermes, "_status_cache", (0.0, []))
     assert [m["state"] for m in hermes.local_status()] == ["off", "off"]
+
+
+def test_promise_without_acting_is_handed_over(team):
+    """ "Sure, I will send you the video" with no tool run did nothing: Qwen3 gets a go instead."""
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {
+        "hermes3:8b": [say("Sure, I will send you the video.")], "qwen3:8b": [say("Muted.")]})
+    assert handle("mute the pc") == "Muted."
+
+
+def test_giving_up_after_a_failed_tool_is_handed_over(team, monkeypatch):
+    monkeypatch.setattr(hermes.tools, "run", lambda name, args: "Error: path\to\video.mp4 isn't a file.", raising=False)
+    brain, fake, handle, steps = team(["hermes3:8b"], {"hermes3:8b": [
+        call("send_file_to_phone", path="path/to/video.mp4"),
+        say("Apologies for the confusion. Could you please provide the correct file path?")]})
+    assert handle("send the clip") == "claude did it"
+
+
+def test_local_brain_is_told_the_last_file_sent(team, monkeypatch, tmp_path):
+    clip = tmp_path / "site.webm"
+    clip.write_bytes(b"v")
+    monkeypatch.setattr(hermes.outbox, "last_sent", lambda: str(clip))
+    brain, fake, handle, steps = team(["hermes3:8b"], {"hermes3:8b": [say("Sent it.")]})
+    seen = []
+    real_post = hermes.requests.post
+    monkeypatch.setattr(hermes.requests, "post", lambda url, json=None, **kw: seen.append(json) or real_post(url, json=json, **kw))
+    handle("forward that recording")
+    assert str(clip) in seen[0]["messages"][-1]["content"]

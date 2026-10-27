@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import activity, approval, camera, media, modes, pc, push, screens, sysinfo, tools, watchers
+from . import activity, approval, camera, media, modes, outbox, pc, push, screens, sysinfo, tools, watchers
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -83,6 +83,7 @@ class PhoneChannel:
         self._watching = False
         self.asks: dict[str, dict] = {}   # permission prompts waiting for an answer
         self.uploads: dict[str, dict] = {}   # files arriving from the phone in pieces
+        self.last_chat: str | None = None   # the chat of the latest phone command (files sent go there)
         self._soon: dict[str, threading.Timer] = {}   # coalesced state / activity updates
         self._soon_lock = threading.Lock()
         activity.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
@@ -252,7 +253,34 @@ class PhoneChannel:
 
     def push(self, payload: dict) -> None:
         """Send a payload straight to the phone (used by tools via the approval bridge, e.g. file downloads)."""
+        if payload.get("kind") == "file" and payload.get("path"):
+            self.send_file(payload)
+            return
         self._publish(payload)
+
+    def send_file(self, payload: dict) -> None:
+        """A file for the phone goes through the outbox: it's kept until the phone confirms it, so it still arrives
+        if the app is closed right now (it's delivered the moment the app connects, with a notification first)."""
+        item = outbox.add(payload["path"], payload.get("name", ""), payload.get("size", 0),
+                          payload.get("mime", ""), self.last_chat)
+        if self.clients:
+            self.deliver_files()
+        if not self.clients and push.have_subs():
+            what = ("A video" if item["mime"].startswith("video/") else
+                    "A picture" if item["mime"].startswith("image/") else "A file")
+            push.send_async("Jarvis", f"{what} is ready for you: {item['name']}. Open Jarvis to get it.",
+                            "file-" + item["fid"], "./")
+
+    def deliver_files(self, force: bool = False) -> None:
+        """Send every file the phone hasn't confirmed yet (each read fresh from disk)."""
+        if not self.clients:
+            return
+        for item in outbox.due(force):
+            body = outbox.payload(item)
+            if body:
+                log.info("Sending %s to the phone.", item["name"])
+                outbox.mark_sent(item["fid"])
+                self._publish(body)
 
     def ask(self, title: str, detail: str, confirm: str) -> bool:
         """Show an Allow / Don't Allow prompt on the phone and wait for the answer (no answer = no)."""
@@ -302,6 +330,9 @@ class PhoneChannel:
                            step_kind=last[-1]["k"] if last else "")
         elif kind == "sync":
             self.send_state()
+            self.deliver_files(force=True)   # anything that was waiting for the app to open
+        elif kind == "got_file":   # the phone has saved a file: stop re-sending it
+            outbox.done(data.get("fid", ""))
         elif kind == "fetch_reply":   # the app reloaded while a command ran: send it the answer it missed
             entry = activity.by_msg(data.get("msg", ""))
             if entry and entry["status"] in ("done", "error"):
@@ -381,6 +412,7 @@ class PhoneChannel:
             self.reply(msg_id, {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[action]())
         elif data.get("text"):
             log.info("Phone: %r", data["text"])
+            self.last_chat = data.get("chat") or self.last_chat
             self.reply(msg_id, "On it...", done=False)
             text = data["text"]
             files = [f for f in (data.get("files") or []) if isinstance(f, str) and os.path.isfile(f)]

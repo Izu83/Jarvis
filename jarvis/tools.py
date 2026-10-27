@@ -741,7 +741,6 @@ def _email(name: str, args: dict) -> str:
 
 
 def _send_file_to_phone(path: str) -> str:
-    import base64
     import mimetypes
     p = files.resolve(path)
     if not p.is_file():
@@ -749,11 +748,12 @@ def _send_file_to_phone(path: str) -> str:
     size = p.stat().st_size
     if size > 40 * 1024 * 1024:
         return f"{p.name} is {files.fmt_size(size)}; that's too big to send to the phone (limit 40 MB)."
-    data = base64.b64encode(p.read_bytes()).decode()
     mime = mimetypes.guess_type(p.name)[0] or ""   # lets the phone show pictures/videos inline
-    if not approval.push({"kind": "file", "id": "file", "name": p.name, "size": size, "mime": mime, "data": data}):
-        return "I couldn't send it: your phone isn't connected right now."
-    return f"Sent {p.name} ({files.fmt_size(size)}) to your phone."
+    # Only the path: the phone channel reads the file and keeps it in its outbox until the phone confirms it.
+    if not approval.push({"kind": "file", "id": "file", "path": str(p), "name": p.name, "size": size, "mime": mime}):
+        return "I couldn't send it: the phone connection isn't running on this PC."
+    return (f"Sent {p.name} ({files.fmt_size(size)}) to your phone. If the Jarvis app isn't open right now, "
+            "it arrives as soon as the user opens it.")
 
 
 def _delete_paths(args: dict) -> str:
