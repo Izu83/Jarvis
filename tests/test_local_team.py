@@ -45,7 +45,7 @@ def team(monkeypatch):
         monkeypatch.setattr(hermes.tools, "environment_description", lambda: "", raising=False)
         monkeypatch.setattr(hermes.tools, "TOOLS", [], raising=False)
         hermes.settings.update({"ollama_host": "http://127.0.0.1:11434", "hermes_model": "hermes3:8b",
-                                "qwen_model": "qwen3:8b", "hermes_fallback": "claude-code"})
+                                "qwen_model": "qwen3:8b", "hermes_fallback": "claude-code", "local_first": True})
         brain = hermes.HermesBrain()
         brain.claude_got = []
         monkeypatch.setattr(brain, "_to_claude", lambda c, *a: brain.claude_got.append(c) or "claude did it")
@@ -213,3 +213,21 @@ def test_tool_call_written_as_text_is_run(team, monkeypatch):
     monkeypatch.setattr(hermes.tools, "TOOLS", [{"name": "window_action"}], raising=False)
     assert handle("close spotify") == "Closed Spotify."
     assert ran == [("window_action", {"action": "close", "window": "Spotify"})]
+
+
+def test_claude_first_by_default(team, monkeypatch):
+    """Claude does the command; the local team isn't even asked."""
+    import types
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"hermes3:8b": [say("local")]})
+    monkeypatch.setitem(hermes.settings, "local_first", False)
+    monkeypatch.setattr(brain, "_claude", lambda: types.SimpleNamespace(failed=False))
+    assert handle("open spotify and play jazz") == "claude did it" and fake.chats == []
+
+
+def test_local_team_steps_in_when_claude_cant_answer(team, monkeypatch):
+    import types
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"hermes3:8b": [say("Muted.")]})
+    monkeypatch.setitem(hermes.settings, "local_first", False)
+    monkeypatch.setattr(brain, "_claude", lambda: types.SimpleNamespace(failed=True))
+    assert handle("mute") == "Muted."
+    assert ("Brain", "Claude can't answer right now, so the local brain is trying…") in steps

@@ -806,6 +806,7 @@
       <div class="group-foot">Create or change a mode by asking, e.g. "Make a gaming mode with Discord on the vertical monitor and Steam on the main one."</div>
       <div class="group-title">Local brain</div>
       <div class="group" id="localList"><div class="row"><span class="grow">Waiting for your PC…</span></div></div>
+      <div class="group"><label class="row"><span class="grow">Try local models first<span class="sub">Free, but much slower, and they get real tasks wrong. Off = Claude does everything and they only step in when Claude can't answer.</span></span><span class="switch"><input type="checkbox" id="localFirstToggle"><span></span></span></label></div>
       <div class="group-foot">Free models on your PC. Green = online; "in memory" means it answers right away, otherwise the first command takes a few extra seconds to load it.</div>
       <div class="group-title">Tokens</div>
       <div class="group">
@@ -947,7 +948,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-27.4";   // bump together with version.json
+const VERSION = "2026-10-28.1";   // bump together with version.json
 const JNI = "JNIv10";   // Jarvis · Niko · Izu83 · version 10 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -963,6 +964,8 @@ const RELEASES = [
     "Jarvis remembers the conversation now: Hermes, Qwen3 and Claude share one memory, so follow-ups like “close it”, “do it again” or “send that to Ana” work, even after a restart.",
     "Say “remember that…” and Jarvis keeps it for good (people, email addresses, what you like). “Forget…” removes it.",
     "Jarvis can write and send new emails from your Gmail, with attachments, and find people's addresses by name. It always shows you the email and only sends it when you tap Send.",
+    "Much smarter and faster: Claude now does every command itself, start to finish, instead of the small local models trying first and getting stuck. Hermes and Qwen3 only step in if Claude can't answer (Settings › Local brain › Try local models first switches the old way back on).",
+    "“Open Instagram” (or YouTube, Gmail, Drive, TikTok…) opens the website right away, and “open Instagram in Zen” uses that browser.",
   ] },
   { v: "JNIv9", when: "Oct 24, 2026", title: "Every step saved, reminders you can see", notes: [
     "Fixed: after the first message, later messages could get stuck and never run. Jarvis now keeps going no matter what, re-sends a message if your phone's connection quietly dropped, and fetches answers you missed while the app was closed.",
@@ -1932,6 +1935,7 @@ function onState(data) {
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
+  if (typeof data.local_first === "boolean" && document.activeElement !== $("localFirstToggle")) $("localFirstToggle").checked = data.local_first;
   if (data.usage) { const u = data.usage, n = x => (x || 0).toLocaleString();
     $("uClaude").textContent = n(u.claude_calls);
     $("uTokens").textContent = n(u.tokens_total != null ? u.tokens_total : (u.tokens_in || 0) + (u.tokens_out || 0));
@@ -2455,6 +2459,7 @@ $("notifyTest").onclick = async () => {
   track(id, { kind: "quick", timeout: 15000 });   // the PC answers with how many devices it reached
   await post({ type: "push_test", id }).catch(() => fail(id, "Can't reach your PC"));
 };
+$("localFirstToggle").onchange = e => { post({ type: "set", key: "local_first", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Local models first" : "Claude does everything", e.target.checked ? "check" : "sparkles", e.target.checked ? "var(--green)" : "var(--blue)"); };
 $("claudeToggle").onchange = e => { post({ type: "set", key: "use_claude", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Claude on" : "Claude off \u2014 free commands only", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("hotkeyToggle").onchange = e => { post({ type: "set", key: "hotkey_enabled", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Talk shortcut on \u2014 Ctrl + Alt + J" : "Talk shortcut off", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("usageReset").onclick = () => { post({ type: "usage_reset", id: newId() }).catch(() => {}); toast("Usage counter reset", "check", "var(--green)"); };

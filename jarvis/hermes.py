@@ -1,4 +1,9 @@
-"""A free, local brain: two models served by Ollama on this PC, working as a team, with Claude as the backstop.
+"""A free, local brain: two models served by Ollama on this PC, working as a team, with Claude.
+
+By default ("local_first": false) Claude does every command and the local team is the backstop: it steps in when
+Claude can't answer (usage limit, no internet, a crash). The 8B models are too slow and too weak to be first in line
+for real tasks (in practice Qwen3 timed out on most multi-step requests and Hermes looped or made things up), but
+they keep Jarvis working when Claude is out. With "local_first": true the order flips, as described below.
 
 - Hermes (hermes3:8b) is the quick one: simple, single-action commands ("open Spotify", "mute") go to it first.
 - Qwen3 (qwen3:8b) is the thinker: it reasons before acting (its thinking shows up as Jarvis's thoughts), so
@@ -299,39 +304,53 @@ class HermesBrain:
             self.progress = progress
             self.last_used = time.time()
 
+            if not settings.get("local_first", False):
+                answer = self._to_claude(command, chat, recent, progress)
+                if not getattr(self._claude(), "failed", False):
+                    return answer
+                log.info("Claude couldn't answer (%r); the local team tries.", answer[:80])
+                self._say("Claude can't answer right now, so the local brain is trying…")
+                return self._local(original, command, chat, recent) or answer
+
             if _needs_claude(original):
                 log.info("Routing straight to Claude (needs vision/web/exact search): %r", command[:70])
                 return self._to_claude(command, chat, recent, progress)
 
-            sent = outbox.last_sent()
-            if sent:   # so "send it again" / "send the video" means this file, not a made-up path
-                command += f"\n\n[The last file Jarvis sent to the phone: {sent}]"
-            self.background = memory.background(chat, phone_recent=recent)
-            followup = bool(self.background) and bool(_FOLLOWUP.search(original))
-            plan = self._plan(original, followup)
-            if not plan and self._ensure_server():   # Ollama was down: it's up now, look again
-                self._refresh_installed(force=True)
-                plan = self._plan(original, followup)
-            tried = []
-            for key in plan:
-                name = self.team[key][1]
-                if tried:
-                    self._say(f"{tried[-1]} got stuck, so {name} is taking over…")
-                elif key == "qwen":
-                    self._say(f"{name} is thinking it through…")
-                try:
-                    answer = self._run(key, command)
-                    if answer is not None:
-                        return answer
-                    log.info("%s couldn't finish confidently.", name)
-                except requests.RequestException as e:
-                    log.info("%s didn't answer (%s).", name, e)
-                except Exception:
-                    log.exception("%s failed.", name)
-                tried.append(name)
-            if tried:
-                self._say("Handing this one to Claude…")
+            answer = self._local(original, command, chat, recent)
+            if answer is not None:
+                return answer
+            self._say("Handing this one to Claude…")
             return self._to_claude(command, chat, recent, progress)
+
+    def _local(self, original: str, command: str, chat, recent) -> str | None:
+        """Let the local team try, in order. None if none of them could do it."""
+        sent = outbox.last_sent()
+        if sent:   # so "send it again" / "send the video" means this file, not a made-up path
+            command += f"\n\n[The last file Jarvis sent to the phone: {sent}]"
+        self.background = memory.background(chat, phone_recent=recent)
+        followup = bool(self.background) and bool(_FOLLOWUP.search(original))
+        plan = self._plan(original, followup)
+        if not plan and self._ensure_server():   # Ollama was down: it's up now, look again
+            self._refresh_installed(force=True)
+            plan = self._plan(original, followup)
+        tried = []
+        for key in plan:
+            name = self.team[key][1]
+            if tried:
+                self._say(f"{tried[-1]} got stuck, so {name} is taking over…")
+            elif key == "qwen":
+                self._say(f"{name} is thinking it through…")
+            try:
+                answer = self._run(key, command)
+                if answer is not None:
+                    return answer
+                log.info("%s couldn't finish confidently.", name)
+            except requests.RequestException as e:
+                log.info("%s didn't answer (%s).", name, e)
+            except Exception:
+                log.exception("%s failed.", name)
+            tried.append(name)
+        return None
 
     def _say(self, text: str) -> None:
         """A step pill showing which brain is on it, so you can see the team at work."""

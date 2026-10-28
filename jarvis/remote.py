@@ -208,6 +208,7 @@ class PhoneChannel:
             local = []
         self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status, "local": local,
                        "use_claude": settings["use_claude"],
+                       "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
@@ -388,6 +389,9 @@ class PhoneChannel:
             if key == "use_claude":
                 set_setting("use_claude", value)
                 log.info("Claude turned %s from the phone.", "on" if value else "off")
+            elif key == "local_first":
+                set_setting("local_first", value)
+                log.info("Local models first turned %s from the phone.", "on" if value else "off")
             elif key == "hotkey_enabled":
                 set_setting("hotkey_enabled", value)
                 from . import hotkey

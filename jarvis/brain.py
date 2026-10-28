@@ -80,6 +80,21 @@ look_at_screen. Then give a real, specific review — strengths, issues, concret
 see part of it".
 - Timed reminders: remind_me for "remind me at 10:53", "notify me in 20 minutes", "call me at 7" (call=true). These reach the phone even when the app is closed. You CAN schedule notifications; never say you can't.
 - You are the user's stand-in at this PC: if a request is doable with keyboard, mouse, screen and PowerShell, do it rather than saying you can't. Only stop for things that need their password, money or explicit consent.
+- Do the whole job in ONE go. The user wants to say a task once and have it done: never stop halfway to ask \
+"would you like me to…?" or hand them steps to do themselves when you could do them. When a detail is missing, \
+choose a sensible default (file name, the Desktop or Documents folder, a subject line) and mention what you chose. \
+Ask only when a wrong guess would matter (who to send something to, spending money, deleting their things).
+- Websites and web apps (Instagram, Google Drive, Gmail on the web, YouTube, any site): open the URL with \
+open_target (the user's browsers: Opera is the default, Zen is installed too), then look_at_screen and act with \
+mouse_click / type_text / press_keys, looking again after each important step. They are signed in already in their \
+browser. To upload a file on a website (e.g. Drive's New > File upload), click the upload control, then in the \
+Windows file dialog type the file's full path into the File name box and press Enter.
+- Making things: write_file creates any text file (code, notes, HTML, CSV, Markdown). For anything else (convert, \
+zip, resize, Office files, downloads), write a script and run it with run_powershell. If the task needs a program \
+that isn't installed, install it with `winget install --id <Id> -e --accept-source-agreements \
+--accept-package-agreements` and say you did.
+- Be fast: fewest steps that work, independent tools in one turn, ui_list before screenshots. Reply in the user's \
+language.
 - Modes are saved layouts the user names ("work mode"). "<name> mode" means run_mode. When the user \
 describes a new mode or a change to one, build it with save_mode (list_modes first when editing) and say what you saved.
 
@@ -106,6 +121,7 @@ def _drives() -> list[str]:
 # is given the recent conversation from memory.py, so nothing the user said is forgotten.
 IDLE_RESET_SECONDS = 300
 MAX_TOOL_ROUNDS = 12
+TASK_SECONDS = 600   # a real task (build something, fill in a website, record a video) may take a few minutes
 
 
 STEP_LABELS = {
@@ -264,6 +280,7 @@ class ClaudeCodeBrain:
             "env": {k: v for k, v in os.environ.items() if k.startswith("JARVIS_APPROVAL_")},
         }}}), encoding="utf-8")
         self.lock = threading.Lock()
+        self.failed = False   # the last command got no real answer (limit, crash, timeout): a backup brain may try
         self.proc: subprocess.Popen | None = None
         self.events: queue.Queue = queue.Queue()
         self.commands = 0
@@ -364,6 +381,7 @@ class ClaudeCodeBrain:
         narration: list[str] = []    # text the model writes while working
         steps: list[str] = []        # the actions it took
         message = {"type": "user", "message": {"role": "user", "content": command}}
+        self.failed = True   # until a proper answer arrives
         # Drop anything left over from the previous command (a late event, a stray result). Otherwise this command
         # would be "answered" by the old result and its own answer would land on the NEXT command, one step behind.
         stale = 0
@@ -384,12 +402,13 @@ class ClaudeCodeBrain:
         except OSError:
             self._restart()
             return "My Claude Code session crashed; I restarted it. Please try again."
-        deadline = time.time() + 180
+        deadline = time.time() + TASK_SECONDS
         while True:
             try:
                 event = self.events.get(timeout=max(1, deadline - time.time()))
             except queue.Empty:
                 self._restart()
+                self.failed = False   # it was working, just too long: the weaker local models won't do better
                 return "That took too long, so I stopped."
             if event is None:
                 self._spawn()
@@ -424,6 +443,7 @@ class ClaudeCodeBrain:
             if event.get("is_error"):
                 log.error("Claude Code error: %s", event.get("result"))
                 return event.get("result") or "Claude Code reported an error (maybe a usage limit)."
+            self.failed = False
             return (event.get("result") or "Done.").strip()
 
 
@@ -443,6 +463,7 @@ class ApiBrain:
         self.last_used = 0.0
         self.seen = 0.0
         self.facts_seen = 0.0
+        self.failed = False
         self.last_thinking = ""
         self.lock = threading.Lock()
 
@@ -456,8 +477,11 @@ class ApiBrain:
             command = self._with_memory(command, chat, recent, fresh=not self.history)
             self.last_used = time.time()
             anthropic = self.anthropic
+            self.failed = True
             try:
-                return self._run(command)
+                answer = self._run(command)
+                self.failed = False
+                return answer
             except anthropic.AuthenticationError:
                 self.history = []
                 return "My API key was rejected. Check ANTHROPIC_API_KEY in the .env file."

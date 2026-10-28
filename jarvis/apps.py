@@ -12,6 +12,60 @@ from . import windows as win
 
 _start_apps: list[dict] | None = None
 
+# Web apps people "open" like programs. When no installed app matches, "open instagram" opens the site instead.
+SITES = {
+    "instagram": "https://www.instagram.com/", "facebook": "https://www.facebook.com/",
+    "messenger": "https://www.messenger.com/", "youtube": "https://www.youtube.com/",
+    "youtube music": "https://music.youtube.com/", "gmail": "https://mail.google.com/",
+    "google": "https://www.google.com/", "google drive": "https://drive.google.com/", "drive": "https://drive.google.com/",
+    "google docs": "https://docs.google.com/", "google sheets": "https://sheets.google.com/",
+    "google slides": "https://slides.google.com/", "google calendar": "https://calendar.google.com/",
+    "google maps": "https://maps.google.com/", "maps": "https://maps.google.com/",
+    "google photos": "https://photos.google.com/", "google translate": "https://translate.google.com/",
+    "tiktok": "https://www.tiktok.com/", "twitter": "https://x.com/", "x": "https://x.com/",
+    "reddit": "https://www.reddit.com/", "twitch": "https://www.twitch.tv/", "netflix": "https://www.netflix.com/",
+    "whatsapp": "https://web.whatsapp.com/", "whatsapp web": "https://web.whatsapp.com/",
+    "telegram": "https://web.telegram.org/", "linkedin": "https://www.linkedin.com/",
+    "pinterest": "https://www.pinterest.com/", "snapchat": "https://web.snapchat.com/",
+    "github": "https://github.com/", "chatgpt": "https://chatgpt.com/", "claude.ai": "https://claude.ai/",
+    "outlook": "https://outlook.live.com/", "onedrive": "https://onedrive.live.com/", "amazon": "https://www.amazon.com/",
+    "ebay": "https://www.ebay.com/", "wikipedia": "https://www.wikipedia.org/", "canva": "https://www.canva.com/",
+    "figma": "https://www.figma.com/", "notion": "https://www.notion.so/", "dropbox": "https://www.dropbox.com/",
+    "soundcloud": "https://soundcloud.com/", "kick": "https://kick.com/",
+}
+
+# Browsers that "open X in <browser>" can name, by the paths they install to.
+BROWSERS = {
+    "zen": [r"%ProgramFiles%\Zen Browser\zen.exe"],
+    "opera gx": [r"%LOCALAPPDATA%\Programs\Opera GX\opera.exe", r"%LOCALAPPDATA%\Programs\Opera GX\launcher.exe"],
+    "opera": [r"%LOCALAPPDATA%\Programs\Opera\opera.exe", r"%LOCALAPPDATA%\Programs\Opera\launcher.exe"],
+    "chrome": [r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
+               r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"],
+    "edge": [r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
+             r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"],
+    "firefox": [r"%ProgramFiles%\Mozilla Firefox\firefox.exe"],
+    "brave": [r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\Application\brave.exe",
+              r"%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe"],
+}
+
+
+def site_url(name: str) -> str | None:
+    low = name.lower().strip().removeprefix("the ").removesuffix(" website").removesuffix(" site").strip()
+    return SITES.get(low)
+
+
+def open_url(url: str, browser: str = "") -> str:
+    """Open a web page, in a named browser if given ("zen", "opera", ...) and installed, else the default one."""
+    key = browser.lower().replace("browser", "").replace("google", "").strip()
+    for path in BROWSERS.get(key, []):
+        exe = os.path.expandvars(path)
+        if os.path.isfile(exe):
+            subprocess.Popen([exe, url])
+            return f"Opened {url} in {browser.strip().title()}."
+    webbrowser.open(url)
+    return f"Opened {url} in the browser."
+
+
 SKIP_DIRS = {"$recycle.bin", "system volume information", "windows", "node_modules", ".git",
              "program files", "program files (x86)", "programdata", "appdata", "__pycache__", ".venv"}
 
@@ -74,7 +128,11 @@ def launch_app(name: str, skip: set[int] = frozenset()) -> tuple[str, win.Window
     """Open an app (or reuse its open window). Returns a message and the window, if found."""
     app = find_app(name)
     if not app:
-        return f"Error: no installed app matches '{name}'.", None
+        url = site_url(name)
+        if url:   # "instagram" isn't installed, but it's a website
+            return open_url(url), None
+        return (f"Error: no installed app matches '{name}'. If it's a website or web app, open its URL with "
+                "open_target; if it's a program the user wants, it can be installed with winget."), None
     hints = _app_hints(name, app)
 
     # Already running? Bring it back instead of starting a second copy.

@@ -48,6 +48,10 @@ sys.modules["jarvis.windows"] = windows
 apps = types.ModuleType("jarvis.apps")
 apps.find_app = lambda name: None   # no installed apps: "open X" falls through to Claude
 apps.find_folder = lambda name, root="": []
+apps.SITES = {"instagram": "https://www.instagram.com/"}
+apps.site_url = lambda name: apps.SITES.get(name.lower().strip())
+apps.opened = []   # (url, browser) pairs the parser opened
+apps.open_url = lambda url, browser="": apps.opened.append((url, browser)) or f"Opened {url}."
 sys.modules["jarvis.apps"] = apps
 
 pc = types.ModuleType("jarvis.pc")

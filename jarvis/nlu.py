@@ -234,6 +234,13 @@ def _target_window(piece: str, opened: set[int]):
     low = p.lower()
     if low in FOLDER_WORDS:
         return apps.launch_folder("", skip=opened)
+    # "instagram in the zen browser" -> that site in that browser
+    inb = re.match(r"(.+?)\s+(?:in|on|with|using)\s+(?:the\s+|my\s+)?(zen|opera gx|opera|google chrome|chrome|edge|"
+                   r"firefox|brave)(?:\s+browser)?$", low)
+    if inb:
+        site = p[:len(inb.group(1))].strip()
+        url = apps.site_url(site) or (("" if site.startswith("http") else "https://") + site if "." in site else None)
+        return (apps.open_url(url, inb.group(2)), None) if url else (None, None)
     if low.startswith(("http://", "https://", "www.")) or re.search(r"\.(com|net|org|io|gg|tv)\b", low):
         url = p if p.startswith("http") else "https://" + p.lstrip("/")
         return apps.open_target(url), None
@@ -249,6 +256,9 @@ def _target_window(piece: str, opened: set[int]):
     app = apps.find_app(p)
     if app:
         return apps.launch_app(p, skip=opened)
+    url = apps.site_url(p)
+    if url:   # not an installed app, but a website people "open" like one
+        return apps.open_url(url), None
     return None, None   # unknown -> signal fallback to Claude
 
 

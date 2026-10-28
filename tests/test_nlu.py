@@ -90,3 +90,14 @@ def test_send_it_with_nothing_sent_goes_to_the_brain(ran, monkeypatch):
     from jarvis import outbox
     monkeypatch.setattr(outbox, "last_sent", lambda: None)
     assert nlu.try_handle("send me the video") is None and ran == []
+
+
+def test_open_a_website_that_isnt_an_app():
+    from jarvis import apps
+    apps.opened.clear()
+    assert nlu.try_handle("open instagram") is not None
+    assert nlu.try_handle("open instagram in the zen browser") is not None
+    assert nlu.try_handle("open example.org in chrome") is not None
+    assert apps.opened == [("https://www.instagram.com/", ""), ("https://www.instagram.com/", "zen"),
+                           ("https://example.org", "chrome")]
+    assert nlu.try_handle("open my homework thing") is None   # unknown -> Claude

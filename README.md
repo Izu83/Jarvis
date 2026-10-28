@@ -25,6 +25,9 @@ Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─�
      step pills show which one is working ("Brain · Qwen3 is thinking it through…"). On an 8 GB GPU set the user
      environment variables `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` (then restart Ollama) so Qwen3
      with the 16k context fits fully on the GPU; without them part of it runs on the CPU and is too slow.
+     By default (`"local_first": false`) Claude does every command and the local team only steps in when Claude
+     can't answer (usage limit, offline, crash): in real use the 8B models were too slow and too unreliable to go
+     first. Settings › Local brain › **Try local models first** (or `"local_first": true`) switches to the order above.
    - `"api"`: a paid key from https://console.anthropic.com/settings/keys in `.env` as `ANTHROPIC_API_KEY=`.
 2. **Dependencies** (already done on this PC):
    ```
