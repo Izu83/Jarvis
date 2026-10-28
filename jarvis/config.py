@@ -23,10 +23,14 @@ DEFAULTS = {
     # over when Hermes gets stuck. "" = Hermes alone. Bigger/smaller: "qwen3:14b" (needs ~12 GB VRAM), "qwen3:4b".
     "qwen_model": "qwen3:8b",
     "local_auto_pull": True,   # download missing local models through Ollama automatically (a few GB, once)
-    "local_ctx": 16384,
+    "local_ctx": 16384,        # context window for the local models (Jarvis's tool list alone is ~6.5k tokens)
     # false = Claude does every command and the local models only step in when Claude can't answer (usage limit,
     # offline); true = the local models try first (free, but much slower and they get real tasks wrong).
-    "local_first": False,        # context window for the local models (Jarvis's tool list alone is ~6.5k tokens)
+    "local_first": False,
+    # Personality and memory (also set on the phone: Settings > Memory). humour: "off", "light" or "lots".
+    # memory_span: how far back Jarvis rereads the conversation: "short" (2 h), "normal" (12 h), "long" (3 days), "max".
+    "humour": "light",
+    "memory_span": "normal",
     # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
     # anything it doesn't understand, it says so instead of asking Claude.
     "use_claude": True,

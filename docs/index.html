@@ -33,13 +33,16 @@
     --wall-hue: #3a6ed2;
     /* surfaces — DARK theme (default) */
     --base: #0a0b11;
-    --glass: color-mix(in srgb, #5a5e72 26%, transparent); --glass-strong: rgba(22,23,29,.76); --card: rgba(255,255,255,.052);
-    --rim-hi: rgba(255,255,255,.26); --rim-lo: rgba(255,255,255,.045);
+    --glass: color-mix(in srgb, #6a6f88 18%, transparent); --glass-strong: rgba(22,23,29,.74); --card: rgba(255,255,255,.055);
+    --rim-hi: rgba(255,255,255,.34); --rim-mid: rgba(255,255,255,.14); --rim-lo: rgba(255,255,255,.045);
+    --spec: rgba(255,255,255,.62); --spec-lo: rgba(255,255,255,.2); --inner-glow: rgba(255,255,255,.13); --edge: rgba(255,255,255,.09);
+    --sheen: rgba(255,255,255,.13); --touch-a: .26;
     --shade: 0 16px 44px -16px rgba(0,0,0,.6), 0 3px 12px rgba(0,0,0,.26);
     --sep: rgba(255,255,255,.08); --fill: rgba(132,134,150,.18); --select: var(--accent-soft);
     --bubble: rgba(52,54,64,.64); --bubble-line: rgba(255,255,255,.07);
     --ambient-bg:
-      radial-gradient(90vmax 66vmax at 50% -14%, color-mix(in srgb, var(--wall-hue) 26%, transparent), transparent 60%),
+      radial-gradient(90vmax 66vmax at 50% -14%, color-mix(in srgb, var(--wall-hue) 30%, transparent), transparent 60%),
+      radial-gradient(52vmax 44vmax at -12% 58%, color-mix(in srgb, var(--wall-hue) 15%, transparent), transparent 64%),
       radial-gradient(58vmax 52vmax at 102% 104%, var(--accent-soft), transparent 62%);
     /* motion */
     --spring: cubic-bezier(.33,1.3,.5,1); --ease: cubic-bezier(.22,.74,.2,1); --ios: cubic-bezier(.32,.72,0,1);
@@ -48,6 +51,10 @@
   html[data-theme="light"] { color-scheme: light; --label: #0b0b0f; --label2: rgba(60,60,67,.6); --label3: rgba(60,60,67,.3); --base: #eef0f6; --glass: rgba(255,255,255,.55); --glass-strong: rgba(250,250,253,.86); --card: rgba(255,255,255,.68); --rim-hi: rgba(255,255,255,.95); --rim-lo: rgba(255,255,255,.3); --shade: 0 14px 36px -14px rgba(30,40,80,.18), 0 2px 8px rgba(30,40,80,.06); --sep: rgba(60,60,67,.13); --fill: rgba(120,120,128,.14); --bubble: rgba(255,255,255,.86); --bubble-line: rgba(0,0,0,.05); --ambient-bg: radial-gradient(90vmax 66vmax at 50% -12%, color-mix(in srgb, var(--wall-hue) 34%, #ffffff), transparent 60%), radial-gradient(60vmax 52vmax at 102% 104%, color-mix(in srgb, var(--accent) 22%, #ffffff), transparent 62%); }
   @media (prefers-color-scheme: light) {
     html[data-theme="auto"] { color-scheme: light; --label: #0b0b0f; --label2: rgba(60,60,67,.6); --label3: rgba(60,60,67,.3); --base: #eef0f6; --glass: rgba(255,255,255,.55); --glass-strong: rgba(250,250,253,.86); --card: rgba(255,255,255,.68); --rim-hi: rgba(255,255,255,.95); --rim-lo: rgba(255,255,255,.3); --shade: 0 14px 36px -14px rgba(30,40,80,.18), 0 2px 8px rgba(30,40,80,.06); --sep: rgba(60,60,67,.13); --fill: rgba(120,120,128,.14); --bubble: rgba(255,255,255,.86); --bubble-line: rgba(0,0,0,.05); --ambient-bg: radial-gradient(90vmax 66vmax at 50% -12%, color-mix(in srgb, var(--wall-hue) 34%, #ffffff), transparent 60%), radial-gradient(60vmax 52vmax at 102% 104%, color-mix(in srgb, var(--accent) 22%, #ffffff), transparent 62%); }
+  }
+  html[data-theme="light"] { --glass: rgba(255,255,255,.4); --rim-mid: rgba(255,255,255,.7); --spec: #fff; --spec-lo: rgba(255,255,255,.75); --inner-glow: rgba(255,255,255,.55); --edge: rgba(0,0,0,.06); --sheen: rgba(255,255,255,.5); --touch-a: .55; }
+  @media (prefers-color-scheme: light) {
+    html[data-theme="auto"] { --glass: rgba(255,255,255,.4); --rim-mid: rgba(255,255,255,.7); --spec: #fff; --spec-lo: rgba(255,255,255,.75); --inner-glow: rgba(255,255,255,.55); --edge: rgba(0,0,0,.06); --sheen: rgba(255,255,255,.5); --touch-a: .55; }
   }
   /* ---------- wallpapers: just a colour tint; the theme sets the surfaces ---------- */
   html[data-wall="midnight"] { --wall-hue: #3a6ed2; }
@@ -77,23 +84,35 @@
     transition: background .5s var(--ease);
   }
 
-  /* ---------- Liquid Glass ---------- */
+  /* ---------- Liquid Glass ----------
+     A clear lens rather than frosted plastic: a light blur with strong saturation so the colours behind show through,
+     a bright specular edge top-left and a softer bounce light bottom-right, an inner glow that gives the glass some
+     thickness, and a highlight that lights up under your finger (--mx/--my, set on touch in the script). */
+  @property --glow { syntax: "<number>"; inherits: true; initial-value: 0; }
   .glass {
     position: relative; isolation: isolate; background: var(--glass);
-    -webkit-backdrop-filter: blur(26px) saturate(150%) brightness(1.02); backdrop-filter: blur(26px) saturate(150%) brightness(1.02);
-    box-shadow: var(--shade), inset 0 1px 0 var(--rim-hi), inset 0 -1px 0 var(--rim-lo), inset 0 0 0 .5px rgba(255,255,255,.1);
+    -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.06); backdrop-filter: blur(20px) saturate(190%) brightness(1.06);
+    box-shadow: var(--shade),
+      inset 1.5px 1.5px 1px -1px var(--spec), inset -1px -1px 1px -.5px var(--spec-lo),
+      inset 0 0 20px -6px var(--inner-glow), inset 0 0 0 .5px var(--edge);
     transform: translateZ(0);
   }
   .glass::before {
     content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: -1;
-    background: linear-gradient(150deg, var(--rim-hi), transparent 40%, transparent 72%, color-mix(in srgb, var(--rim-hi) 60%, transparent));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .7;
+    background: linear-gradient(135deg, var(--rim-hi), transparent 30%, transparent 66%, var(--rim-mid));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   }
   .glass::after {
     content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
-    background: radial-gradient(120% 64% at 28% -12%, rgba(255,255,255,.18), transparent 56%);
+    background:
+      radial-gradient(150px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / calc(var(--glow) * var(--touch-a))), transparent 72%),
+      radial-gradient(120% 70% at 30% -18%, var(--sheen), transparent 55%);
+    transition: --glow .55s var(--ease);
   }
+  .glass.touching { --glow: 1; }
+  .glass.touching::after { transition-duration: .08s; }
   .glass.strong { background: var(--glass-strong); }
+  .glass.strong::after { background: radial-gradient(120% 40% at 30% -10%, var(--sheen), transparent 50%); }
   .press { transition: transform .4s var(--spring), filter .2s, opacity .2s; }
   .press:active { transform: scale(.955); filter: brightness(1.06); transition-duration: .1s; }
   /* ---------- Appearance (wallpaper + accent pickers) ---------- */
@@ -214,9 +233,11 @@
   /* floating chips under the top bar: "working" + upcoming reminders */
   .statusbar { display: flex; justify-content: center; gap: 6px; padding: 0 4px 10px; }
   .statusbar .pill { min-width: 0; flex: 0 1 auto; max-width: 100%; box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 .5px var(--bubble-line); }
-  /* the tab bar at the very bottom */
-  .tabbar { display: flex; justify-content: space-around; align-items: flex-start; margin: 8px -10px 0; padding: 6px 4px 0; border-top: .5px solid var(--sep); }
-  .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--label2); padding: 0 2px; }
+  /* the tab bar at the very bottom: a floating glass capsule, the chat scrolls underneath it */
+  .tabbar { display: flex; justify-content: space-around; align-items: center; margin: 10px 2px 0; padding: 5px; border-radius: 34px; }
+  .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--label); padding: 6px 2px 5px; border-radius: 26px; transition: background .3s var(--ease), transform .4s var(--spring); }
+  .tab:active { background: var(--fill); }
+  .tab .tl { color: var(--label2); }
   .tab .ti { position: relative; width: 28px; height: 28px; display: grid; place-items: center; }
   .tab svg.i { width: 25px; height: 25px; stroke-width: 1.9; }
   .tab .ti .avatar { width: 27px; height: 27px; box-shadow: 0 0 0 1.5px var(--sep); }
@@ -322,9 +343,11 @@
   /* the tab bar sits just above the home indicator. --vgap is how far short of the screen bottom iOS stops the page
      in Home Screen mode (an iOS bug); that space already clears the indicator, so it comes off the padding. */
   .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; padding: 48px 10px max(6px, calc(env(safe-area-inset-bottom) - 8px - var(--vgap, 0px))); background: transparent; }
-  .dock::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--base);
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-    -webkit-mask: linear-gradient(to top, #000 calc(100% - 46px), transparent); mask: linear-gradient(to top, #000 calc(100% - 46px), transparent); }
+  /* a soft fade behind the floating glass (not a solid panel), so the chat shows through the glass as it scrolls */
+  .dock::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(to top, color-mix(in srgb, var(--base) 82%, transparent), color-mix(in srgb, var(--base) 45%, transparent) 62%, transparent);
+    -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+    -webkit-mask: linear-gradient(to top, #000 calc(100% - 60px), transparent); mask: linear-gradient(to top, #000 calc(100% - 60px), transparent); }
   .shelf { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 12px; scrollbar-width: none; -webkit-mask: linear-gradient(90deg, #000 92%, transparent); mask: linear-gradient(90deg, #000 92%, transparent); }
   .shelf::-webkit-scrollbar { display: none; }
   .tile { flex: none; height: 40px; border-radius: 20px; padding: 0 14px 0 6px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.24px; }
@@ -446,7 +469,24 @@
   .x-btn svg.i { width: 15px; height: 15px; stroke-width: 2.6; }
   .group-title { font-size: 13px; color: var(--label2); margin: 22px 34px 7px; letter-spacing: -.08px; }
   .group-foot { font-size: 13px; color: var(--label2); margin: 7px 34px 0; line-height: 18px; letter-spacing: -.08px; }
-  .group { margin: 0 16px; border-radius: 22px; background: var(--card); overflow: hidden; box-shadow: inset 0 1px 0 var(--rim-lo); }
+  .group { margin: 0 16px; border-radius: 22px; background: var(--card); overflow: hidden; box-shadow: inset 0 1px 0 var(--rim-lo), inset 0 0 0 .5px var(--edge); }
+  /* ---------- Settings › Memory ---------- */
+  .mem-about { padding: 14px 16px 12px; }
+  .mem-about textarea { display: block; width: 100%; min-height: 104px; border: 0; outline: 0; resize: none; background: var(--fill); border-radius: 14px; padding: 11px 13px; color: var(--label); font: inherit; font-size: 16px; line-height: 21px; letter-spacing: -.2px; }
+  .mem-about textarea::placeholder { color: var(--label2); }
+  .mem-foot { display: flex; align-items: center; gap: 10px; min-height: 30px; margin-top: 8px; font-size: 13px; color: var(--label2); }
+  .mem-foot span { flex: 1; }
+  .mini { height: 30px; padding: 0 15px; border-radius: 15px; background: var(--accent-grad); color: #fff; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px -4px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.35); }
+  #factList { max-height: 360px; overflow-y: auto; }
+  #factList .row.leaving { opacity: .3; pointer-events: none; transition: opacity .2s; }
+  .fact { font-size: 15px; line-height: 20px; overflow-wrap: anywhere; }
+  .fx { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--label2); flex: none; }
+  .fx svg.i { width: 13px; height: 13px; stroke-width: 2.6; }
+  .add-fact { color: var(--accent); }
+  .add-fact svg.i { width: 20px; height: 20px; }
+  .add-fact input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--label); font: inherit; font-size: 17px; padding: 14px 0; }
+  .add-fact input::placeholder { color: var(--label2); }
+  .sub-only { color: var(--label2); font-size: 15px; }
   .row { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 18px; position: relative; width: 100%; text-align: left; }
   .row + .row::before { content: ""; position: absolute; top: 0; left: 18px; right: 0; border-top: .5px solid var(--sep); }
   .row .grow { flex: 1; padding: 13px 0; min-width: 0; }
@@ -752,7 +792,7 @@
     </div>
   </div>
   <!-- iOS-style tab bar: everything you navigate to lives down here, nothing at the top of the screen -->
-  <nav class="tabbar" id="tabbar" aria-label="Jarvis">
+  <nav class="tabbar glass" id="tabbar" aria-label="Jarvis">
     <button class="tab press" id="menuBtn" aria-label="Chats"><span class="ti"><svg class="i"><use href="#i-chat"/></svg><span class="badge-dot" id="menuBadge" hidden></span></span><span class="tl">Chats</span></button>
     <button class="tab press" id="titlePill" aria-label="Your PC"><span class="ti"><svg class="i"><use href="#i-display"/></svg><span class="dot" id="dot"></span></span><span class="tl" id="status">Connecting…</span></button>
     <button class="tab press" id="newBtn" aria-label="New chat"><span class="ti"><svg class="i"><use href="#i-compose"/></svg></span><span class="tl">New</span></button>
@@ -801,6 +841,25 @@
         <div class="opt-label" style="margin-top: 17px;">Accent</div>
         <div class="swatches" id="accents"></div>
       </div>
+      <div class="group-title">Memory</div>
+      <div class="group mem-about">
+        <div class="opt-label">About me</div>
+        <textarea id="aboutText" rows="4" maxlength="4000" placeholder="Your name, what you do, people Jarvis should know, how you like your answers…"></textarea>
+        <div class="mem-foot"><span id="aboutState">Jarvis reads this before every conversation.</span><button class="mini press" id="aboutSave" hidden>Save</button></div>
+      </div>
+      <div class="group" style="margin-top:12px; padding: 15px 16px 17px;">
+        <div class="opt-label">Humour</div>
+        <div class="segment" id="humourSeg"></div>
+        <div class="opt-label" style="margin-top: 17px;">Remembers the conversation for</div>
+        <div class="segment" id="spanSeg"></div>
+      </div>
+      <div class="group-title">Things Jarvis remembers</div>
+      <div class="group" id="factList"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
+      <div class="group" style="margin-top:12px">
+        <label class="row add-fact"><svg class="i"><use href="#i-plus"/></svg><input id="factAdd" placeholder="Add something to remember" enterkeyhint="done" autocomplete="off"></label>
+        <button class="row btn danger" id="memClear">Forget Recent Conversations</button>
+      </div>
+      <div class="group-foot">Jarvis also saves things you mention by itself, like names, people and what you like. Tap × to delete one. Forgetting conversations keeps About me and these facts.</div>
       <div class="group-title">Modes</div>
       <div class="group" id="modeList"></div>
       <div class="group-foot">Create or change a mode by asking, e.g. "Make a gaming mode with Discord on the vertical monitor and Steam on the main one."</div>
@@ -948,10 +1007,20 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-28.1";   // bump together with version.json
-const JNI = "JNIv10";   // Jarvis · Niko · Izu83 · version 10 — Jarvis's own release name
+const VERSION = "2026-10-28.2";   // bump together with version.json
+const JNI = "JNIv11";   // Jarvis · Niko · Izu83 · version 11 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv11", when: "Oct 28, 2026", title: "Clearer glass, a memory you control, and a sense of humour", notes: [
+    "New Liquid Glass: clearer glass that lets the colours behind it through, a bright edge that catches the light, and a glow under your finger when you tap it.",
+    "The tab bar is now a floating glass capsule, and your chat scrolls underneath it.",
+    "New Settings › Memory: write a few lines About me (your name, what you do, people Jarvis should know, how you like your answers) and Jarvis keeps it in mind in every conversation.",
+    "See everything Jarvis remembers about you, delete anything with one tap, or add something yourself.",
+    "Choose how far back Jarvis remembers the conversation (2 hours up to 2 weeks), or make it forget recent conversations.",
+    "Jarvis now saves things you mention by itself (names, people, what you like) without being asked.",
+    "Jarvis has a touch of dry humour now. Settings › Memory › Humour turns it off, or up to Lots.",
+    "On your PC, Jarvis runs only in the taskbar tray: no black window. Right-click the tray icon to restart it, open the log or quit.",
+  ] },
   { v: "JNIv10", when: "Oct 27, 2026", title: "Everything at your thumb + a two-brain local team", notes: [
     "New look: nothing at the top any more. A tab bar at the bottom, like most iPhone apps: Chats, Your PC, New, Activity and You.",
     "The Working and Reminder chips, warnings and little notices all show up down by the message box now.",
@@ -1730,6 +1799,7 @@ async function onMessage(text) {
     try { data = await openJson(text); } catch { return; }
     lastRx = Date.now();
     if (data.kind === "state") { onState(data); return; }
+    if (data.kind === "memory") { onMemory(data); return; }
     if (data.kind === "activity") { onActivity(data.activity, data.watches); return; }
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
@@ -2369,8 +2439,9 @@ $("newBtn").onclick = () => newChat(chatById(db.current)?.messages.length ? chat
 $("drawerNewBtn").onclick = () => newChat();
 $("newGroupBtn").onclick = createGroup;
 $("search").oninput = renderSidebar;
-$("profileBtn").onclick = () => openSheet("sheet");
-$("meRow").onclick = () => { closeDrawer(); openSheet("sheet"); };
+const openProfile = () => { openSheet("sheet"); post({ type: "memory_get", id: newId() }).catch(() => {}); };
+$("profileBtn").onclick = openProfile;
+$("meRow").onclick = () => { closeDrawer(); openProfile(); };
 $("titlePill").onclick = openControl;
 $("actTab").onclick = openActivity;
 $("versionLabel").textContent = VERSION;
@@ -2459,6 +2530,85 @@ $("notifyTest").onclick = async () => {
   track(id, { kind: "quick", timeout: 15000 });   // the PC answers with how many devices it reached
   await post({ type: "push_test", id }).catch(() => fail(id, "Can't reach your PC"));
 };
+// ================= Settings › Memory: About me, humour, how far back, and the saved facts =================
+const HUMOURS = [["off", "Off"], ["light", "A little"], ["lots", "Lots"]];
+const SPANS = [["short", "2 hours"], ["normal", "12 hours"], ["long", "3 days"], ["max", "2 weeks"]];
+let mem = null;
+function segmentOf(box, items, sel, pick) {
+  box.innerHTML = "";
+  for (const [id, name] of items) {
+    const b = document.createElement("button");
+    b.className = "press" + (id === sel ? " sel" : "");
+    b.textContent = name;
+    b.onclick = () => { box.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b)); pick(id); };
+    box.append(b);
+  }
+}
+function memSet(change, msg) {
+  post({ type: "memory_set", ...change, id: newId() })
+    .then(() => msg && toast(msg, "check", "var(--green)"))
+    .catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+}
+function aboutDirty(on) {
+  $("aboutSave").hidden = !on;
+  $("aboutState").textContent = on ? "Not saved yet" : "Jarvis reads this before every conversation.";
+}
+function onMemory(d) {
+  mem = d;
+  if (document.activeElement !== $("aboutText")) { $("aboutText").value = d.about || ""; aboutDirty(false); }
+  segmentOf($("humourSeg"), HUMOURS, d.humour, id => memSet({ humour: id },
+    id === "off" ? "Strictly business from now on" : id === "lots" ? "Comedy mode on" : "A touch of humour it is"));
+  segmentOf($("spanSeg"), SPANS, d.span, id => memSet({ span: id }, "Saved"));
+  const list = $("factList"); list.innerHTML = "";
+  if (!d.facts?.length) list.innerHTML = '<div class="row"><span class="grow sub-only">Nothing yet. Tell Jarvis “remember that…”, or add something below.</span></div>';
+  for (const t of d.facts || []) {
+    const r = document.createElement("div");
+    r.className = "row";
+    r.innerHTML = `<span class="grow fact"></span><button class="fx press" aria-label="Forget this">${icon("x")}</button>`;
+    r.querySelector(".fact").textContent = t;
+    r.querySelector(".fx").onclick = () => {
+      r.classList.add("leaving");
+      post({ type: "memory_forget", text: t, id: newId() }).catch(() => { r.classList.remove("leaving"); toast("Not connected to your PC", "x", "var(--red)"); });
+    };
+    list.append(r);
+  }
+}
+const saveAbout = () => {
+  const v = $("aboutText").value.trim();
+  if (!mem || v === (mem.about || "")) { aboutDirty(false); return; }
+  mem.about = v; aboutDirty(false);
+  memSet({ about: v }, v ? "Jarvis will keep that in mind" : "About me cleared");
+};
+$("aboutText").oninput = () => aboutDirty($("aboutText").value.trim() !== (mem?.about || ""));
+$("aboutText").onblur = saveAbout;
+$("aboutSave").onclick = saveAbout;
+$("factAdd").onkeydown = e => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const v = e.target.value.trim();
+  if (!v) { e.target.blur(); return; }
+  post({ type: "memory_add", text: v, id: newId() })
+    .then(() => { e.target.value = ""; toast("Remembered", "check", "var(--green)"); })
+    .catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+};
+$("memClear").onclick = () => {
+  if (!confirm("Forget recent conversations? Jarvis keeps About me and the facts it saved.")) return;
+  post({ type: "memory_clear", id: newId() }).then(() => toast("Conversations forgotten", "check", "var(--green)"))
+    .catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+};
+
+// Liquid Glass: the glass lights up where your finger touches it (big panels like sheets stay still)
+document.addEventListener("pointerdown", e => {
+  const g = e.target.closest?.(".glass");
+  if (!g || g.matches(".sheet, .drawer")) return;
+  const r = g.getBoundingClientRect();
+  g.style.setProperty("--mx", `${e.clientX - r.left}px`);
+  g.style.setProperty("--my", `${e.clientY - r.top}px`);
+  g.classList.add("touching");
+  const off = () => { g.classList.remove("touching"); removeEventListener("pointerup", off); removeEventListener("pointercancel", off); };
+  addEventListener("pointerup", off); addEventListener("pointercancel", off);
+}, { passive: true });
+
 $("localFirstToggle").onchange = e => { post({ type: "set", key: "local_first", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Local models first" : "Claude does everything", e.target.checked ? "check" : "sparkles", e.target.checked ? "var(--green)" : "var(--blue)"); };
 $("claudeToggle").onchange = e => { post({ type: "set", key: "use_claude", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Claude on" : "Claude off \u2014 free commands only", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("hotkeyToggle").onchange = e => { post({ type: "set", key: "hotkey_enabled", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Talk shortcut on \u2014 Ctrl + Alt + J" : "Talk shortcut off", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };

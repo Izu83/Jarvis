@@ -10,7 +10,10 @@ from jarvis import brain, mail, memory
 def fresh_memory(monkeypatch, tmp_path):
     monkeypatch.setattr(memory, "CONV_PATH", tmp_path / "conversation.json")
     monkeypatch.setattr(memory, "FACTS_PATH", tmp_path / "memory.json")
+    monkeypatch.setattr(memory, "ABOUT_PATH", tmp_path / "about_me.txt")
     monkeypatch.setattr(memory, "_conv", {})
+    monkeypatch.setitem(memory.settings, "memory_span", "normal")
+    monkeypatch.setitem(memory.settings, "humour", "light")
 
 
 def test_conversation_is_kept_per_chat_and_survives_a_restart(monkeypatch):
@@ -72,6 +75,40 @@ def test_claude_session_gets_what_it_missed():
     assert "mute" in note and "open spotify" not in note
     memory.remember("The user's name is Nikolay")         # a new fact is passed on once
     assert "Nikolay" in with_memory("hi", fresh=False)
+
+
+def test_about_me_and_facts_from_the_phone():
+    assert memory.background(None) == ""
+    memory.set_about("I'm Niko, I study IT. Keep answers short.")
+    assert "Niko, I study IT" in memory.background(None)
+    me = types.SimpleNamespace(seen=memory.time.time(), facts_seen=memory.facts_stamp(), thread=None)
+    assert brain.ClaudeCodeBrain._with_memory(me, "hi", None, None, False) == "hi"
+    memory.set_about("I'm Niko, I study IT and code in Python.")
+    memory.FACTS_PATH.parent.joinpath("about_me.txt").touch()
+    me.facts_seen = 0.0   # as if the stamp changed
+    assert "code in Python" in brain.ClaudeCodeBrain._with_memory(me, "hi", None, None, False)
+    memory.remember("Ana is the user's sister")
+    memory.remember("The user likes jazz")
+    assert memory.forget_exact("Ana is the user's sister") and not memory.forget_exact("nope")
+    assert [f["text"] for f in memory.facts()] == ["The user likes jazz"]
+
+
+def test_memory_span_and_clearing(monkeypatch):
+    memory.record(None, "open spotify", "Opened Spotify.", started=memory.time.time() - 5 * 3600)
+    assert memory.recent(None) != []
+    monkeypatch.setitem(memory.settings, "memory_span", "short")   # 2 hours
+    assert memory.recent(None) == []
+    monkeypatch.setitem(memory.settings, "memory_span", "long")
+    assert len(memory.recent(None)) == 1
+    memory.clear_conversations()
+    assert memory.recent(None) == []
+
+
+def test_humour_setting_goes_into_the_system_prompt(monkeypatch):
+    monkeypatch.setattr(brain.tools, "environment_description", lambda: "Monitors: one", raising=False)
+    assert "dry, understated wit" in brain.system_prompt()
+    monkeypatch.setitem(memory.settings, "humour", "off")
+    assert "no jokes" in brain.system_prompt() and "{personality}" not in brain.system_prompt()
 
 
 def test_resolve_recipients(monkeypatch):

@@ -214,6 +214,13 @@ class PhoneChannel:
                        "vapid": push.public_key(), "notify": push.have_subs(),
                        "activity": activity.summary(), "watches": watchers.items()})
 
+    def send_memory(self) -> None:
+        """What Jarvis remembers, for Settings > Memory on the phone."""
+        from . import memory
+        self._publish({"kind": "memory", "id": "memory", "about": memory.about(),
+                       "facts": [f["text"] for f in memory.facts()][::-1],   # newest first
+                       "humour": settings.get("humour", "light"), "span": settings.get("memory_span", "normal")})
+
     def _later(self, seconds: float, fn, *args) -> None:
         threading.Timer(seconds, fn, args).start()
 
@@ -398,6 +405,33 @@ class PhoneChannel:
                 hotkey.set_enabled(value)
                 log.info("Keyboard shortcut turned %s from the phone.", "on" if value else "off")
             self.send_state()
+        elif kind == "memory_get":
+            self.send_memory()
+        elif kind == "memory_set":   # Settings > Memory: About me, humour, how far back it remembers
+            from . import memory
+            if isinstance(data.get("about"), str):
+                memory.set_about(data["about"])
+                log.info("About me updated from the phone.")
+            if data.get("humour") in memory.HUMOUR:
+                set_setting("humour", data["humour"])
+                log.info("Humour set to %s from the phone.", data["humour"])
+            if data.get("span") in memory.SPANS:
+                set_setting("memory_span", data["span"])
+                log.info("Memory span set to %s from the phone.", data["span"])
+            self.send_memory()
+        elif kind == "memory_add":
+            from . import memory
+            memory.remember(data.get("text", ""))
+            self.send_memory()
+        elif kind == "memory_forget":
+            from . import memory
+            memory.forget_exact(data.get("text", ""))
+            self.send_memory()
+        elif kind == "memory_clear":
+            from . import memory
+            memory.clear_conversations()
+            log.info("Conversation memory cleared from the phone.")
+            self.send_memory()
         elif kind == "usage_reset":
             from . import usage
             usage.reset()

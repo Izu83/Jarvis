@@ -6,6 +6,9 @@
   and nothing is forgotten when Jarvis restarts or a Claude session is swapped for a fresh one.
 - Facts: things worth keeping for good (people, email addresses, preferences), saved with the remember tool in
   .brain/memory.json. Tools may run in a separate process (the Claude tool server), so facts are read from disk.
+- About me: a note the user writes themselves on the phone (Settings > Memory), in .brain/about_me.txt. Every brain
+  gets it along with the facts. The phone can also add and delete facts, and set how far back the conversation
+  reaches ("memory_span") and how much humour Jarvis uses ("humour").
 """
 import json
 import logging
@@ -13,17 +16,38 @@ import re
 import threading
 import time
 
-from .config import ROOT
+from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.memory")
 
 CONV_PATH = ROOT / ".brain" / "conversation.json"
 FACTS_PATH = ROOT / ".brain" / "memory.json"
+ABOUT_PATH = ROOT / ".brain" / "about_me.txt"
 KEEP_PER_CHAT = 40        # exchanges saved per chat
-CONTEXT_EXCHANGES = 10    # how many of them a brain is shown
-CONTEXT_HOURS = 12        # older than this is a different conversation
 DROP_CHAT_DAYS = 14
 MAX_FACTS = 200
+MAX_ABOUT = 4000
+
+# How far back a brain is shown the conversation: (hours, exchanges). Older than that is a different conversation.
+SPANS = {"short": (2, 6), "normal": (12, 10), "long": (72, 20), "max": (DROP_CHAT_DAYS * 24, 30)}
+
+# How Jarvis talks, set on the phone. Goes into every brain's system prompt.
+HUMOUR = {
+    "off": "Be plain and businesslike: no jokes or banter.",
+    "light": "Have a touch of dry, understated wit, like a calm British butler: now and then a light, friendly quip "
+             "in a reply, never at the cost of clarity or speed, never when the user is stressed, something failed, "
+             "or the topic is serious. Most replies need no joke at all.",
+    "lots": "Be playful and witty: a quick joke, a bit of teasing or a clever aside in most replies, but still keep "
+            "replies short, get the job done first, and drop the jokes when something is serious or went wrong.",
+}
+
+
+def span() -> tuple[int, int]:
+    return SPANS.get(settings.get("memory_span", "normal"), SPANS["normal"])
+
+
+def personality() -> str:
+    return HUMOUR.get(settings.get("humour", "light"), HUMOUR["light"])
 
 _lock = threading.Lock()
 
@@ -67,11 +91,20 @@ def record(chat, user: str, answer: str, did=None, started: float | None = None)
         _write(CONV_PATH, _conv)
 
 
-def recent(chat, since: float = 0.0, limit: int = CONTEXT_EXCHANGES) -> list[dict]:
-    """The latest exchanges of this chat (oldest first) that started after `since`."""
-    cutoff = max(since, time.time() - CONTEXT_HOURS * 3600)
+def recent(chat, since: float = 0.0, limit: int | None = None) -> list[dict]:
+    """The latest exchanges of this chat (oldest first) that started after `since`, within the memory span."""
+    hours, most = span()
+    limit = most if limit is None else limit
+    cutoff = max(since, time.time() - hours * 3600)
     with _lock:
         return [dict(e) for e in _conv.get(_key(chat), []) if e["ts"] > cutoff][-limit:]
+
+
+def clear_conversations() -> None:
+    """Forget every chat's conversation (the facts and About me stay)."""
+    with _lock:
+        _conv.clear()
+        _write(CONV_PATH, _conv)
 
 
 def from_phone(recent_msgs: list | None) -> list[dict]:
@@ -113,9 +146,13 @@ def background(chat, since: float = 0.0, phone_recent: list | None = None, fresh
     give it the facts and the whole recent conversation; otherwise only what happened since it last answered
     (exchanges other brains handled). Empty when there's nothing to tell."""
     parts = []
-    known = facts_text() if (fresh if with_facts is None else with_facts) else ""
-    if known:
-        parts.append("What you remember about the user (saved with the remember tool):\n" + known)
+    if fresh if with_facts is None else with_facts:
+        mine = about()
+        if mine:
+            parts.append("About the user, in their own words (always keep this in mind):\n" + mine)
+        known = facts_text()
+        if known:
+            parts.append("What you remember about the user (saved with the remember tool):\n" + known)
     entries = recent(chat, 0.0 if fresh else since)
     if not entries and fresh and phone_recent:
         entries = from_phone(phone_recent)
@@ -143,12 +180,32 @@ def facts_text() -> str:
     return "\n".join("- " + f["text"] for f in facts())
 
 
-def facts_stamp() -> float:
-    """Changes whenever a fact is added or removed (brains re-send the facts then)."""
+def _mtime(path) -> float:
     try:
-        return FACTS_PATH.stat().st_mtime
+        return path.stat().st_mtime
     except OSError:
         return 0.0
+
+
+def facts_stamp() -> float:
+    """Changes whenever a fact or About me changes (brains re-send them then)."""
+    return _mtime(FACTS_PATH) + _mtime(ABOUT_PATH)
+
+
+def about() -> str:
+    try:
+        return ABOUT_PATH.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def set_about(text: str) -> None:
+    text = str(text).strip()[:MAX_ABOUT]
+    try:
+        ABOUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ABOUT_PATH.write_text(text, encoding="utf-8")
+    except OSError:
+        log.exception("Couldn't save About me")
 
 
 def _words(text: str) -> set[str]:
@@ -180,6 +237,17 @@ def forget(about: str) -> str:
             return f"I didn't have anything saved about {about}."
         _write(FACTS_PATH, [f for f in items if f not in gone])
     return "Forgot: " + "; ".join(f["text"] for f in gone)
+
+
+def forget_exact(text: str) -> bool:
+    """Remove one fact by its exact text (the phone's delete button)."""
+    with _lock:
+        items = facts()
+        kept = [f for f in items if f["text"] != text]
+        if len(kept) == len(items):
+            return False
+        _write(FACTS_PATH, kept)
+    return True
 
 
 def lookup_address(name: str) -> str | None:

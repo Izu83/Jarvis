@@ -174,6 +174,7 @@ def test_local_brain_sees_the_shared_conversation(team, monkeypatch, tmp_path):
     from jarvis import memory
     monkeypatch.setattr(memory, "CONV_PATH", tmp_path / "conv.json")
     monkeypatch.setattr(memory, "FACTS_PATH", tmp_path / "facts.json")
+    monkeypatch.setattr(memory, "ABOUT_PATH", tmp_path / "about_me.txt")
     monkeypatch.setattr(memory, "_conv", {})
     memory.record(None, "open spotify", "Opened Spotify.", ["Opening Spotify…"])
     memory.remember("The user's sister is Ana; her email is ana@example.com")

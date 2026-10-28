@@ -26,7 +26,7 @@ import time
 import requests
 
 from . import memory, outbox, tools, usage
-from .brain import MAX_TOOL_ROUNDS, SYSTEM_TEMPLATE, describe_step, make_brain_named, step_kind
+from .brain import MAX_TOOL_ROUNDS, describe_step, make_brain_named, step_kind, system_prompt
 from .config import settings
 
 log = logging.getLogger("jarvis.hermes")
@@ -164,8 +164,8 @@ class HermesBrain:
         if settings.get("qwen_model"):
             self.team["qwen"] = (settings["qwen_model"], "Qwen3", True)
         self.tools = _ollama_tools()
-        base = SYSTEM_TEMPLATE.format(environment=tools.environment_description())
-        self.systems = {"hermes": base + HERMES_NOTE, "qwen": base + QWEN_NOTE}
+        self.systems: dict[str, str] = {}   # built on first use, and again when the humour setting changes
+        self._personality = None
         self.installed: set[str] = set()   # models Ollama has (refreshed now and then)
         self._checked = 0.0
         self._pulling: set[str] = set()
@@ -416,6 +416,10 @@ class HermesBrain:
         return None   # ran out of rounds -> let Claude take over
 
     def _chat(self, key: str, model: str, think: bool, turn: list) -> dict:
+        if self._personality != memory.personality():
+            base = system_prompt()
+            self._personality = memory.personality()
+            self.systems = {"hermes": base + HERMES_NOTE, "qwen": base + QWEN_NOTE}
         system = self.systems[key]
         if self.background:
             system += ("\n\n" + self.background + "\n\nThe user's latest message is the NEW request: do that one. "

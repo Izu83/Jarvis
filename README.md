@@ -45,14 +45,16 @@ the page and code contain no secrets. Your key lives only in `.env` (git-ignored
 ## Running
 
 ```
-run.bat                # voice + phone, with a tray icon
+run.bat                # start Jarvis hidden: no window, just the tray icon
+run.bat --console      # run in this window instead, with the log printed live
 run.bat --text         # also type commands in the console (handy for testing)
 run.bat --no-voice     # phone only
 run.bat --startup      # start Jarvis hidden at every login (--startup-off to stop)
 ```
 
-Or double-click `Jarvis.vbs` to run it in the background with no console window, just a tray icon under the ^ arrow
-in the taskbar (right-click it to pick a microphone, open the log or quit). Only one Jarvis runs at a time.
+Jarvis lives in the taskbar tray (under the ^ arrow): right-click its icon to pick a microphone, restart Jarvis, open
+the log or quit. `run.bat` and `Jarvis.vbs` both start it that way, with no console window. Only one Jarvis runs at
+a time.
 
 Say **"Hey Jarvis"** or press **Ctrl+Alt+J**, give the command, then pause. A pop-up in the top-right of the main
 monitor shows what it heard live, then each step while it works, then the reply, which it also speaks in a natural
@@ -176,10 +178,19 @@ Setup (once):
 
 Every command and answer (and the steps taken) is kept per chat in `.brain/conversation.json`, whichever part of
 Jarvis handled it: a quick local shortcut, Hermes, Qwen3 or Claude. Each brain is shown the same recent conversation
-(the last 10 exchanges of the past 12 hours), so follow-ups like "close it", "do it again" or "send that to Ana" work,
+(by default the last 10 exchanges of the past 12 hours), so follow-ups like "close it", "do it again" or "send that to Ana" work,
 also after a restart or when Claude's session is swapped for a fresh one. "Remember that…" saves a fact for good in
 `.brain/memory.json` (people, email addresses, preferences); Jarvis also saves clearly useful facts by itself, and
 "forget…" removes them.
+
+On the phone, **Settings › Memory** controls all of it:
+
+- **About me**: a note in your own words (name, work, people, how you like answers), saved in `.brain/about_me.txt`
+  and given to every brain at the start of each conversation.
+- **Humour**: Off, A little (default: a dry, butler-ish quip now and then) or Lots (`humour` in `config.json`).
+- **Remembers the conversation for**: 2 hours, 12 hours, 3 days or 2 weeks (`memory_span`).
+- **Things Jarvis remembers**: every saved fact, each with a delete button, plus a box to add one yourself and a
+  button that forgets recent conversations (About me and the facts stay).
 
 Outlook, Yahoo and iCloud are detected from the address; for anything else set `email_imap_host` / `email_smtp_host`.
 

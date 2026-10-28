@@ -88,7 +88,8 @@ Ask only when a wrong guess would matter (who to send something to, spending mon
 open_target (the user's browsers: Opera is the default, Zen is installed too), then look_at_screen and act with \
 mouse_click / type_text / press_keys, looking again after each important step. They are signed in already in their \
 browser. To upload a file on a website (e.g. Drive's New > File upload), click the upload control, then in the \
-Windows file dialog type the file's full path into the File name box and press Enter.
+Windows file dialog type the file's full path into the File name box and press Enter. Then wait a few seconds and \
+look again until the site says the upload is complete, before you say it's done.
 - Making things: write_file creates any text file (code, notes, HTML, CSV, Markdown). For anything else (convert, \
 zip, resize, Office files, downloads), write a script and run it with run_powershell. If the task needs a program \
 that isn't installed, install it with `winget install --id <Id> -e --accept-source-agreements \
@@ -103,12 +104,21 @@ user and the conversation so far (some of it handled by other parts of Jarvis): 
 again", "close it", "send that to Ana", "the other one", "what did I just ask") from it instead of asking or \
 guessing, and never act as if the conversation just started. Don't repeat earlier steps unless the user asks. When \
 the user tells you something worth keeping (people, email addresses, preferences, "remember that…"), save it with \
-remember; forget removes facts.
+remember; forget removes facts. Also save lasting things the user mentions in passing without being asked: their \
+name, job, school, people in their life and who they are, likes and dislikes, how they want things done, recurring \
+plans. Do it quietly (no need to announce it), one short fact per call, and never save one-off task details, \
+passwords or codes. If a saved fact turns out wrong or outdated, forget it and remember the right one.
+
+Personality: you are a capable, warm assistant with a personality, not a robot. {personality}
 
 This PC:
 {environment}"""
 
 BUILTIN_TOOLS = "Read,Glob,Grep,WebSearch,WebFetch"
+
+
+def system_prompt() -> str:
+    return SYSTEM_TEMPLATE.format(environment=tools.environment_description(), personality=memory.personality())
 
 
 def _drives() -> list[str]:
@@ -268,7 +278,8 @@ class ClaudeCodeBrain:
         if not Path(exe).exists():
             raise RuntimeError("Claude Code CLI not found. Install it from https://claude.com/claude-code")
         self.exe = exe
-        self.system = SYSTEM_TEMPLATE.format(environment=tools.environment_description())
+        self.system = system_prompt()
+        self.personality = memory.personality()
         # An empty working folder, so no project files or CLAUDE.md get pulled into the prompt
         self.workdir = ROOT / ".brain"
         self.workdir.mkdir(exist_ok=True)
@@ -353,7 +364,10 @@ class ClaudeCodeBrain:
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None) -> str:
         with self.lock:
-            if self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION:
+            if self.personality != memory.personality():   # the humour setting changed: a fresh session gets it
+                self.personality, self.system = memory.personality(), system_prompt()
+                self._restart()
+            elif self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION:
                 self._restart()
             command = self._with_memory(command, chat, recent, fresh=self.commands == 0 or chat != self.thread)
             self.commands += 1
@@ -456,7 +470,7 @@ class ApiBrain:
 
         self.anthropic = anthropic
         self.client = anthropic.Anthropic()
-        self.system = SYSTEM_TEMPLATE.format(environment=tools.environment_description())
+        self.system = system_prompt()
         self.history: list = []
         self.thread = None
         self.progress = None
@@ -474,6 +488,8 @@ class ApiBrain:
             self.progress = progress
             if time.time() - self.last_used > IDLE_RESET_SECONDS or len(self.history) > 60 or chat != self.thread:
                 self.history = []
+            if not self.history:
+                self.system = system_prompt()   # picks up a changed humour setting
             command = self._with_memory(command, chat, recent, fresh=not self.history)
             self.last_used = time.time()
             anthropic = self.anthropic

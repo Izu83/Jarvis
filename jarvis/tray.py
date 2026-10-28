@@ -6,6 +6,8 @@ loop; quitting from it stops the whole process. No extra dependency — this use
 """
 import logging
 import os
+import subprocess
+import sys
 import webbrowser
 from pathlib import Path
 
@@ -19,7 +21,7 @@ from .config import ROOT, set_setting, settings
 log = logging.getLogger("jarvis.tray")
 
 WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon is clicked
-ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK = 1023, 1024, 1025, 1026
+ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART = 1023, 1024, 1025, 1026, 1027
 MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
@@ -97,12 +99,23 @@ class Tray:
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_PHONE, "Open the phone page")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_LOG, "Open the log")
             win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
+            win32gui.AppendMenu(menu, win32con.MF_STRING, ID_RESTART, "Restart Jarvis")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_QUIT, "Quit Jarvis")
             x, y = win32gui.GetCursorPos()
             win32gui.SetForegroundWindow(hwnd)   # so clicking elsewhere dismisses the menu
             win32gui.TrackPopupMenu(menu, win32con.TPM_LEFTALIGN, x, y, 0, hwnd, None)
             win32gui.PostMessage(hwnd, win32con.WM_NULL, 0, 0)
         return True
+
+    @staticmethod
+    def _start_again() -> None:
+        """Launch a new hidden Jarvis a few seconds from now, once this one has quit (only one may run at a time)."""
+        pyw = ROOT / ".venv" / "Scripts" / "pythonw.exe"
+        if not pyw.exists():
+            pyw = Path(sys.executable).with_name("pythonw.exe")
+        later = f"import subprocess, time; time.sleep(4); subprocess.Popen([r'{pyw}', '-m', 'jarvis'], cwd=r'{ROOT}')"
+        subprocess.Popen([str(pyw), "-c", later], cwd=str(ROOT), close_fds=True,
+                         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
 
     def _on_command(self, hwnd, msg, wparam, lparam):
         cmd = wparam & 0xFFFF
@@ -123,8 +136,12 @@ class Tray:
                 os.startfile(str(ROOT / "jarvis.log"))
             except Exception:
                 log.debug("couldn't open the log", exc_info=True)
-        elif cmd == ID_QUIT:
-            log.info("Quit from the tray icon.")
+        elif cmd in (ID_QUIT, ID_RESTART):
+            if cmd == ID_RESTART:
+                log.info("Restart from the tray icon.")
+                self._start_again()
+            else:
+                log.info("Quit from the tray icon.")
             try:
                 win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (hwnd, 0))
             except Exception:
