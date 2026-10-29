@@ -38,6 +38,18 @@ def test_brains_cannot_swallow_a_stop():
     stopping.begin()
 
 
+@pytest.mark.parametrize("text", ["stop", "Stop.", "Jarvis, stop", "hey jarvis stop that", "cancel",
+                                  "never mind", "nevermind", "stop what you're doing", "please stop now", "Enough!"])
+def test_stop_phrases(text):
+    assert stopping.is_stop_phrase(text)
+
+
+@pytest.mark.parametrize("text", ["stop the music", "stop watching", "cancel my reminders", "don't stop",
+                                  "stop gesture control", "what is a stop sign"])
+def test_not_stop_phrases(text):
+    assert not stopping.is_stop_phrase(text)
+
+
 def test_hooks_run_and_a_failing_hook_does_not_block_the_rest():
     ran = []
     stopping.on_stop(lambda: (_ for _ in ()).throw(RuntimeError("boom")))

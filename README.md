@@ -71,6 +71,12 @@ voice (Microsoft's free neural voices via edge-tts; the built-in Windows voice w
 3. **The brain** (Claude Code, the API, or Hermes) does everything else with the tools in `tools.py`.
 
 Commands run one at a time. If you send another while Jarvis is busy, it shows that it's waiting for the first one.
+Saying or typing **"stop"** ("Jarvis, stop", "cancel", "never mind") while he's busy stops the running command
+instead of waiting its turn. When he's idle, "stop" still pauses the music.
+
+With **local models first** on, a model that errors twice in a row (Ollama's "500", often when the graphics card is
+busy) rests for 15 minutes and Claude covers for it; Settings › Local brain shows it. Ollama's own output, with the
+reason for those errors, goes to `.brain/ollama.log` when Jarvis starts it.
 
 ## Things you can say
 
@@ -106,7 +112,9 @@ which you can also edit by hand.
 - **Slash commands**: type `/` in the message box for the list: `/work` (and your other modes), `/monitors`,
   `/camera`, `/system`, `/control`, `/call` and `/newmode`. Tap one, or type the whole name and press send.
 - **Stop button**: while Jarvis works on something in the chat you're in, the send button becomes a ■ stop
-  button. He stops within a second or so (a command still waiting its turn is just taken off the list).
+  button. He stops within a second or so (a command still waiting its turn is just taken off the list). `/stop` does
+  the same for whatever he's doing, even from another chat.
+- **Send again / edit**: press and hold one of your messages to send it again, edit it first, or copy it.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
 - **Everything at the bottom**: like most iPhone apps there's no bar at the top. The tab bar at the bottom has
   Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
@@ -156,6 +164,16 @@ ProgramData, drive roots and your main user folders themselves can't be deleted 
 
 The Control Center shows what's playing in any app (Spotify, YouTube in your browser, ...) with its album cover,
 a live progress bar and controls, using Windows' own media information.
+
+## Siri and the Share button
+
+Make an **Ask Jarvis** shortcut once in the iPhone's Shortcuts app (the app's Settings › Siri & Share shows each
+step, with the address link and key to copy). Then say *"Hey Siri, Ask Jarvis"*, or pick Ask Jarvis under any app's
+Share button to send it a link or text. Siri reads the answer out.
+
+A Shortcut can't do the app's encryption, so it uses its own key (`JARVIS_SIRI_KEY` in `.env`) over the same HTTPS
+tunnel: it looks up the PC's current address on the relay (`<topic>-s`), then asks `<address>/ask` with the key and
+the question in headers. Answers that take longer than 45 seconds come to the app as a message instead.
 
 ## Screens on your phone
 
@@ -273,6 +291,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/siri.py` | The "Ask Jarvis" Siri / Share shortcut's key and question handling |
 | `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |
 | `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |
 | `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |
@@ -299,6 +318,9 @@ https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-w
   send you files. With the default `autonomy: full` it does most of that without asking, so your pairing key is
   effectively the key to the PC. Keep the pairing link private.
 - If your phone is lost, run `run.bat --pair` after deleting `JARVIS_TOPIC`/`JARVIS_KEY` from `.env` to rotate keys.
+- The Siri shortcut's key (`JARVIS_SIRI_KEY`) can run commands too, unencrypted apart from HTTPS (Cloudflare can see
+  them). Delete it from `.env` and restart Jarvis to turn the shortcut off; a new one is made when you next open
+  Settings › Siri & Share.
 - Windows of apps running as administrator can't be moved unless Jarvis also runs as administrator.
 
 ## Tests

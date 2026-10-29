@@ -136,7 +136,7 @@ def main() -> None:
     current = {"via": "pc", "chat": None, "msg_id": ""}   # where the command being worked on came from
 
     def ask_user(title: str, detail: str, confirm: str) -> bool:
-        if current["via"] in ("phone", "schedule") and phone and phone.clients:
+        if current["via"] in ("phone", "schedule", "siri") and phone and phone.clients:
             log.info("Asking on the phone: %s", title)
             ok = phone.ask(title, detail, confirm)
         else:
@@ -255,8 +255,13 @@ def main() -> None:
 
     def submit(text: str, reply=None, chat=None, recent=None, progress=None, via: str = "pc",
                msg_id: str | None = None) -> None:
-        tid = activity.start(text, via=via, chat=chat, msg_id=msg_id, status="queued")
         busy_with = working["text"]
+        if busy_with and stopping.is_stop_phrase(text):   # "Jarvis, stop" mid-task: don't queue it, stop
+            stop_command()
+            if reply:
+                reply("Okay, stopping.", "", [])
+            return
+        tid = activity.start(text, via=via, chat=chat, msg_id=msg_id, status="queued")
         jobs.put((tid, text, reply, chat, recent, progress, via, msg_id))
         if busy_with and progress:   # say so, instead of looking like nothing is happening
             try:

@@ -1,6 +1,7 @@
 """Lets the pure-Python parts of Jarvis be tested on any OS: the Windows-only modules (window handling, app
 launching, the tool runner, clipboard) are replaced with small fakes, and config points at a temporary folder so
 tests never touch your real config.json, modes.json or .brain/."""
+import os
 import pathlib
 import sys
 import tempfile
@@ -21,7 +22,8 @@ config.settings = {
     "use_claude": True,
 }
 config.set_setting = config.settings.__setitem__
-config.secret = lambda name: ""
+config.secret = lambda name: os.environ.get(name, "")   # nothing from the real .env; tests set what they need
+config.set_secret = os.environ.__setitem__
 sys.modules["jarvis.config"] = config
 
 

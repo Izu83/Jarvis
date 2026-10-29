@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, camera, inbox, media, modes, outbox, pc, proactive, push, screens, stopping,
-               sysinfo, tools, watchers)
+from . import (activity, approval, camera, inbox, media, modes, outbox, pc, proactive, push, screens, siri,
+               stopping, sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -154,6 +154,9 @@ class PhoneChannel:
                             "`run.bat --pair` and scan the QR code.", r.status_code)
             else:
                 log.info("Told your phone the new address.")
+            # the Siri Shortcut can't decrypt, so it reads the address from a topic of its own; the address alone
+            # is no use without the Siri key
+            requests.post(f"{self.server}/{self.topic}-s", data=url.rstrip("/") + siri.PATH, timeout=10)
         except requests.RequestException as e:
             log.warning("Couldn't announce the address to the relay: %s", e)
 
@@ -253,6 +256,9 @@ class PhoneChannel:
             jpeg = camera.capture()
         except Exception as e:
             log.warning("Camera capture failed: %s", e)
+            if isinstance(e, camera.NoCamera):
+                camera.tell_when_back(lambda: self.message("Your webcam is connected again, so /camera works now."))
+                e = f"{e}. I'll tell you when it's back"
             self.reply(msg_id, f"I couldn't take a photo: {e}.")
             return
         self._publish({"kind": "image", "id": msg_id, "monitors": [], "title": "Camera",
@@ -383,6 +389,11 @@ class PhoneChannel:
             entry = activity.by_msg(data.get("msg", ""))
             if entry and entry["status"] in ("done", "error"):
                 self.reply(entry["msg_id"], entry["reply"] or "Done.", steps=entry["steps"])
+        elif kind == "siri_get":   # Settings › Siri & Share: what the Shortcut needs (sent encrypted, like everything)
+            self._publish({"kind": "siri", "id": "siri", "key": siri.key(),
+                           "address": siri.address_url(self.server, self.topic)})
+            if self.tunnel.url:   # make sure the address topic has the current address right away
+                threading.Thread(target=self._announce, args=(self.tunnel.url,), daemon=True).start()
         elif kind == "stop":   # the stop button on a command that's queued or running
             log.info("Phone: stop")
             threading.Thread(target=self.on_stop, args=(data.get("target", ""),), daemon=True,
@@ -509,6 +520,41 @@ class PhoneChannel:
                             progress=lambda text, k="", i=msg_id: self.reply(i, text, done=False, step_kind=k),
                             via="phone", msg_id=msg_id)
 
+    async def _http(self, connection, request):
+        """Plain HTTP requests on the phone port: only the Siri Shortcut's /ask (see siri.py). Anything else
+        carries on as the app's WebSocket."""
+        if request.path.split("?")[0] != siri.PATH:
+            return None
+        if not siri.authorised(request.headers.get("X-Jarvis-Key", "")):
+            log.warning("Siri: a request with a wrong or missing key was refused.")
+            return connection.respond(401, "Wrong Jarvis key. Copy it again from the Jarvis app's Settings.\n")
+        text = siri.question(request.headers.get("X-Jarvis-Ask", ""))
+        if not text:
+            return connection.respond(400, "There was nothing to ask.\n")
+        log.info("Siri: %r", text[:80])
+        answer = await self.loop.run_in_executor(None, self._ask_from_siri, text)
+        return connection.respond(200, answer)
+
+    def _ask_from_siri(self, text: str) -> str:
+        """Run it like any command and wait for the answer; if it's slow, it goes to the app as a message later."""
+        done, lock, box = threading.Event(), threading.Lock(), {"late": False}
+
+        def reply(answer, thinking="", steps=None):
+            with lock:
+                box["answer"] = answer
+                late = box["late"]
+            done.set()
+            if late:
+                self.message(answer)
+
+        self.on_command(text, reply, via="siri")
+        done.wait(siri.WAIT)
+        with lock:
+            if "answer" in box:
+                return box["answer"]
+            box["late"] = True
+        return siri.LATE
+
     def _reply_or_push(self, msg_id: str, text: str, thinking: str = "", steps: list | None = None) -> None:
         """Final reply to a phone command: if the app has since closed, send it as a notification instead."""
         self.reply(msg_id, text, thinking=thinking, steps=steps)
@@ -618,8 +664,9 @@ class PhoneChannel:
 
     async def _serve(self) -> None:
         self.loop = asyncio.get_running_loop()
+        # open_timeout covers _http too, which may wait up to siri.WAIT for an answer
         async with serve(self._client, "127.0.0.1", self.port, max_size=2**26, ping_interval=20, ping_timeout=20,
-                         compression=None):
+                         compression=None, process_request=self._http, open_timeout=siri.WAIT + 15):
             log.info("Phone server on 127.0.0.1:%d; starting tunnel...", self.port)
             self.tunnel.start()
             threading.Thread(target=self._re_announce, daemon=True, name="announce").start()

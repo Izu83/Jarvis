@@ -27,7 +27,7 @@ import requests
 
 from . import memory, outbox, stopping, tools, usage
 from .brain import MAX_TOOL_ROUNDS, describe_step, make_brain_named, step_kind, system_prompt
-from .config import settings
+from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.hermes")
 
@@ -101,11 +101,22 @@ def is_complex(command: str) -> bool:
 
 _status_cache: tuple[float, list] = (0.0, [])
 
+# A model that errors twice in a row (Ollama's "500", often the graphics card being busy) is rested for a while,
+# so every command doesn't first wait ~5 s for it to fail. Model name -> when it may try again.
+STRIKES_TO_REST = 2
+REST_SECONDS = 15 * 60
+_resting: dict[str, float] = {}
+
+
+def resting(model: str) -> bool:
+    return _resting.get(model, 0) > time.time()
+
 
 def local_status() -> list[dict]:
     """Is each local model online? For the phone's Settings: [{name, model, role, state}], where state is
     "loaded" (in the GPU, answers right away), "ready" (installed, loads on first use), "missing" (not downloaded),
-    "offline" (Ollama isn't running) or "off" (the local brain isn't in use). Cached for a few seconds."""
+    "offline" (Ollama isn't running), "resting" (it kept failing, so Claude covers for it a while) or "off" (the
+    local brain isn't in use). Cached for a few seconds."""
     global _status_cache
     if time.time() - _status_cache[0] < 5:
         return _status_cache[1]
@@ -128,6 +139,8 @@ def local_status() -> list[dict]:
             return "off"
         if not up:
             return "offline"
+        if resting(model):
+            return "resting"
         has = lambda names: model in names or f"{model}:latest" in names
         return "loaded" if has(loaded) else "ready" if has(installed) else "missing"
 
@@ -178,6 +191,7 @@ class HermesBrain:
         self.last_thinking = ""
         self.lock = threading.Lock()
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
+        self._strikes: dict[str, int] = {}   # errors in a row, per team member (see REST_SECONDS)
         log.info("Local brain ready: %s via %s. Claude is the fallback.",
                  " + ".join(f"{name} ({m})" for m, name, _ in self.team.values()), self.host)
         threading.Thread(target=self._prepare, daemon=True, name="ollama-start").start()
@@ -238,10 +252,19 @@ class HermesBrain:
             self._refresh_installed(force=True)
 
     def _ready(self, key: str) -> bool:
-        if key not in self.team:
+        if key not in self.team or resting(self.team[key][0]):
             return False
         self._refresh_installed()
         return self._has(self.team[key][0])
+
+    def _strike(self, key: str) -> None:
+        """This team member errored. Twice in a row and it rests, so commands go straight to the next brain."""
+        self._strikes[key] = self._strikes.get(key, 0) + 1
+        if self._strikes[key] >= STRIKES_TO_REST:
+            self._strikes[key] = 0
+            _resting[self.team[key][0]] = time.time() + REST_SECONDS
+            log.warning("%s keeps failing; skipping it for %d minutes (Claude covers). See .brain/ollama.log.",
+                        self.team[key][1], REST_SECONDS // 60)
 
     def _plan(self, command: str, followup: bool = False) -> list[str]:
         """Which local models try this command, in order."""
@@ -270,9 +293,14 @@ class HermesBrain:
             return False
         log.info("Ollama wasn't running; starting it for Hermes.")
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        # Its output goes to .brain/ollama.log, so when a model errors the reason can be looked up
+        out = ROOT / ".brain" / "ollama.log"
         try:
-            subprocess.Popen([exe, "serve"], creationflags=flags, close_fds=True, stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if out.exists() and out.stat().st_size > 5_000_000:
+                out.unlink()
+            with open(out, "ab") as f:
+                subprocess.Popen([exe, "serve"], creationflags=flags, close_fds=True, stdin=subprocess.DEVNULL,
+                                 stdout=f, stderr=subprocess.STDOUT)
         except OSError:
             log.exception("Couldn't start Ollama.")
             return False
@@ -344,13 +372,16 @@ class HermesBrain:
                 self._say(f"{name} is thinking it through…")
             try:
                 answer = self._run(key, command)
+                self._strikes[key] = 0   # it answered (even if not confidently): it works
                 if answer is not None:
                     return answer
                 log.info("%s couldn't finish confidently.", name)
             except requests.RequestException as e:
                 log.info("%s didn't answer (%s).", name, e)
+                self._strike(key)
             except Exception:
                 log.exception("%s failed.", name)
+                self._strike(key)
             tried.append(name)
         return None
 

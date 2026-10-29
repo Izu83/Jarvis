@@ -170,6 +170,8 @@
   .stamp { align-self: center; font-size: 12px; font-weight: 600; color: var(--label2); margin: 16px 0 6px; letter-spacing: 0; }
   .bubble { max-width: 80%; padding: 9px 14px 10px; border-radius: 21px; font-size: 17px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; animation: rise .45s var(--spring) both; transition: transform .3s var(--spring); }
   .bubble { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; cursor: text; }
+  /* your own messages: press and hold opens Send Again / Edit / Copy instead of selecting text */
+  .bubble.me { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: default; }
   .bubble *::selection, .bubble::selection { background: rgba(10,132,255,.35); }
   .me::selection, .me *::selection { background: rgba(255,255,255,.4); }
   .msg-actions { display: flex; gap: 2px; margin: 3px 4px 2px; align-self: flex-start; animation: rise .35s var(--ease) both; }
@@ -489,6 +491,16 @@
   .add-fact input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--label); font: inherit; font-size: 17px; padding: 14px 0; }
   .add-fact input::placeholder { color: var(--label2); }
   .sub-only { color: var(--label2); font-size: 15px; }
+  /* Settings › Siri & Share */
+  .siri-how { padding: 4px 18px 16px; font-size: 15px; line-height: 21px; border-top: .5px solid var(--sep); }
+  .siri-how p { margin: 12px 0 8px; }
+  .siri-how ol { margin: 0 0 12px; padding-left: 20px; }
+  .siri-how li { margin: 6px 0; }
+  .siri-how code { font-size: 13px; background: var(--fill); border-radius: 6px; padding: 1px 5px; overflow-wrap: anywhere; }
+  .siri-copy { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .siri-copy > span { flex: 1; min-width: 0; }
+  .siri-copy small { display: block; font-size: 12px; color: var(--label2); margin-bottom: 3px; }
+  .siri-copy code { display: block; padding: 5px 8px; }
   .row { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 18px; position: relative; width: 100%; text-align: left; }
   .row + .row::before { content: ""; position: absolute; top: 0; left: 18px; right: 0; border-top: .5px solid var(--sep); }
   .row .grow { flex: 1; padding: 13px 0; min-width: 0; }
@@ -872,6 +884,26 @@
       <div class="group" id="localList"><div class="row"><span class="grow">Waiting for your PC…</span></div></div>
       <div class="group"><label class="row"><span class="grow">Try local models first<span class="sub">Free, but much slower, and they get real tasks wrong. Off = Claude does everything and they only step in when Claude can't answer.</span></span><span class="switch"><input type="checkbox" id="localFirstToggle"><span></span></span></label></div>
       <div class="group-foot">Free models on your PC. Green = online; "in memory" means it answers right away, otherwise the first command takes a few extra seconds to load it.</div>
+      <div class="group-title">Siri &amp; Share</div>
+      <div class="group">
+        <button class="row btn" id="siriBtn">Set Up “Ask Jarvis” for Siri</button>
+        <div class="siri-how" id="siriHow" hidden>
+          <p>You make this once, in the iPhone's <b>Shortcuts</b> app. Then say <b>“Hey Siri, Ask Jarvis”</b>, or pick <b>Ask Jarvis</b> under any app's Share button. Siri reads the answer out.</p>
+          <ol>
+            <li>In Shortcuts, tap <b>+</b> and name the shortcut <b>Ask Jarvis</b>.</li>
+            <li>Open its details (ⓘ) and turn on <b>Show in Share Sheet</b>. At the top, let it receive <b>Text</b> and <b>URLs</b>, and set <b>If there's no input</b> to <b>Ask For › Text</b>.</li>
+            <li>Add <b>URL Encode</b> (it uses the Shortcut Input).</li>
+            <li>Add <b>Get Contents of URL</b> and paste the <b>address link</b> below.</li>
+            <li>Add <b>Get URLs from Input</b>.</li>
+            <li>Add another <b>Get Contents of URL</b> (it uses those URLs). Tap <b>Show More</b> › <b>Headers</b> and add two:<br>
+              <code>X-Jarvis-Key</code> = the <b>key</b> below<br><code>X-Jarvis-Ask</code> = the <b>URL Encoded Text</b> from step 3</li>
+            <li>Add <b>Show Result</b>.</li>
+          </ol>
+          <div class="siri-copy"><span><small>Address link</small><code id="siriAddr">Waiting for your PC…</code></span><button class="mini" id="siriAddrCopy">Copy</button></div>
+          <div class="siri-copy"><span><small>Key (keep it private)</small><code id="siriKey">…</code></span><button class="mini" id="siriKeyCopy">Copy</button></div>
+        </div>
+      </div>
+      <div class="group-foot">The key lets the shortcut talk to your PC, so don't share it. If Jarvis needs longer than about 45 seconds, Siri says so and the answer comes here as a message.</div>
       <div class="group-title">Tokens</div>
       <div class="group">
         <label class="row"><span class="grow">Use Claude for complex commands<span class="sub">Off = only the free built-in commands, never uses your Claude limit</span></span><span class="switch"><input type="checkbox" id="claudeToggle"><span></span></span></label>
@@ -1012,10 +1044,17 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.4";   // bump together with version.json
-const JNI = "JNIv14";   // Jarvis · Niko · Izu83 · version 14 — Jarvis's own release name
+const VERSION = "2026-10-29.5";   // bump together with version.json
+const JNI = "JNIv15";   // Jarvis · Niko · Izu83 · version 15 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv15", when: "Oct 29, 2026", title: "Siri, stop by voice & more", notes: [
+    "“Hey Siri, Ask Jarvis”: make the shortcut once (Settings › Siri & Share shows how) and Siri reads Jarvis's answer out. It's in every app's Share button too.",
+    "Say or type “stop” (or “Jarvis, stop”, “never mind”) while he's busy and he stops right away. /stop works too.",
+    "Press and hold one of your messages to send it again, edit it first, or copy it.",
+    "If a photo fails because the webcam isn't plugged in, Jarvis tells you when it's connected again.",
+    "A local model that keeps failing now rests for 15 minutes, so you don't wait for it to fail on every command. Settings › Local brain shows it.",
+  ] },
   { v: "JNIv14", when: "Oct 29, 2026", title: "A stop button", notes: [
     "While Jarvis is working on something, the send button turns into a ■ stop button. Tap it and he stops within a second or so and says “Okay, I stopped.”",
     "Tap stop on a command that's still waiting its turn and it's simply taken off the list.",
@@ -1226,8 +1265,18 @@ function bubble(text, who, ts = Date.now(), error = false, thinking = "") {
   else el.innerHTML = rich(text);
   $("log").append(el);
   if (who === "jarvis" && text) { addThoughts(el, thinking); addActions(el, ts); }
-  else if (who === "me") { const t = document.createElement("div"); t.className = "time right"; t.textContent = timeLabel(ts); $("log").append(t); }
+  else if (who === "me") {
+    const t = document.createElement("div"); t.className = "time right"; t.textContent = timeLabel(ts); $("log").append(t);
+    if (text) onLongPress(el, () => myMenu(text));
+  }
   return el;
+}
+function myMenu(text) {   // press and hold (or right-click) one of your own messages
+  actionSheet("", [
+    { label: "Send Again", run: () => send(text, null, null, false) },
+    { label: "Edit", run: () => { $("text").value = text; autosize(); renderCmds(); $("text").focus(); } },
+    { label: "Copy", run: () => navigator.clipboard.writeText(text).then(() => toast("Copied", "copy"), () => toast("Couldn't copy", "x", "var(--red)")) },
+  ]);
 }
 // Jarvis's own reasoning, saved under the reply and shown when tapped (like Claude's "thinking")
 function addThoughts(el, thinking) {
@@ -1696,9 +1745,9 @@ async function resend(id) {
   }
   p.ackTimer = setTimeout(() => resend(id), 7000);
 }
-async function send(text, tile = null, onReply = null) {
+async function send(text, tile = null, onReply = null, typed = true) {
   text = text.trim();
-  const atts = onReply || tile ? [] : attachments.slice();   // only typed messages carry attachments
+  const atts = onReply || tile || !typed ? [] : attachments.slice();   // only typed messages carry attachments
   if (atts.some(a => !a.path && !a.error)) { toast("Still sending your file…", "clip-up", "var(--orange)"); return false; }
   const ready = atts.filter(a => a.path);
   if (!key || (!text && !ready.length)) return false;
@@ -1837,6 +1886,7 @@ async function onMessage(text) {
     lastRx = Date.now();
     if (data.kind === "state") { onState(data); return; }
     if (data.kind === "memory") { onMemory(data); return; }
+    if (data.kind === "siri") { onSiri(data); return; }
     if (data.kind === "activity") { onActivity(data.activity, data.watches); return; }
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
@@ -2032,7 +2082,7 @@ function ring(el, pct) {
 }
 // Settings › Local brain: is Hermes / Qwen3 online on the PC?
 const LOCAL_STATE = { loaded: ["ok", "Online · in memory"], ready: ["ok", "Online"], missing: ["warn", "Not downloaded"],
-                      offline: ["bad", "Offline"], off: ["", "Not in use"] };
+                      offline: ["bad", "Offline"], resting: ["warn", "Kept failing · Claude covers for now"], off: ["", "Not in use"] };
 function renderLocal(list) {
   $("localList").innerHTML = list.length ? list.map(m => { const [cls, label] = LOCAL_STATE[m.state] || ["", m.state];
     return `<div class="row"><span class="grow">${esc(m.name)}<span class="sub">${esc(m.model)} · ${esc(m.role)}</span></span>` +
@@ -2184,6 +2234,7 @@ function slashCommands() {
     { name: "camera", alias: ["cam", "webcam", "photo", "selfie"], icon: "camera", tint: "#ff9f0a", desc: "A photo from your PC's webcam", run: () => requestCamera() },
     { name: "system", alias: ["stats", "pc"], icon: "chart", tint: "#30b0c7", desc: "CPU, memory, disks and network", run: openSystem },
     { name: "control", alias: ["music", "media", "volume"], icon: "music", tint: "#30d158", desc: "Music, volume, clipboard and lock", run: openControl },
+    { name: "stop", alias: ["cancel"], icon: "stop", tint: "#ff453a", desc: "Stop what Jarvis is doing", run: stopAnything },
     { name: "call", alias: [], icon: "phone", tint: "#34c759", desc: "Talk to Jarvis out loud", run: () => Call.open(false) },
     { name: "newmode", alias: ["mode"], icon: "plus", tint: "#8e8e93", desc: "Make a new mode",
       run: () => { text.value = "Create a mode called "; autosize(); text.focus(); } },
@@ -2313,6 +2364,20 @@ $("clipSend").onclick = async () => {
   if (!text) text = prompt("Text to put on your PC's clipboard") || "";
   if (text.trim()) quick("clip_set", { text: text.slice(0, 2000) });
 };
+// Settings › Siri & Share: the steps, and the address link + key the Shortcut needs (asked from the PC, encrypted)
+$("siriBtn").onclick = () => {
+  const how = $("siriHow");
+  how.hidden = !how.hidden;
+  if (!how.hidden) post({ type: "siri_get", id: newId() }).catch(() => toast("Can't reach your PC right now.", "x", "var(--red)"));
+};
+function onSiri(d) { $("siriAddr").textContent = d.address; $("siriKey").textContent = d.key; }
+const copyPlain = async (text, btn) => {
+  if (!text || text.endsWith("…")) return;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; setTimeout(() => { btn.textContent = "Copy"; }, 1500); }
+  catch { toast("Couldn't copy", "x", "var(--red)"); }
+};
+$("siriAddrCopy").onclick = () => copyPlain($("siriAddr").textContent, $("siriAddrCopy"));
+$("siriKeyCopy").onclick = () => copyPlain($("siriKey").textContent, $("siriKeyCopy"));
 $("clipCopy").onclick = async () => {
   try { await navigator.clipboard.writeText($("clipText").textContent); toast("Copied", "copy"); closeSheets(); }
   catch { toast("Select the text and copy it", "x", "var(--orange)"); }
@@ -2384,6 +2449,11 @@ async function stopCommand() {
   b.p.stopping = true; setStep(b.p, "Stopping…"); autosize();
   try { await post({ type: "stop", id: newId(), target: b.id }); }
   catch { b.p.stopping = false; autosize(); toast("Can't reach your PC right now.", "x", "var(--red)"); }
+}
+async function stopAnything() {   // /stop: this chat's command, or else whatever Jarvis is doing (from anywhere)
+  if (busyCmd()) return stopCommand();
+  try { await post({ type: "stop", id: newId(), target: "" }); toast("Asked Jarvis to stop", "stop"); }
+  catch { toast("Can't reach your PC right now.", "x", "var(--red)"); }
 }
 text.addEventListener("input", () => { autosize(); cmdSel = 0; renderCmds(); });
 text.addEventListener("keydown", e => {

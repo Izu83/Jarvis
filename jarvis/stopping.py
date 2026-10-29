@@ -5,10 +5,23 @@ outright, so a long answer or tool run doesn't carry on; the phone drops its wai
 command then unwinds with Stopped, which run_job turns into "Okay, I stopped."
 """
 import logging
+import re
 import subprocess
 import threading
 
 log = logging.getLogger("jarvis.stopping")
+
+# Said (or typed) while Jarvis is busy, these stop the command instead of waiting their turn in the queue.
+# When he's idle they're ordinary commands ("stop" on its own then pauses the music, as before).
+_STOP_PHRASE = re.compile(
+    r"^(?:(?:hey\s+)?jarvis[,.!]?\s+)?(?:please\s+)?"
+    r"(?:stop|cancel|abort|halt|enough|never\s?mind|forget it|"
+    r"stop (?:it|that|this|now|working|everything|what you'?re doing)|cancel (?:it|that|this))"
+    r"(?:\s+(?:please|jarvis|now))?[\s.!]*$", re.I)
+
+
+def is_stop_phrase(text: str) -> bool:
+    return bool(_STOP_PHRASE.match(text.strip()))
 
 _event = threading.Event()
 _hooks: list = []
