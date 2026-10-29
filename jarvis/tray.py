@@ -22,7 +22,7 @@ from .config import ROOT, set_setting, settings
 log = logging.getLogger("jarvis.tray")
 
 WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon is clicked
-ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR, ID_STOP = 1023, 1024, 1025, 1026, 1027, 1028, 1029
+ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR, ID_STOP, ID_FACEID = 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030
 MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
@@ -104,6 +104,9 @@ class Tray:
                 win32gui.AppendMenu(menu, win32con.MF_STRING | speak, ID_SPEAK, "Speak reply on Ctrl+Alt+J")
                 win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_PAIR, "Pair your phone (QR code)…")
+            from . import faceid
+            if faceid.enabled():   # a lost or reset phone can't do Face ID any more: turn it off from here
+                win32gui.AppendMenu(menu, win32con.MF_STRING, ID_FACEID, "Turn off Face ID for permissions")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_PHONE, "Open the phone page")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_LOG, "Open the log")
             win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
@@ -146,6 +149,10 @@ class Tray:
         elif cmd == ID_STOP and self.on_stop is not None:
             log.info("Stop from the tray icon.")
             threading.Thread(target=self.on_stop, daemon=True, name="tray-stop").start()
+        elif cmd == ID_FACEID:
+            from . import faceid
+            faceid.clear()
+            log.info("Face ID for permissions turned off from the tray.")
         elif cmd == ID_PAIR:
             log.info("Showing the pairing QR code.")
             self._open_pairing()

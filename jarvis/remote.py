@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, away, camera, inbox, media, modes, outbox, pc, proactive, push, screens, siri,
-               stopping, sysinfo, tools, watchers)
+from . import (activity, approval, away, camera, faceid, inbox, media, modes, outbox, pc, proactive, push, screens,
+               siri, stopping, sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -93,6 +93,7 @@ class PhoneChannel:
         watchers.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
         stopping.on_stop(self._drop_asks)
         away.set_handler(self._away_alert)
+        away.set_on_change(lambda: self.soon("state", 0.2, self.send_state))   # the phone's away-mode chip
         self._frame_lock = threading.Lock()   # one live-screen picture at a time (the old, one-at-a-time way)
         from .live import LiveStream
         self.live = LiveStream(self._publish_frame, _short_label)
@@ -239,6 +240,7 @@ class PhoneChannel:
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "voice_language": settings.get("voice_language", "en"),
+                       "away": away.is_on(), "away_since": away.since(), "faceid": faceid.enabled(),
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
                        "activity": activity.summary(), "watches": watchers.items() + proactive.items()})
@@ -401,6 +403,8 @@ class PhoneChannel:
         """Show an Allow / Don't Allow prompt on the phone and wait for the answer (no answer = no)."""
         ask_id = secrets.token_hex(6)
         payload = {"kind": "ask", "id": ask_id, "title": title, "detail": detail, "confirm": confirm}
+        if faceid.enabled():   # "Allow" must come back signed by your face (checked in _answer)
+            payload.update(faceid=True, challenge=faceid.challenge(), keys=faceid.ids())
         entry = {"event": threading.Event(), "ok": False, "payload": payload}
         self.asks[ask_id] = entry
         self._publish(dict(payload))
@@ -409,6 +413,23 @@ class PhoneChannel:
         if not answered:
             self._publish({"kind": "ask_done", "id": ask_id})   # take the stale prompt off the screen
         return entry["ok"]
+
+    def _answer(self, data: dict) -> None:
+        """Allow / Don't Allow from the phone. With Face ID on, an Allow needs a valid signature for this exact
+        prompt; a bad one leaves the prompt open (Face ID can be tried again), it never counts as a yes."""
+        ask_id = data.get("ask", "")
+        entry = self.asks.get(ask_id)
+        if not entry:
+            return
+        allow = data.get("allow") is True
+        p = entry["payload"]
+        if allow and p.get("faceid") and not faceid.verify(data.get("webauthn"), p["challenge"]):
+            log.warning("Permission: an Allow without a valid Face ID was ignored (%s).", p.get("title"))
+            self._publish({"kind": "ask_retry", "id": ask_id,
+                           "text": "Face ID didn't check out, so it isn't allowed yet. Try again."})
+            return
+        entry["ok"] = allow
+        entry["event"].set()
 
     def watch(self) -> None:
         """The System page is open: stream detailed stats until it stops asking (60 s)."""
@@ -495,10 +516,23 @@ class PhoneChannel:
             threading.Thread(target=self.send_voice, args=(data.get("req", ""), data.get("text", "")),
                              daemon=True, name="phone-tts").start()
         elif kind == "answer":
-            entry = self.asks.get(data.get("ask", ""))
-            if entry:
-                entry["ok"] = data.get("allow") is True
-                entry["event"].set()
+            self._answer(data)
+        elif kind == "faceid_add":   # Settings: Face ID for permissions, on
+            err = faceid.add(data.get("cred", ""), data.get("key", ""), data.get("client", ""), data.get("label", ""))
+            self.reply(msg_id, err or "Face ID is on. Risky actions now need your face before they're allowed.")
+        elif kind == "faceid_off_begin":   # turning it off needs Face ID too: here's what to sign
+            self._faceid_off = faceid.challenge()
+            self._publish({"kind": "faceid_challenge", "id": msg_id, "challenge": self._faceid_off,
+                           "keys": faceid.ids()})
+        elif kind == "faceid_off":
+            ch, self._faceid_off = getattr(self, "_faceid_off", ""), ""
+            if ch and faceid.verify(data.get("webauthn"), ch):
+                faceid.clear()
+                self.reply(msg_id, "Face ID for permissions is off.")
+            else:
+                self.reply(msg_id, "Face ID didn't check out, so it's still on.")
+        elif kind == "away_off":   # the away-mode chip
+            self.reply(msg_id, away.turn_off())
         elif kind == "art":
             self.send_art(data.get("art", ""))
         elif kind == "media":  # Control Center buttons: instant, no Claude

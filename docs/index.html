@@ -232,6 +232,8 @@
   .pill .pt { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill.run .pt { font-weight: 500; }
   .pill.more { color: var(--label2); font-weight: 500; }
+  .pill.away { box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 1px color-mix(in srgb, var(--orange) 55%, transparent); }
+  .pill.away.busy { opacity: .5; }
   .pills.open .pill .pt { white-space: normal; }
   /* floating chips under the top bar: "working" + upcoming reminders */
   .statusbar { display: flex; justify-content: center; gap: 6px; padding: 0 4px 10px; }
@@ -950,6 +952,11 @@
         <div class="opt-note" id="langNote"></div>
       </div>
       <div class="group-foot">For “Hey Jarvis” on your PC and dictation here. Replies in Bulgarian are read in a Bulgarian voice either way.</div>
+      <div class="group-title">Security</div>
+      <div class="group">
+        <label class="row"><span class="grow">Face ID for permissions<span class="sub">Sending, deleting, running commands and shutting down need your face before they're allowed</span></span><span class="switch"><input type="checkbox" id="faceidToggle"><span></span></span></label>
+      </div>
+      <div class="group-foot">Your PC checks the Face ID itself, so someone holding your unlocked phone can't approve anything. Turning it off needs Face ID too. Lost your phone? Right-click the Jarvis tray icon on the PC › Turn off Face ID for permissions.</div>
       <div class="group-title">Notifications</div>
       <div class="group">
         <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
@@ -1089,10 +1096,15 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.7";   // bump together with version.json
-const JNI = "JNIv17";   // Jarvis · Niko · Izu83 · version 17 — Jarvis's own release name
+const VERSION = "2026-10-29.8";   // bump together with version.json
+const JNI = "JNIv18";   // Jarvis · Niko · Izu83 · version 18 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv18", when: "Oct 29, 2026", title: "Face ID & an away-mode chip", notes: [
+    "While away mode is on, a chip above the message box says so (and since when). Tap it to turn away mode off.",
+    "Settings › Security › Face ID for permissions: sending, deleting, running commands and shutting down then need your face before they're allowed.",
+    "Your PC checks the Face ID itself, so someone holding your unlocked phone can't approve anything. Turning it off needs Face ID too, or the tray menu on your PC if your phone is lost.",
+  ] },
   { v: "JNIv17", when: "Oct 29, 2026", title: "A smoother live screen", notes: [
     "/live now streams at up to 20 pictures a second (about 16 measured through the internet link), instead of 2.",
     "When the screen stops moving you get one full-sharpness picture, so zoomed-in text is crisp. Your zoom stays put.",
@@ -1436,7 +1448,8 @@ function readAloud(text, btn) {
 function pill(kind, text, state = "") {   // state: "" (done) | "run" | "err"
   const b = document.createElement("div");
   b.className = "pill" + (state ? " " + state : "");
-  const mark = kind === "Reminder" ? icon("clock", "i pi") : kind === "Watch" ? icon("bell", "i pi") : '<span class="pd"></span>';
+  const mark = kind === "Reminder" ? icon("clock", "i pi") : kind === "Watch" ? icon("bell", "i pi")
+    : kind === "Away mode" ? icon("shield", "i pi") : '<span class="pd"></span>';
   b.innerHTML = `${mark}<span class="pk"></span><span class="pt"></span>`;
   b.querySelector(".pk").textContent = kind || "Step";
   b.querySelector(".pt").textContent = text;
@@ -1946,6 +1959,8 @@ async function onMessage(text) {
     if (data.kind === "memory") { onMemory(data); return; }
     if (data.kind === "siri") { onSiri(data); return; }
     if (data.kind === "partial") { onPartial(data); return; }
+    if (data.kind === "faceid_challenge") { faceidWait?.(data); faceidWait = null; return; }
+    if (data.kind === "ask_retry") { toast(data.text, "x", "var(--red)"); const a = asks.get(data.id); if (a) showAsk(a); return; }
     if (data.kind === "frame") { Live.frame(data); return; }
     if (data.kind === "activity") { onActivity(data.activity, data.watches); return; }
     if (data.kind === "sys") { onSys(data.sys); return; }
@@ -2082,6 +2097,12 @@ function renderStatusBar() {
     const b = pill(w.when ? "Reminder" : "Watch", (w.when ? whenLabel(w.when) + " · " : "") + w.label + more);
     b.classList.add("press"); b.onclick = openActivity; bar.append(b);
   }
+  if (awayOn) {   // away mode: shown until it's off; tap to turn it off
+    const b = pill("Away mode", (awaySince ? "on since " + timeLabel(awaySince * 1000) : "on") + " · tap to turn off");
+    b.classList.add("press", "away");
+    b.onclick = () => { b.classList.add("busy"); quick("away_off"); };
+    bar.append(b);
+  }
   const show = !!(bar.children.length && cfg);
   bar.hidden = !show;
   $("actBadge").hidden = !running.length;   // a live dot on the Activity tab while Jarvis works
@@ -2175,8 +2196,13 @@ function renderLang() {
   });
   $("langNote").textContent = LANG_NOTE[voiceLang];
 }
+let awayOn = false, awaySince = 0;
 function onState(data) {
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
+  if (typeof data.away === "boolean" && (data.away !== awayOn || data.away_since !== awaySince)) {
+    awayOn = data.away; awaySince = data.away_since || 0; renderStatusBar();
+  }
+  if (typeof data.faceid === "boolean") { faceidOn = data.faceid; $("faceidToggle").checked = data.faceid; }
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
@@ -3181,7 +3207,57 @@ _talk.addEventListener("contextmenu", e => e.preventDefault());
 
 // ================= permission prompts =================
 // Deleting, clearing and running commands on the PC wait for an explicit Allow here. No answer = not allowed.
+// ================= Face ID for permissions (WebAuthn; the PC checks the signature, see jarvis/faceid.py) =================
+let faceidOn = false, faceidWait = null;
+const asks = new Map();   // permission prompts by id, so one can come back if Face ID didn't check out
+const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4)), c => c.charCodeAt(0));
+const canFaceId = () => !!(window.PublicKeyCredential && navigator.credentials?.create);
+function faceidSign(challenge, keys) {   // must run straight from a tap (iOS needs the gesture)
+  return navigator.credentials.get({ publicKey: {
+    challenge: unb64u(challenge), allowCredentials: (keys || []).map(id => ({ type: "public-key", id: unb64u(id) })),
+    userVerification: "required", timeout: 60000 } }).then(a => ({
+      id: b64u(a.rawId), authenticatorData: b64u(a.response.authenticatorData),
+      clientDataJSON: b64u(a.response.clientDataJSON), signature: b64u(a.response.signature) }));
+}
+async function faceidSetup() {
+  if (!canFaceId()) { toast("This browser can't do Face ID", "x", "var(--red)"); return false; }
+  let cred;
+  try {
+    cred = await navigator.credentials.create({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: "Jarvis" },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "jarvis-permissions", displayName: "Jarvis permissions" },
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },
+      attestation: "none", timeout: 60000 } });
+  } catch { toast("Face ID wasn't set up", "x", "#8e8e93"); return false; }
+  const key = cred.response.getPublicKey?.();
+  if (!key) { toast("This browser can't do Face ID for Jarvis", "x", "var(--red)"); return false; }
+  const id = newId();
+  track(id, { kind: "quick", timeout: 15000 });
+  post({ type: "faceid_add", id, cred: b64u(cred.rawId), key: btoa(String.fromCharCode(...new Uint8Array(key))),
+         client: b64u(cred.response.clientDataJSON), label: /iPhone|iPad|Android/.exec(navigator.userAgent)?.[0] || "this device" })
+    .catch(() => fail(id, "Can't reach your PC right now."));
+  return true;
+}
+function faceidOff() {   // the PC sends a challenge, Face ID signs it, then the PC turns it off
+  const id = newId();
+  post({ type: "faceid_off_begin", id }).catch(() => toast("Can't reach your PC right now.", "x", "var(--red)"));
+  faceidWait = data => {   // arrives a moment later; iOS may not show Face ID without a fresh tap, so ask for one
+    const go = () => faceidSign(data.challenge, data.keys).then(w => {
+      const rid = newId(); track(rid, { kind: "quick", timeout: 15000 });
+      post({ type: "faceid_off", id: rid, webauthn: w }).catch(() => fail(rid, "Can't reach your PC right now."));
+    }, () => toast("Face ID cancelled, so it's still on", "x", "#8e8e93"));
+    actionSheet("Turn off Face ID for permissions?", [{ label: "Confirm with Face ID", run: go }]);
+  };
+}
+$("faceidToggle").onchange = e => {
+  const want = e.target.checked;
+  e.target.checked = faceidOn;   // the PC's state decides; it comes back in the next update
+  if (want && !faceidOn) faceidSetup(); else if (!want && faceidOn) faceidOff();
+};
 function showAsk(data) {
+  asks.set(data.id, data);
   $("ask-" + data.id)?.remove();
   const wrap = document.createElement("div");
   wrap.className = "alert-wrap"; wrap.id = "ask-" + data.id;
@@ -3194,15 +3270,21 @@ function showAsk(data) {
     msg.textContent = why;
     const code = document.createElement("code"); code.textContent = rest.join("\n\n"); msg.append(code);
   } else msg.textContent = data.detail || "";
-  wrap.querySelector(".destructive").textContent = data.confirm || "Allow";
-  const answer = allow => {
+  wrap.querySelector(".destructive").textContent = (data.confirm || "Allow") + (data.faceid ? " with Face ID" : "");
+  const answer = (allow, webauthn) => {
     wrap.remove();
-    post({ type: "answer", ask: data.id, allow, id: newId() }).then(
+    if (!webauthn) asks.delete(data.id);   // with Face ID it may come back (ask_retry) if the PC rejects it
+    post({ type: "answer", ask: data.id, allow, webauthn, id: newId() }).then(
       () => toast(allow ? "Allowed" : "Not allowed", allow ? "check" : "x", allow ? "var(--green)" : "#8e8e93"),
       () => toast("Couldn't reach your PC", "x", "var(--red)"));
   };
   wrap.querySelector(".deny").onclick = () => answer(false);
-  wrap.querySelector(".destructive").onclick = () => answer(true);
+  wrap.querySelector(".destructive").onclick = () => {
+    if (!data.faceid) { answer(true); return; }
+    // Face ID first, straight from this tap; the card stays until it's done (cancelled = still waiting)
+    faceidSign(data.challenge, data.keys).then(w => answer(true, w),
+      () => toast("Face ID cancelled. It isn't allowed yet.", "x", "#8e8e93"));
+  };
   document.body.append(wrap);
   if (document.visibilityState !== "visible") { try { navigator.setAppBadge?.(1); } catch {} }
 }

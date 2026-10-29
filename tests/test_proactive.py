@@ -43,7 +43,8 @@ def test_messages_wait_until_the_phone_has_them():
 def test_a_scheduled_task_runs_then_is_gone(clean):
     ran, _ = clean
     msg = proactive.schedule("Tell me the weather", in_minutes=30, chat="c1")
-    assert msg.startswith("Okay, at ") and msg.endswith("message you: Tell me the weather.")
+    # "tomorrow at" when the test runs in the last half hour before midnight
+    assert msg.startswith(("Okay, at ", "Okay, tomorrow at ")) and msg.endswith("message you: Tell me the weather.")
     assert proactive.items()[0]["label"] == "Tell me the weather"
     proactive._run_due()
     assert ran == []                                   # not yet

@@ -193,7 +193,18 @@ screen isn't resent, and once it stops changing one full-size picture follows fo
 
 `/away` (or "I'm leaving", "away mode on"): while it's on, a real hand on the mouse or keyboard gets you a message
 and a webcam photo (kept in `.brain/away/`). Jarvis's own clicks and the live screen don't count: Windows marks
-them as generated input. `/away` again, or "I'm back", turns it off; `/lock` locks the PC.
+them as generated input. `/away` again, or "I'm back", turns it off; `/lock` locks the PC. While it's on, a chip
+above the phone's message box says so; tap it to turn away mode off.
+
+## Face ID for permissions
+
+Settings › Security › **Face ID for permissions** (Touch ID / Windows Hello in other browsers). Setting it up makes a
+passkey-style key on the phone that only works with your face; the PC keeps the public half in `.brain/faceid.json`.
+Every permission prompt on the phone (sending, deleting, running a command, shutting down: everything that asks)
+then carries a fresh challenge, and Allow only counts when it comes back signed by that key with the face checked.
+The PC checks the signature (`jarvis/faceid.py`), so someone holding your unlocked phone, or anything with only the
+pairing key, can't approve. Turning it off needs Face ID too; with a lost or reset phone, right-click the tray icon
+› **Turn off Face ID for permissions**. Prompts shown on the PC itself are unchanged.
 
 ## Bulgarian
 
@@ -326,6 +337,7 @@ a notification first).
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
+| `jarvis/faceid.py` | Face ID for permissions: stores the phone's public key, checks each signed Allow |
 | `jarvis/health.py` | The self-check: problems reported once with the fix, `/health` |
 | `jarvis/live.py` | The live screen stream: mss capture, confirmed pictures, adaptive size |
 | `jarvis/partial.py` | The answer as it's written, throttled, for the phone |
@@ -356,6 +368,7 @@ https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-w
   send you files. With the default `autonomy: full` it does most of that without asking, so your pairing key is
   effectively the key to the PC. Keep the pairing link private.
 - If your phone is lost, run `run.bat --pair` after deleting `JARVIS_TOPIC`/`JARVIS_KEY` from `.env` to rotate keys.
+- With Face ID for permissions on, nothing that asks permission can be approved from the phone without your face.
 - The Siri shortcut's key (`JARVIS_SIRI_KEY`) can run commands too, unencrypted apart from HTTPS (Cloudflare can see
   them). Delete it from `.env` and restart Jarvis to turn the shortcut off; a new one is made when you next open
   Settings › Siri & Share.

@@ -36,13 +36,34 @@ class _MOUSE(ctypes.Structure):
 _HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 
 
+_on_change = None   # fn() when away mode turns on or off (the phone shows a chip while it's on)
+
+
 def set_handler(fn) -> None:
     global _on_intruder
     _on_intruder = fn
 
 
+def set_on_change(fn) -> None:
+    global _on_change
+    _on_change = fn
+
+
+def _changed() -> None:
+    if _on_change:
+        try:
+            _on_change()
+        except Exception:
+            log.debug("away on-change failed", exc_info=True)
+
+
 def is_on() -> bool:
     return _state["on"]
+
+
+def since() -> float:
+    """When away mode was turned on (0 when it's off)."""
+    return _state["since"] if _state["on"] else 0.0
 
 
 def note_own_input(seconds: float = 2.0) -> None:
@@ -103,6 +124,7 @@ def turn_on() -> str:
     _state["thread"] = t
     t.start()
     log.info("Away mode on.")
+    _changed()
     return ("Away mode is on. If anyone uses the mouse or keyboard, I'll send you a webcam photo. "
             "Type /away again when you're back.")
 
@@ -115,6 +137,7 @@ def turn_off() -> str:
         ctypes.windll.user32.PostThreadMessageW(_state["tid"], WM_QUIT, 0, 0)
     _state["tid"] = 0
     log.info("Away mode off.")
+    _changed()
     return "Welcome back. Away mode is off."
 
 
