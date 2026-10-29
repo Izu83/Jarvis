@@ -1011,7 +1011,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.1";   // bump together with version.json
+const VERSION = "2026-10-29.2";   // bump together with version.json
 const JNI = "JNIv12";   // Jarvis · Niko · Izu83 · version 12 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1023,6 +1023,9 @@ const RELEASES = [
     "A heads-up when an important email arrives (once email is set up).",
     "Settings › Memory › Messages you on his own: When asked, Important or Chatty (adds a good-morning message). Nothing unasked buzzes your phone between 23:00 and 08:00.",
     "Messages wait for you: if the app is closed, they arrive the moment you open it, with a notification first.",
+    "Sending a photo works again: a picture on its own (no words needed) goes to Jarvis, and he looks at it and answers. Before, it was only saved on the PC.",
+    "The photos you send stay in the chat instead of turning into a file name.",
+    "Photos always go to Claude, even with Local models first on: the local models can't see pictures.",
   ] },
   { v: "JNIv11", when: "Oct 28, 2026", title: "Clearer glass, a memory you control, and a sense of humour", notes: [
     "New Liquid Glass: clearer glass that lets the colours behind it through, a bright edge that catches the light, and a glow under your finger when you tap it.",
@@ -1429,6 +1432,7 @@ function renderChat() {
     if (m.who === "shots") { if (!shotsCache.has(m.id) && !pending.has(m.id)) continue; const p = pending.get(m.id); const card = shotsCard(m.id, m.ts, m.title); if (p) p.card = card; }
     else if (m.who === "file") drawFile(m);
     else if (m.who === "steps") { stamp(m.ts); $("log").append(pillsEl(m.steps || [], false, "", m.failed)); }
+    else if (m.who === "me" && m.atts?.length) bubble(m.text.split("\n\u{1F4CE} ")[0].replace(/^\u{1F4CE} .*$/u, ""), "me", m.ts).prepend(attBox(m.atts));
     else bubble(m.text, m.who, m.ts, m.error, m.thinking);
   }
   for (const p of pending.values()) {
@@ -1675,19 +1679,15 @@ async function send(text, tile = null, onReply = null) {
   const ready = atts.filter(a => a.path);
   if (!key || (!text && !ready.length)) return false;
   if (atts.length) { attachments.length = 0; renderAttach(); }
-  if (!text) { toast(ready.length > 1 ? `Saved ${ready.length} files on your PC` : "Saved on your PC", "check", "var(--green)"); return true; }
   const chat = current();
   const recent = chat.messages.filter(m => m.who === "me" || m.who === "jarvis").slice(-6).map(m => ({ who: m.who, text: (m.text || "").slice(0, 250) }));
-  addMessage(chat, { who: "me", text: text + ready.map(a => "\n\u{1F4CE} " + a.name).join("") });
+  const shown = ready.map(a => ({ name: a.name, thumb: a.small || null }));
+  addMessage(chat, { who: "me", text: (text + ready.map(a => "\n\u{1F4CE} " + a.name).join("")).trim(), atts: shown });
   const mine = bubble(text, "me");
-  if (ready.length) {
-    const box = document.createElement("div"); box.className = "att";
-    for (const a of ready) {
-      if (a.thumb) { const img = new Image(); img.src = a.thumb; img.alt = ""; box.append(img); }
-      else { const s = document.createElement("span"); s.className = "fn"; s.textContent = "\u{1F4CE} " + a.name; box.append(s); }
-    }
-    mine.prepend(box);
-  }
+  if (ready.length) mine.prepend(attBox(ready.map(a => ({ name: a.name, thumb: a.thumb || a.small }))));
+  // Just a photo or file, no words: Jarvis still looks at it and answers.
+  if (!text) text = ready.length > 1 ? "(No message, just these attachments: look at them and respond.)"
+                                     : "(No message, just this attachment: look at it and respond.)";
   setChatTitle(chat);
   const id = newId();
   const payload = { type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) };
@@ -2963,11 +2963,31 @@ function pickAndUpload() {
   }
   input.click();
 }
+// The pictures (or file names) you sent, shown at the top of your message bubble.
+function attBox(list) {
+  const box = document.createElement("div"); box.className = "att";
+  for (const a of list) {
+    if (a.thumb) { const img = new Image(); img.src = a.thumb; img.alt = ""; box.append(img); }
+    else { const s = document.createElement("span"); s.className = "fn"; s.textContent = "\u{1F4CE} " + a.name; box.append(s); }
+  }
+  return box;
+}
+// A small copy of a photo (a few KB) that's saved with the chat, so the picture is still there next time.
+async function smallThumb(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = 240 / Math.max(bmp.width, bmp.height), c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(bmp.width * Math.min(1, k))); c.height = Math.max(1, Math.round(bmp.height * Math.min(1, k)));
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.6);
+  } catch { return null; }
+}
 const toB64 = bytes => { let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin); };
 async function uploadFile(file) {
   if (file.size > 40 * 1024 * 1024) { toast("That file is over 40 MB", "x", "var(--orange)"); return; }
   const att = { id: newId(), name: file.name || "photo.jpg", thumb: /^image\//.test(file.type) ? URL.createObjectURL(file) : null, pct: 0, path: null, error: null };
   attachments.push(att); renderAttach();
+  if (att.thumb) smallThumb(file).then(t => { att.small = t; });
   try {
     const buf = new Uint8Array(await file.arrayBuffer());   // read the file first, before touching the socket
     const n = Math.max(1, Math.ceil(buf.length / PART));

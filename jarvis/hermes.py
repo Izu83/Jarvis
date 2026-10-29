@@ -150,6 +150,8 @@ def _ollama_tools() -> list[dict]:
 def _needs_claude(command: str) -> bool:
     """True when the command clearly needs something Hermes can't do well (vision, web, exact file search)."""
     c = command.lower()
+    if "[the user attached these files" in c:   # photos and documents from the phone: only Claude can see them
+        return True
     if any(h in c for h in CLAUDE_HINTS):
         return True
     return bool(_FILE_SEARCH.search(c))
