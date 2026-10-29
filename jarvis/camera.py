@@ -13,10 +13,14 @@ from . import gesture
 log = logging.getLogger("jarvis.camera")
 
 # Run by the cv2-capable Python. Opens the camera, reads a few frames so it can auto-expose, saves one JPEG.
-# argv for `python -c "<script>" <out> <index>` is ["-c", out, index].
+# argv for `python -c "<script>" <out> <index>` is ["-c", out, index]. Exit 2 = no camera to open, 1 = it wouldn't read.
 _SNAP = (
     "import sys, cv2\n"
     "cam = cv2.VideoCapture(int(sys.argv[2]), cv2.CAP_DSHOW)\n"
+    "if not cam.isOpened():\n"
+    "    cam = cv2.VideoCapture(int(sys.argv[2]), cv2.CAP_MSMF)\n"
+    "if not cam.isOpened():\n"
+    "    sys.exit(2)\n"
     "cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280); cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)\n"
     "ok, frame = False, None\n"
     "for _ in range(4):\n"          # a few frames so the camera auto-exposes; fewer = faster
@@ -52,8 +56,10 @@ def capture(index: int = 0) -> bytes:
                            creationflags=subprocess.CREATE_NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise RuntimeError(f"couldn't start the camera: {e}") from e
+    if r.returncode == 2:
+        raise RuntimeError("Windows can't see a webcam right now. Check it's plugged in, then try again")
     if r.returncode != 0 or not out.exists():
-        raise RuntimeError("couldn't read from the webcam (is it connected and not in use by another app?)")
+        raise RuntimeError("the webcam wouldn't give a picture (is another app using it?)")
     data = out.read_bytes()
     out.unlink(missing_ok=True)
     log.info("Captured a %d KB webcam photo.", len(data) // 1024)

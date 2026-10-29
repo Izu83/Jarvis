@@ -244,7 +244,7 @@ class PhoneChannel:
             jpeg = camera.capture()
         except Exception as e:
             log.warning("Camera capture failed: %s", e)
-            self.reply(msg_id, f"I couldn't take a photo: {e}")
+            self.reply(msg_id, f"I couldn't take a photo: {e}.")
             return
         self._publish({"kind": "image", "id": msg_id, "monitors": [], "title": "Camera",
                        "data": base64.b64encode(jpeg).decode()})

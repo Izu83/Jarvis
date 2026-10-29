@@ -82,7 +82,7 @@ Commands run one at a time. If you send another while Jarvis is busy, it shows t
 
 ## Modes
 
-A mode is a saved layout you start with one phrase: **"Jarvis, work mode"**, or the mode's button on the phone.
+A mode is a saved layout you start with one phrase: **"Jarvis, work mode"**, or type **/work** (`/` + the mode's name) on the phone.
 Modes run instantly and don't use Claude at all. The default `work` mode:
 
 | Monitor | Windows |
@@ -103,6 +103,8 @@ which you can also edit by hand.
 - **Control Center**: shown on every new chat, or tap **Your PC** in the tab bar. Spotify now playing with play/pause,
   skip and volume; live CPU and memory with the busiest app; send your phone's clipboard to the PC or see the PC's
   clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
+- **Slash commands**: type `/` in the message box for the list: `/work` (and your other modes), `/monitors`,
+  `/camera`, `/system`, `/control`, `/call` and `/newmode`. Tap one, or type the whole name and press send.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
 - **Everything at the bottom**: like most iPhone apps there's no bar at the top. The tab bar at the bottom has
   Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
@@ -155,7 +157,7 @@ a live progress bar and controls, using Windows' own media information.
 
 ## Screens on your phone
 
-Tap **Screens** to get one picture of all three monitors, laid out like your desk. Tap a monitor (or use the
+Type **/monitors** (or `/screens`) to get one picture of all three monitors, laid out like your desk. Tap a monitor (or use the
 All / Left / Main / Right switch) to zoom in; pinch, drag and double-tap work too. Screenshots go straight from the PC to your phone,
 end-to-end encrypted. Claude never sees them, so they cost no tokens. They expire from the relay after 3 hours.
 

@@ -349,15 +349,15 @@
     background: linear-gradient(to top, color-mix(in srgb, var(--base) 82%, transparent), color-mix(in srgb, var(--base) 45%, transparent) 62%, transparent);
     -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
     -webkit-mask: linear-gradient(to top, #000 calc(100% - 60px), transparent); mask: linear-gradient(to top, #000 calc(100% - 60px), transparent); }
-  .shelf { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 12px; scrollbar-width: none; -webkit-mask: linear-gradient(90deg, #000 92%, transparent); mask: linear-gradient(90deg, #000 92%, transparent); }
-  .shelf::-webkit-scrollbar { display: none; }
-  .tile { flex: none; height: 40px; border-radius: 20px; padding: 0 14px 0 6px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.24px; }
-  .tile .ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; transition: background .3s; }
-  .tile .ic svg.i { width: 17px; height: 17px; stroke-width: 2.1; }
-  .tile .ic .spinner { width: 15px; height: 15px; border-width: 2px; border-color: rgba(255,255,255,.35); border-top-color: #fff; }
-  .tile.done .ic { background: var(--green) !important; }
-  .tile.plain { padding: 0 14px; font-weight: 500; color: var(--label2); gap: 6px; }
-  .tile.plain svg.i { width: 18px; height: 18px; }
+  /* the "/" menu: opens above the message box while you type a /command (they replace the old row of buttons) */
+  .cmds { margin: 0 2px 10px; border-radius: 22px; padding: 6px; max-height: 46vh; overflow-y: auto; transition: opacity .2s var(--ease); }
+  .cmds[hidden] { display: none; }
+  .cmd { width: 100%; display: flex; align-items: center; gap: 12px; padding: 6px 10px 6px 6px; border-radius: 16px; text-align: left; color: var(--label); }
+  .cmd.sel { background: var(--fill); }
+  .cmd .ic { width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; }
+  .cmd .ic svg.i { width: 17px; height: 17px; stroke-width: 2.1; }
+  .cmd b { display: block; font-size: 16px; font-weight: 600; line-height: 20px; }
+  .cmd small { display: block; font-size: 13px; line-height: 17px; color: var(--label2); }
   .bar { display: flex; gap: 8px; align-items: flex-end; }
   .attach { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 0 4px 10px; }
   .attach::-webkit-scrollbar { display: none; }
@@ -393,8 +393,7 @@
   .plusmenu.open .plus-toggle svg.i { transform: rotate(45deg); }
   .plusmenu.open .plus-toggle { color: #fff; background: var(--blue); }
   .plusmenu.active .plus-toggle::after { content: ""; position: absolute; top: 7px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--base); }
-  .shelf { transition: opacity .2s var(--ease); }
-  .dock.menuopen .shelf { opacity: 0; pointer-events: none; }
+  .dock.menuopen .cmds { opacity: 0; pointer-events: none; }
   .plus-actions { position: absolute; left: 0; bottom: calc(100% + 10px); display: flex; flex-direction: column-reverse; gap: 10px; }
   .plus-actions > button { opacity: 0; transform: translateY(14px) scale(.5); pointer-events: none;
     transition: opacity .2s var(--ease), transform .4s var(--spring); }
@@ -776,7 +775,7 @@
 
 <footer class="dock" id="dock" hidden>
   <div class="statusbar" id="statusBar" hidden></div>
-  <div class="shelf" id="shelf"></div>
+  <div class="cmds glass" id="cmds" hidden></div>
   <div class="attach" id="attach" hidden></div>
   <div class="bar">
     <div class="plusmenu" id="plusMenu">
@@ -788,7 +787,7 @@
       <button class="glass press plus-toggle" id="plusToggle" aria-label="More" aria-expanded="false"><svg class="i"><use href="#i-plus"/></svg></button>
     </div>
     <div class="field glass">
-      <textarea id="text" rows="1" placeholder="Ask Jarvis" enterkeyhint="send"></textarea>
+      <textarea id="text" rows="1" placeholder="Ask Jarvis, or type /" enterkeyhint="send"></textarea>
       <button id="send" aria-label="Send" disabled><svg class="i"><use href="#i-up"/></svg></button>
     </div>
   </div>
@@ -1011,10 +1010,15 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.2";   // bump together with version.json
-const JNI = "JNIv12";   // Jarvis · Niko · Izu83 · version 12 — Jarvis's own release name
+const VERSION = "2026-10-29.3";   // bump together with version.json
+const JNI = "JNIv13";   // Jarvis · Niko · Izu83 · version 13 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv13", when: "Oct 29, 2026", title: "Slash commands", notes: [
+    "The row of buttons above the message box is gone. Type / to see what's there, then /work, /monitors, /camera, /system, /control, /call or /newmode. Your own modes show up as /their-name too.",
+    "Tap a command in the list, or type the whole name and press send. /screens, /photo and /music work too.",
+    "When the webcam can't take a photo, you now get a message saying why (for example, that Windows can't see the webcam) instead of a card that spins forever.",
+  ] },
   { v: "JNIv12", when: "Oct 29, 2026", title: "Jarvis texts back, and texts first", notes: [
     "Jarvis can send you more than one message: a quick “on it” before something slow, a result the moment he has it, or a long answer split into a few texts.",
     "Jarvis can message you without being asked in that moment. Say “every morning at 8 check my email and tell me what matters” or “at 18:00 tell me the weather”, and he does it then and texts you the answer.",
@@ -1372,7 +1376,7 @@ function fillShots(card, id) {
   const shot = shotsCache.get(id), p = pending.get(id);
   const label = card.querySelector("header span"), desk = card.querySelector(".desk, .expired");
   if (!shot && p) { label.textContent = p.status || "Capturing…"; return; }
-  if (!shot) { label.textContent = ""; desk.outerHTML = '<div class="expired">This screenshot is gone. Tap Screens for a new one.</div>'; return; }
+  if (!shot) { label.textContent = ""; desk.outerHTML = '<div class="expired">This picture is gone. Type /monitors for a new one.</div>'; return; }
   label.textContent = timeLabel(shot.ts);
   const d = document.createElement("div");
   d.className = "desk";
@@ -1648,7 +1652,13 @@ function fail(id, msg) {
   pending.delete(id); clearTimeout(p.timer); clearTimeout(p.ackTimer); setAwaiting(id);
   if (p.tile) tileState(p.tile, "");
   if (p.kind === "quick") { toast(msg, "x", "var(--red)"); return; }
-  if (p.kind === "shots") { if (p.card) p.card.querySelector("header span").textContent = msg; return; }
+  if (p.kind === "shots") {   // no picture: drop the empty card and say why, like any other failed command
+    p.card?.remove();
+    const chat = chatById(p.chatId);
+    if (chat) { chat.messages = chat.messages.filter(m => m.id !== id); addMessage(chat, { who: "jarvis", text: msg, error: true }); }
+    if (p.chatId === db.current) { bubble(msg, "jarvis", Date.now(), true); scrollDown(); }
+    return;
+  }
   const chat = chatById(p.chatId);
   saveSteps(chat, p, true);
   if (chat) addMessage(chat, { who: "jarvis", text: msg, error: true });
@@ -1836,7 +1846,7 @@ async function onMessage(text) {
       p.timer = setTimeout(() => setStep(p, "Still working…"), 60000);
       return;
     }
-    if (p.kind === "shots") return;   // the picture itself completes it
+    if (p.kind === "shots") { fail(data.id, data.text); return; }   // a picture completes it; a reply means it failed
     pending.delete(data.id); setAwaiting(data.id);
     if (p.tile) tileState(p.tile, "done");
     if (p.kind === "quick") {
@@ -2144,27 +2154,55 @@ function onSys(s) {
 }
 setInterval(() => { if (!$("sysSheet").hidden && Date.now() - sysSeen > 12000) { $("sysDot").className = "dot warn"; $("sysLive").textContent = sysSeen ? "Paused" : "Connecting…"; } }, 3000);
 
-// ================= modes + shelf =================
+// ================= modes + "/" commands =================
 function setModes(list) {
   if (JSON.stringify(list) === JSON.stringify(modes)) return;
   modes = list; store(MODES_KEY, JSON.stringify(list));
-  renderShelf(); renderModeList();
+  renderCmds(); renderModeList();
 }
-function renderShelf() {
-  const shelf = $("shelf");
-  shelf.innerHTML = "";
-  const add = (html, cls, onclick) => {
+// What used to be a row of buttons above the message box: type / to see them, /work, /camera and so on to run one.
+// Your own modes come first, so a mode wins if it shares a name with a built-in command.
+function slashCommands() {
+  const own = modes.map(m => ({ name: m.name.toLowerCase().replace(/\s+/g, "-"), alias: [], icon: m.icon,
+    tint: TINTS[m.icon] || TINTS.sparkles, desc: `Switch to ${m.name} mode`, run: () => send(`${m.name} mode`) }));
+  return own.concat([
+    { name: "monitors", alias: ["screens", "screen", "screenshot"], icon: "display", tint: "#8e8e93", desc: "A picture of all your screens", run: () => requestScreens() },
+    { name: "camera", alias: ["cam", "webcam", "photo", "selfie"], icon: "camera", tint: "#ff9f0a", desc: "A photo from your PC's webcam", run: () => requestCamera() },
+    { name: "system", alias: ["stats", "pc"], icon: "chart", tint: "#30b0c7", desc: "CPU, memory, disks and network", run: openSystem },
+    { name: "control", alias: ["music", "media", "volume"], icon: "music", tint: "#30d158", desc: "Music, volume, clipboard and lock", run: openControl },
+    { name: "call", alias: [], icon: "phone", tint: "#34c759", desc: "Talk to Jarvis out loud", run: () => Call.open(false) },
+    { name: "newmode", alias: ["mode"], icon: "plus", tint: "#8e8e93", desc: "Make a new mode",
+      run: () => { text.value = "Create a mode called "; autosize(); text.focus(); } },
+  ]);
+}
+const findCommands = q => slashCommands().filter(c => [c.name, ...c.alias].some(n => n.startsWith(q)));
+let cmdSel = 0;   // the highlighted row; Enter runs it when what you typed isn't a whole command name
+function renderCmds() {
+  const box = $("cmds"), m = /^\s*\/(\S*)$/.exec(text.value);
+  const list = m ? findCommands(m[1].toLowerCase()) : [];
+  box.hidden = !list.length;
+  if (!list.length) return;
+  cmdSel = Math.min(cmdSel, list.length - 1);
+  box.innerHTML = "";
+  list.forEach((c, i) => {
     const b = document.createElement("button");
-    b.className = `tile glass press ${cls}`; b.innerHTML = html; b.onclick = () => onclick(b);
-    shelf.append(b);
-  };
-  for (const m of modes) add(`<span class="ic" style="background:${TINTS[m.icon] || TINTS.sparkles}">${icon(m.icon)}</span>${esc(cap(m.name))}`, "", b => send(`${m.name} mode`, b));
-  add(`<span class="ic" style="background:#8e8e93">${icon("display")}</span>Screens`, "", b => requestScreens(b));
-  add(`<span class="ic" style="background:#ff9f0a">${icon("camera")}</span>Camera`, "", b => requestCamera(b));
-  add(`<span class="ic" style="background:#30b0c7">${icon("chart")}</span>System`, "", openSystem);
-  add(`<span class="ic" style="background:#30d158">${icon("music")}</span>Control`, "", openControl);
-  add(`<span class="ic" style="background:#34c759">${icon("phone")}</span>Call`, "", () => Call.open(false));
-  add(`${icon("plus")} New mode`, "plain", () => { $("text").value = "Create a mode called "; autosize(); $("text").focus(); });
+    b.className = "cmd press" + (i === cmdSel ? " sel" : "");
+    b.innerHTML = `<span class="ic" style="background:${c.tint}">${icon(c.icon)}</span><span><b>/${esc(c.name)}</b><small>${esc(c.desc)}</small></span>`;
+    b.onmousedown = e => e.preventDefault();   // keep the keyboard (and the text box's focus) while tapping
+    b.onclick = () => runCommand(c);
+    box.append(b);
+  });
+}
+function runCommand(c) {
+  text.value = ""; autosize(); cmdSel = 0; renderCmds();
+  text.blur();   // put the keyboard away so the photo, screens or sheet is in view
+  c.run();
+}
+function slash(v) {
+  const q = v.trim().slice(1).split(/\s+/)[0].toLowerCase(), list = findCommands(q);
+  const c = list.find(c => c.name === q || c.alias.includes(q)) || list[cmdSel];
+  if (c) runCommand(c);
+  else toast(`There's no /${q}. Type / to see them all.`, "x", "var(--red)");
 }
 // ---- Appearance: wallpaper + accent (saved on this device, applied via CSS variables) ----
 const WALLS = [
@@ -2314,10 +2352,17 @@ document.querySelectorAll(".sheet").forEach(sheet => {
 // ================= composer + dictation =================
 const text = $("text");
 function autosize() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px"; $("send").disabled = !text.value.trim() && !attachments.length; }
-text.addEventListener("input", autosize);
-text.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
+text.addEventListener("input", () => { autosize(); cmdSel = 0; renderCmds(); });
+text.addEventListener("keydown", e => {
+  if (!$("cmds").hidden && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    const n = $("cmds").children.length;
+    e.preventDefault(); cmdSel = (cmdSel + (e.key === "ArrowDown" ? 1 : n - 1)) % n; renderCmds(); return;
+  }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+});
 $("send").onclick = submit;
 function submit() {
+  if (/^\s*\/\S*\s*$/.test(text.value) && !attachments.length) { slash(text.value); return; }
   if (attachments.some(a => !a.path && !a.error)) { toast("Still sending your file…", "clip-up", "var(--orange)"); return; }
   const v = text.value; text.value = ""; autosize(); send(v);
 }
@@ -3113,7 +3158,7 @@ async function start() {
   loadDb();
   try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
   restoreAwaiting();
-  renderShelf(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
+  renderCmds(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
   connect();
   if (/[?&]call=1/.test(location.search)) { window.history.replaceState(null, "", location.pathname); setTimeout(() => Call.open(true, ""), 400); }
 }
