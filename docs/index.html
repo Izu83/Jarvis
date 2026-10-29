@@ -494,6 +494,17 @@
   .add-fact input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--label); font: inherit; font-size: 17px; padding: 14px 0; }
   .add-fact input::placeholder { color: var(--label2); }
   .sub-only { color: var(--label2); font-size: 15px; }
+  /* /cleandisk */
+  .clean-msg { padding: 28px 24px; text-align: center; color: var(--label2); font-size: 15px; line-height: 21px; }
+  .clean-msg .spinner { margin: 0 auto 14px; }
+  .clean-msg b { display: block; color: var(--label); font-size: 20px; margin-bottom: 6px; }
+  .clean-row { align-items: flex-start; }
+  .clean-row input { width: 22px; height: 22px; margin: 15px 0 0; flex: none; accent-color: var(--blue); }
+  .clean-row .size { padding-top: 13px; font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+  .clean-row .note { display: block; font-size: 13px; color: var(--orange); margin-top: 3px; }
+  .clean-go { position: sticky; bottom: 0; padding: 14px 16px calc(env(safe-area-inset-bottom) + 8px); }
+  .clean-go button { width: 100%; height: 50px; border-radius: 25px; color: #fff; font-size: 17px; font-weight: 600; background: var(--accent-grad); box-shadow: 0 6px 18px -6px var(--accent-glow); }
+  .clean-go button:disabled { opacity: .4; }
   /* Settings › Siri & Share */
   .siri-how { padding: 4px 18px 16px; font-size: 15px; line-height: 21px; border-top: .5px solid var(--sep); }
   .siri-how p { margin: 12px 0 8px; }
@@ -1037,6 +1048,15 @@
   </div>
 </div>
 
+<!-- /cleandisk: pick a disk, see safe / your call / leave alone, clean what's ticked -->
+<div class="sheet-wrap" id="cleanSheet" hidden>
+  <div class="sheet glass strong tall" role="dialog" aria-label="Clean up a disk">
+    <div class="grabber"></div>
+    <div class="sheet-head"><span style="width:32px"></span><h3>Clean up a disk</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-body" id="cleanBody"></div>
+  </div>
+</div>
+
 <div class="sheet-wrap" id="clipSheet" hidden>
   <div class="sheet glass strong" role="dialog" aria-label="PC Clipboard">
     <div class="grabber"></div>
@@ -1096,10 +1116,16 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.8";   // bump together with version.json
-const JNI = "JNIv18";   // Jarvis · Niko · Izu83 · version 18 — Jarvis's own release name
+const VERSION = "2026-10-30.1";   // bump together with version.json
+const JNI = "JNIv19";   // Jarvis · Niko · Izu83 · version 19 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv19", when: "Oct 30, 2026", title: "/cleandisk", notes: [
+    "/cleandisk asks which disk, scans it in a few seconds, and sorts what it finds: Safe to clean (ticked), Your call (not ticked) and Leave alone (shown so you know where the space is, never touched).",
+    "Safe means things programs rebuild by themselves: temp files older than a day, browser and app caches, graphics shader caches, crash reports, pip and npm download caches.",
+    "Apps that are open are skipped (close them first), files in use are left alone, and with Face ID on, cleaning needs your face.",
+    "The Windows-only parts (Windows Update leftovers, old Windows versions) open Windows' own Disk Cleanup on your PC.",
+  ] },
   { v: "JNIv18", when: "Oct 29, 2026", title: "Face ID & an away-mode chip", notes: [
     "While away mode is on, a chip above the message box says so (and since when). Tap it to turn away mode off.",
     "Settings › Security › Face ID for permissions: sending, deleting, running commands and shutting down then need your face before they're allowed.",
@@ -1959,6 +1985,7 @@ async function onMessage(text) {
     if (data.kind === "memory") { onMemory(data); return; }
     if (data.kind === "siri") { onSiri(data); return; }
     if (data.kind === "partial") { onPartial(data); return; }
+    if (data.kind && data.kind.startsWith("clean_")) { Clean.on(data); return; }
     if (data.kind === "faceid_challenge") { faceidWait?.(data); faceidWait = null; return; }
     if (data.kind === "ask_retry") { toast(data.text, "x", "var(--red)"); const a = asks.get(data.id); if (a) showAsk(a); return; }
     if (data.kind === "frame") { Live.frame(data); return; }
@@ -2349,6 +2376,7 @@ function slashCommands() {
     { name: "control", alias: ["music", "media", "volume"], icon: "music", tint: "#30d158", desc: "Music, volume, clipboard and lock", run: openControl },
     { name: "live", alias: ["remote", "desktop", "mirror"], icon: "display", tint: "#5e5ce6", desc: "Your PC's screen live: tap to click", run: () => Live.show() },
     { name: "stop", alias: ["cancel"], icon: "stop", tint: "#ff453a", desc: "Stop what Jarvis is doing", run: stopAnything },
+    { name: "cleandisk", alias: ["clean", "cleanup", "disk"], icon: "disk", tint: "#30b0c7", desc: "Free up space on a disk", run: () => Clean.open() },
     { name: "away", alias: ["leaving", "back"], icon: "shield", tint: "#ff9f0a", desc: "Away mode: a photo if someone uses your PC", run: () => askQuick("away") },
     { name: "lock", alias: [], icon: "lock", tint: "#8e8e93", desc: "Lock your PC", run: () => quick("lock") },
     { name: "health", alias: ["check", "status"], icon: "check", tint: "#30d158", desc: "Is everything working?", run: () => askQuick("health") },
@@ -3207,6 +3235,117 @@ _talk.addEventListener("contextmenu", e => e.preventDefault());
 
 // ================= permission prompts =================
 // Deleting, clearing and running commands on the PC wait for an explicit Allow here. No answer = not allowed.
+// ================= /cleandisk: which disk › scan › safe / your call / leave alone › clean (jarvis/cleandisk.py) =================
+const Clean = {
+  scan: null, timer: null,
+  body() { return $("cleanBody"); },
+  msg(title, text, spin = false) {
+    this.body().innerHTML = `<div class="clean-msg">${spin ? '<div class="spinner"></div>' : ""}<b></b><span></span></div>`;
+    this.body().querySelector("b").textContent = title; this.body().querySelector("span").textContent = text;
+  },
+  wait(ms, what) { clearTimeout(this.timer); this.timer = setTimeout(() => this.msg("No answer", `Your PC didn't answer ${what}. Is Jarvis running?`), ms); },
+  open() {
+    if (!key) return;
+    openSheet("cleanSheet"); this.msg("Which disk?", "Asking your PC…", true);
+    post({ type: "clean_disks", id: newId() }).catch(() => this.msg("Can't reach your PC", "Is Jarvis running?"));
+    this.wait(15000, "");
+  },
+  on(d) {
+    if (d.kind === "clean_disks") this.disks(d.disks || []);
+    else if (d.kind === "clean_progress") { const s = this.body().querySelector(".clean-msg span"); if (s) s.textContent = d.text; this.wait(90000, "in time"); }
+    else if (d.kind === "clean_result") this.result(d);
+    else if (d.kind === "clean_done") this.done(d);
+  },
+  disks(list) {
+    clearTimeout(this.timer);
+    const b = this.body();
+    b.innerHTML = '<div class="group-title">Which disk?</div><div class="group" id="cleanDisks"></div>';
+    for (const dk of list) {
+      const row = document.createElement("button");
+      row.className = "row press";
+      row.innerHTML = `<span class="grow"><b></b><span class="sub"></span><div class="meter" style="margin-top:7px"><i></i></div></span><svg class="i disclose"><use href="#i-right"/></svg>`;
+      row.querySelector("b").textContent = dk.name + (dk.label ? "  " + dk.label : "");
+      row.querySelector(".sub").textContent = `${fmtBytes(dk.free)} free of ${fmtBytes(dk.total)}`;
+      Object.assign(row.querySelector(".meter i").style, { width: dk.pct + "%", background: levelColor(dk.pct) });
+      row.onclick = () => this.start(dk.name);
+      $("cleanDisks").append(row);
+    }
+  },
+  start(drive) {
+    this.msg("Scanning " + drive, "Looking for what's safe to clean…", true);
+    post({ type: "clean_scan", id: newId(), drive }).catch(() => this.msg("Can't reach your PC", "Is Jarvis running?"));
+    this.wait(90000, "in time");
+  },
+  result(d) {
+    clearTimeout(this.timer);
+    this.scan = d;
+    const b = this.body(), groups = [["safe", "Safe to clean", "Programs rebuild these by themselves."],
+      ["ask", "Your call", "Gone for good, or a big download to get back."], ["leave", "Leave alone", "Shown so you know where the space is. Jarvis never cleans these."]];
+    b.innerHTML = "";
+    if (!d.items.some(i => i.verdict !== "leave")) {
+      this.msg("Nothing to clean on " + d.drive, "No caches or temporary files worth clearing here.");
+      return;
+    }
+    for (const [v, title, foot] of groups) {
+      const list = d.items.filter(i => i.verdict === v).sort((a, c) => c.size - a.size);
+      if (!list.length) continue;
+      b.insertAdjacentHTML("beforeend", `<div class="group-title">${title}</div>`);
+      const g = document.createElement("div"); g.className = "group"; b.append(g);
+      for (const it of list) {
+        const row = document.createElement(v === "leave" ? "div" : "label");
+        row.className = "row clean-row";
+        const app = e => e.replace(/\.exe$/i, "").replace(/^./, c => c.toUpperCase());
+        const blocked = it.blocked?.length ? `Close ${it.blocked.map(app).join(", ")} first, or it's skipped` : "";
+        row.innerHTML = (v === "leave" ? "" : `<input type="checkbox" data-id="${esc(it.id)}"${v === "safe" && !blocked ? " checked" : ""}>`)
+          + `<span class="grow"><b></b><span class="sub"></span>${blocked ? `<span class="note">${esc(blocked)}</span>` : ""}</span><span class="size"></span>`;
+        row.querySelector("b").textContent = it.label;
+        row.querySelector(".sub").textContent = it.why;
+        row.querySelector(".size").textContent = fmtBytes(it.size) + (it.partial ? "+" : "");
+        g.append(row);
+      }
+      b.insertAdjacentHTML("beforeend", `<div class="group-foot">${esc(foot)}</div>`);
+    }
+    if (d.admin) {
+      b.insertAdjacentHTML("beforeend", '<div class="group-title">Needs Windows</div><div class="group"><button class="row btn" id="cleanAdmin">Open Disk Cleanup on the PC</button></div>');
+      b.insertAdjacentHTML("beforeend", `<div class="group-foot">${esc(d.admin)}</div>`);
+      $("cleanAdmin").onclick = () => quick("clean_open", { drive: d.drive });
+    }
+    b.insertAdjacentHTML("beforeend", `<div class="clean-go"><button class="press" id="cleanGo"></button></div>`);
+    const update = () => {
+      const ids = [...b.querySelectorAll("input[data-id]:checked")].map(x => x.dataset.id);
+      const total = d.items.filter(i => ids.includes(i.id)).reduce((s, i) => s + i.size, 0);
+      $("cleanGo").disabled = !ids.length;
+      $("cleanGo").textContent = ids.length ? `Clean ${fmtBytes(total)}${d.faceid ? " with Face ID" : ""}` : "Tick what to clean";
+      return ids;
+    };
+    b.querySelectorAll("input[data-id]").forEach(x => x.onchange = update);
+    update();
+    $("cleanGo").onclick = () => {
+      const ids = update();
+      if (!ids.length) return;
+      const risky = d.items.filter(i => ids.includes(i.id) && i.verdict === "ask");
+      if (risky.length && !confirm(`${risky.map(i => i.label).join(" and ")} can't be brought back. Clean anyway?`)) return;
+      const go = webauthn => this.run(ids, webauthn);
+      if (d.faceid) faceidSign(d.challenge, d.keys).then(go, () => toast("Face ID cancelled. Nothing was cleaned.", "x", "#8e8e93"));
+      else go();
+    };
+  },
+  run(ids, webauthn) {
+    const id = newId();
+    this.msg("Cleaning…", "This can take a minute for big caches.", true);
+    track(id, { kind: "quick", timeout: 600000, onReply: t => this.msg("Not cleaned", t) });
+    post({ type: "clean_run", id, scan: this.scan.scan, ids, webauthn }).catch(() => fail(id, "Can't reach your PC right now."));
+    clearTimeout(this.timer);
+  },
+  done(d) {
+    const p = pending.get(d.id); if (p) { clearTimeout(p.timer); pending.delete(d.id); }
+    this.msg("Done", d.text);
+    toast("Disk cleaned", "check");
+    const chat = current(); addMessage(chat, { who: "jarvis", text: "🧹 " + d.text });
+    if (chat.id === db.current) bubble("🧹 " + d.text, "jarvis");
+  },
+};
+
 // ================= Face ID for permissions (WebAuthn; the PC checks the signature, see jarvis/faceid.py) =================
 let faceidOn = false, faceidWait = null;
 const asks = new Map();   // permission prompts by id, so one can come back if Face ID didn't check out

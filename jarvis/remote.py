@@ -414,6 +414,44 @@ class PhoneChannel:
             self._publish({"kind": "ask_done", "id": ask_id})   # take the stale prompt off the screen
         return entry["ok"]
 
+    def _clean_scan(self, msg_id: str, drive: str) -> None:
+        """Scan a disk for /cleandisk. The paths stay here; the phone gets ids, labels, sizes and reasons."""
+        from . import cleandisk
+        progress = lambda t: self._publish({"kind": "clean_progress", "id": msg_id, "text": t})
+        items = cleandisk.scan(drive, progress)
+        scan_id = secrets.token_hex(6)
+        self._clean = {"scan": scan_id, "items": {i["id"]: i for i in items}, "drive": drive, "ts": time.time(),
+                       "challenge": faceid.challenge() if faceid.enabled() else ""}
+        shown = [{k: i.get(k) for k in ("id", "label", "verdict", "why", "size", "partial", "blocked")} for i in items]
+        self._publish({"kind": "clean_result", "id": msg_id, "scan": scan_id, "drive": drive, "items": shown,
+                       "admin": cleandisk.ADMIN, "faceid": bool(self._clean["challenge"]),
+                       "challenge": self._clean["challenge"], "keys": faceid.ids()})
+
+    def _clean_run(self, msg_id: str, data: dict) -> None:
+        """Clean what was ticked, from the latest scan only. Deleting: with Face ID on, it needs your face."""
+        from . import cleandisk
+        from .files import fmt_size
+        scan = getattr(self, "_clean", None)
+        if not scan or data.get("scan") != scan["scan"] or time.time() - scan["ts"] > 1800:
+            self.reply(msg_id, "That scan is out of date. Run /cleandisk again.")
+            return
+        if scan["challenge"] and not faceid.verify(data.get("webauthn"), scan["challenge"]):
+            self.reply(msg_id, "Face ID didn't check out, so nothing was cleaned.")
+            return
+        chosen = [scan["items"][i] for i in data.get("ids", []) if i in scan["items"]]
+        self._clean = None   # one clean per scan
+        log.info("Disk clean-up on %s: %s", scan["drive"], ", ".join(i["label"] for i in chosen) or "nothing")
+        progress = lambda t: self._publish({"kind": "clean_progress", "id": msg_id, "text": t})
+        out = cleandisk.clean(chosen, progress)
+        free = next((d["free"] for d in sysinfo.disks() if d["name"].upper() == scan["drive"].upper()), None)
+        text = f"Freed {fmt_size(out['freed'])} on {scan['drive']}."
+        if out["skipped"]:
+            text += f" {out['skipped']} files were in use and stayed."
+        if free is not None:
+            text += f" {fmt_size(free)} is free now."
+        self._publish({"kind": "clean_done", "id": msg_id, "text": " ".join([text, *out["notes"]]),
+                       "freed": out["freed"]})
+
     def _answer(self, data: dict) -> None:
         """Allow / Don't Allow from the phone. With Face ID on, an Allow needs a valid signature for this exact
         prompt; a bad one leaves the prompt open (Face ID can be tried again), it never counts as a yes."""
@@ -533,6 +571,17 @@ class PhoneChannel:
                 self.reply(msg_id, "Face ID didn't check out, so it's still on.")
         elif kind == "away_off":   # the away-mode chip
             self.reply(msg_id, away.turn_off())
+        elif kind == "clean_disks":   # /cleandisk: which disk?
+            self._publish({"kind": "clean_disks", "id": msg_id, "disks": sysinfo.disks()})
+        elif kind == "clean_scan":
+            self._clean_scan(msg_id, str(data.get("drive", "C:")))
+        elif kind == "clean_run":
+            self._clean_run(msg_id, data)
+        elif kind == "clean_open":   # the admin-only part: Windows' own Disk Cleanup, on the PC
+            import subprocess
+            drive = str(data.get("drive", "C:"))[:2]
+            subprocess.Popen(["cleanmgr.exe", "/d", drive if drive[1:] == ":" else "C:"])
+            self.reply(msg_id, "Windows Disk Cleanup is open on your PC. Click Clean up system files there.")
         elif kind == "art":
             self.send_art(data.get("art", ""))
         elif kind == "media":  # Control Center buttons: instant, no Claude

@@ -196,6 +196,22 @@ and a webcam photo (kept in `.brain/away/`). Jarvis's own clicks and the live sc
 them as generated input. `/away` again, or "I'm back", turns it off; `/lock` locks the PC. While it's on, a chip
 above the phone's message box says so; tap it to turn away mode off.
 
+## Cleaning up a disk
+
+`/cleandisk` asks which disk, scans it (a few seconds) and sorts what it finds:
+
+- **Safe to clean** (ticked): temp files older than a day, browser caches (Chrome, Edge, Brave, Opera, Firefox/Zen),
+  Discord / Spotify / VS Code caches, graphics shader caches, crash reports, pip / npm / yarn / NuGet download caches.
+  Programs rebuild these by themselves.
+- **Your call** (not ticked): the Recycle Bin, downloaded AI models (Hugging Face, PyTorch, Kaggle).
+- **Leave alone** (never cleaned, shown so you know where the space is): the hibernation and page files, Downloads,
+  Documents and other folders of yours.
+
+Only folders `jarvis/cleandisk.py` knows by name are ever cleaned; the phone sends back just the ids you ticked.
+Apps that are open are skipped, files in use stay, links inside a cache are never followed, and with Face ID on,
+cleaning needs your face. Windows Update leftovers and old Windows versions need administrator rights, so the
+pop-up has a button that opens Windows' own Disk Cleanup on the PC.
+
 ## Face ID for permissions
 
 Settings › Security › **Face ID for permissions** (Touch ID / Windows Hello in other browsers). Setting it up makes a
@@ -337,6 +353,7 @@ a notification first).
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
+| `jarvis/cleandisk.py` | /cleandisk: scan a disk into safe / your call / leave alone, clean what's ticked |
 | `jarvis/faceid.py` | Face ID for permissions: stores the phone's public key, checks each signed Allow |
 | `jarvis/health.py` | The self-check: problems reported once with the fix, `/health` |
 | `jarvis/live.py` | The live screen stream: mss capture, confirmed pictures, adaptive size |
