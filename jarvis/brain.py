@@ -17,7 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import memory, tools, usage
+from . import memory, stopping, tools, usage
 from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.brain")
@@ -306,9 +306,11 @@ class ClaudeCodeBrain:
         self.commands = 0
         self.last_used = time.time()
         self.last_thinking = ""
+        self.busy = False   # in the middle of a command (so a stop has something to end)
         self._spawn()
         threading.Thread(target=self._recycle_when_idle, daemon=True, name="brain-recycler").start()
         atexit.register(self._kill)
+        stopping.on_stop(self._interrupt)
 
     def _spawn(self) -> None:
         cmd = [
@@ -363,6 +365,12 @@ class ClaudeCodeBrain:
         self._kill()
         self._spawn()
 
+    def _interrupt(self) -> None:
+        """Stop pressed: end the session mid-command (with its tool server). _ask sees it end and starts a fresh one."""
+        if self.busy and self.proc and self.proc.poll() is None:
+            log.info("Stopping the Claude Code session (pid %s).", self.proc.pid)
+            stopping.kill_tree(self.proc.pid)
+
     def _recycle_when_idle(self) -> None:
         while True:
             time.sleep(15)
@@ -382,9 +390,11 @@ class ClaudeCodeBrain:
             self.commands += 1
             started = time.time()
             self.last_thinking = ""
+            self.busy = True
             try:
                 answer = self._ask(command, progress)
             finally:
+                self.busy = False
                 self.last_used = self.seen = time.time()
             log.info("answered in %.1fs", time.time() - started)
             return answer
@@ -424,6 +434,7 @@ class ClaudeCodeBrain:
             self.proc.stdin.flush()
         except OSError:
             self._restart()
+            stopping.check()   # it was ended by a stop, not a crash
             return "My Claude Code session crashed; I restarted it. Please try again."
         deadline = time.time() + TASK_SECONDS
         while True:
@@ -435,6 +446,9 @@ class ClaudeCodeBrain:
                 return "That took too long, so I stopped."
             if event is None:
                 self._spawn()
+                if stopping.requested():   # we ended it ourselves: the user pressed stop
+                    self.failed = False
+                    raise stopping.Stopped()
                 return ("Claude Code stopped unexpectedly. If this keeps happening, run 'claude' in a "
                         "terminal and check you're logged in.")
             if event.get("type") == "assistant":

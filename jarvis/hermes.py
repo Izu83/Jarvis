@@ -25,7 +25,7 @@ import time
 
 import requests
 
-from . import memory, outbox, tools, usage
+from . import memory, outbox, stopping, tools, usage
 from .brain import MAX_TOOL_ROUNDS, describe_step, make_brain_named, step_kind, system_prompt
 from .config import settings
 
@@ -372,6 +372,7 @@ class HermesBrain:
         failed = False   # did the latest tool call fail?
         started = time.time()
         for _ in range(MAX_TOOL_ROUNDS):
+            stopping.check()
             msg = self._chat(key, model, think, turn)
             thought = (msg.pop("thinking", "") or "").strip()
             content = msg.get("content") or ""
@@ -407,6 +408,7 @@ class HermesBrain:
                 if self.progress:
                     self.progress(step, step_kind(tool))
                 log.info("[%s] tool %s %s", name, tool, json.dumps(args)[:400])
+                stopping.check()
                 try:
                     output = tools.run(tool, args)
                 except Exception as e:
@@ -437,11 +439,13 @@ class HermesBrain:
         }
         if think and not self._no_think:
             body["think"] = True
-        r = requests.post(f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT if think else CHAT_TIMEOUT)
+        # stopping.wait: a slow model answer must not hold up the stop button
+        r = stopping.wait(requests.post, f"{self.host}/api/chat", json=body,
+                          timeout=THINK_TIMEOUT if think else CHAT_TIMEOUT)
         if r.status_code == 400 and "think" in body:   # this Ollama doesn't know "think": ask again without it
             self._no_think = True
             body.pop("think")
-            r = requests.post(f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT)
+            r = stopping.wait(requests.post, f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT)
         r.raise_for_status()
         return r.json().get("message", {}) or {}
 

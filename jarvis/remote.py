@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, camera, inbox, media, modes, outbox, pc, proactive, push, screens, sysinfo,
-               tools, watchers)
+from . import (activity, approval, camera, inbox, media, modes, outbox, pc, proactive, push, screens, stopping,
+               sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -72,6 +72,7 @@ def pairing_link() -> str:
 class PhoneChannel:
     def __init__(self, on_command):
         self.on_command = on_command
+        self.on_stop = lambda target="": None   # the stop button (set by __main__)
         self.topic, key = ensure_keys()
         self.aes = AESGCM(key)
         self.server = settings["ntfy_server"].rstrip("/")
@@ -89,6 +90,14 @@ class PhoneChannel:
         self._soon_lock = threading.Lock()
         activity.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
         watchers.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
+        stopping.on_stop(self._drop_asks)
+
+    def _drop_asks(self) -> None:
+        """Stop pressed: any permission prompt still waiting is answered No and taken off the phone."""
+        for ask_id, entry in list(self.asks.items()):
+            entry["ok"] = False
+            entry["event"].set()
+            self._publish({"kind": "ask_done", "id": ask_id})
 
     # ------------------------------------------------------------ crypto
 
@@ -374,6 +383,10 @@ class PhoneChannel:
             entry = activity.by_msg(data.get("msg", ""))
             if entry and entry["status"] in ("done", "error"):
                 self.reply(entry["msg_id"], entry["reply"] or "Done.", steps=entry["steps"])
+        elif kind == "stop":   # the stop button on a command that's queued or running
+            log.info("Phone: stop")
+            threading.Thread(target=self.on_stop, args=(data.get("target", ""),), daemon=True,
+                             name="phone-stop").start()
         elif kind == "cancel_watch":
             if proactive.cancel(data.get("watch", "")) is None:   # a scheduled task, else a reminder / watch
                 watchers.cancel(data.get("watch", ""))

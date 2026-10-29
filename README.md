@@ -53,7 +53,7 @@ run.bat --no-voice     # phone only
 run.bat --startup      # start Jarvis hidden at every login (--startup-off to stop)
 ```
 
-Jarvis lives in the taskbar tray (under the ^ arrow): right-click its icon to pick a microphone, pair your phone (a
+Jarvis lives in the taskbar tray (under the ^ arrow): right-click its icon to stop what Jarvis is doing, pick a microphone, pair your phone (a
 window with the QR code and the pairing link), restart Jarvis, open the log or quit. `run.bat` and `Jarvis.vbs` both start it that way, with no console window. Only one Jarvis runs at
 a time.
 
@@ -105,6 +105,8 @@ which you can also edit by hand.
   clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
 - **Slash commands**: type `/` in the message box for the list: `/work` (and your other modes), `/monitors`,
   `/camera`, `/system`, `/control`, `/call` and `/newmode`. Tap one, or type the whole name and press send.
+- **Stop button**: while Jarvis works on something in the chat you're in, the send button becomes a ■ stop
+  button. He stops within a second or so (a command still waiting its turn is just taken off the list).
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
 - **Everything at the bottom**: like most iPhone apps there's no bar at the top. The tab bar at the bottom has
   Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
@@ -271,6 +273,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |
 | `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |
 | `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |
 | `jarvis/autostart.py` | `--startup` / `--startup-off` |

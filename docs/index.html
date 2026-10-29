@@ -381,6 +381,8 @@
   #send { width: 38px; height: 38px; margin: 5px 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--accent-grad); box-shadow: 0 4px 12px -3px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.4); transition: transform .35s var(--spring), opacity .2s; }
   #send:disabled { transform: scale(.4); opacity: 0; pointer-events: none; }
   #send svg.i { width: 18px; height: 18px; stroke-width: 2.6; }
+  #send.stop { background: var(--label); color: var(--base); box-shadow: none; }   /* Jarvis is working: tap to stop */
+  #send.stop svg.i { width: 21px; height: 21px; fill: currentColor; stroke: none; }
   #mic { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; }
   #mic.on { color: #fff; background: var(--red); animation: halo 1.5s ease-out infinite; }
   #gestureBtn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--label); }
@@ -715,7 +717,7 @@
   <p class="lead">Pair once, then control your computer from anywhere.</p>
   <div class="group-title">How to pair</div>
   <div class="group">
-    <div class="row"><span class="step-n">1</span><span class="grow">On your PC, run <b>run.bat --pair</b></span></div>
+    <div class="row"><span class="step-n">1</span><span class="grow">On your PC, right-click the Jarvis tray icon › <b>Pair your phone</b></span></div>
     <div class="row"><span class="step-n">2</span><span class="grow">Scan the QR code with Camera</span></div>
     <div class="row"><span class="step-n">3</span><span class="grow">Share → <b>Add to Home Screen</b></span></div>
   </div>
@@ -1010,10 +1012,16 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.3";   // bump together with version.json
-const JNI = "JNIv13";   // Jarvis · Niko · Izu83 · version 13 — Jarvis's own release name
+const VERSION = "2026-10-29.4";   // bump together with version.json
+const JNI = "JNIv14";   // Jarvis · Niko · Izu83 · version 14 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv14", when: "Oct 29, 2026", title: "A stop button", notes: [
+    "While Jarvis is working on something, the send button turns into a ■ stop button. Tap it and he stops within a second or so and says “Okay, I stopped.”",
+    "Tap stop on a command that's still waiting its turn and it's simply taken off the list.",
+    "A permission question that was waiting is answered No when you stop.",
+    "On your PC, the tray icon's menu has “Stop what Jarvis is doing” too.",
+  ] },
   { v: "JNIv13", when: "Oct 29, 2026", title: "Slash commands", notes: [
     "The row of buttons above the message box is gone. Type / to see what's there, then /work, /monitors, /camera, /system, /control, /call or /newmode. Your own modes show up as /their-name too.",
     "Tap a command in the list, or type the whole name and press send. /screens, /photo and /music work too.",
@@ -1128,7 +1136,12 @@ const SUGGESTIONS = [
 ];
 const DB_KEY = "jarvis.db", MODES_KEY = "jarvis.modes";
 let cfg = null, key = null, ws = null, modes = [], pc = null, pcSeen = 0, host = "";
-const pending = new Map();       // message id -> { chatId, kind, el, step, tile, ... }
+// message id -> { chatId, kind, el, step, tile, ... }. Every change re-checks the send button: while a command
+// runs in the chat on screen (and nothing is typed) it's a stop button.
+const pending = new (class extends Map {
+  set(k, v) { super.set(k, v); queueMicrotask(autosize); return this; }
+  delete(k) { const had = super.delete(k); queueMicrotask(autosize); return had; }
+})();
 const shotsCache = new Map();    // screenshot message id -> { url, monitors } (this session only)
 
 function store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
@@ -1444,6 +1457,7 @@ function renderChat() {
     p.step = stepRow(p.status || "Sending…"); drawSteps(p); p.el = bubble(null, "jarvis");
   }
   if (chat.unread) { chat.unread = false; saveDb(); updateBadges(); }
+  queueMicrotask(autosize);   // stop or send, for this chat
   if ($("home")) requestAnimationFrame(() => { $("log").scrollTop = 0; });   // a new chat opens on the greeting
   else scrollDown(false);
 }
@@ -2351,7 +2365,26 @@ document.querySelectorAll(".sheet").forEach(sheet => {
 
 // ================= composer + dictation =================
 const text = $("text");
-function autosize() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px"; $("send").disabled = !text.value.trim() && !attachments.length; }
+function autosize() {
+  text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px";
+  const typed = !!text.value.trim() || attachments.length > 0, busy = !typed && !!busyCmd(), b = $("send");
+  b.disabled = !typed && !busy;
+  b.classList.toggle("stop", busy);
+  b.setAttribute("aria-label", busy ? "Stop" : "Send");
+  b.querySelector("use").setAttribute("href", busy ? "#i-stop" : "#i-up");
+}
+function busyCmd() {   // the newest command Jarvis is still working on in the chat on screen
+  let found = null;
+  for (const [id, p] of pending) if (p.kind === "cmd" && p.chatId === db.current && !p.finished && !p.stopping) found = { id, p };
+  return found;
+}
+async function stopCommand() {
+  const b = busyCmd();
+  if (!b) return;
+  b.p.stopping = true; setStep(b.p, "Stopping…"); autosize();
+  try { await post({ type: "stop", id: newId(), target: b.id }); }
+  catch { b.p.stopping = false; autosize(); toast("Can't reach your PC right now.", "x", "var(--red)"); }
+}
 text.addEventListener("input", () => { autosize(); cmdSel = 0; renderCmds(); });
 text.addEventListener("keydown", e => {
   if (!$("cmds").hidden && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -2360,7 +2393,7 @@ text.addEventListener("keydown", e => {
   }
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
 });
-$("send").onclick = submit;
+$("send").onclick = () => $("send").classList.contains("stop") ? stopCommand() : submit();
 function submit() {
   if (/^\s*\/\S*\s*$/.test(text.value) && !attachments.length) { slash(text.value); return; }
   if (attachments.some(a => !a.path && !a.error)) { toast("Still sending your file…", "clip-up", "var(--orange)"); return; }
@@ -3113,7 +3146,7 @@ document.querySelectorAll("[data-power]").forEach(btn => btn.onclick = () => {
 async function relink() {
   let text = "";
   try { text = await navigator.clipboard.readText(); } catch {}
-  if (!parsePairing(text || "")) text = prompt("Paste the pairing link from your PC (run.bat --pair):") || "";
+  if (!parsePairing(text || "")) text = prompt("Paste the pairing link from your PC (tray icon › Pair your phone):") || "";
   const p = parsePairing(text);
   if (!p) { if (text.trim()) toast("That isn't a pairing link", "x", "var(--red)"); return; }
   try { key = await crypto.subtle.importKey("raw", b64d(p.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
@@ -3130,7 +3163,7 @@ function showLost() {
   if ($("lostCard")) return;
   const card = document.createElement("div");
   card.className = "lost glass strong"; card.id = "lostCard";
-  card.innerHTML = '<b><span class="dot"></span>Can\'t find your PC</b><p>Make sure Jarvis is running on your PC. Then run <code>run.bat --pair</code> there, copy the link it shows, and tap below.</p><button class="press">Paste Pairing Link</button>';
+  card.innerHTML = '<b><span class="dot"></span>Can\'t find your PC</b><p>Make sure Jarvis is running on your PC. Then right-click its tray icon › Pair your phone, copy the link, and tap below.</p><button class="press">Paste Pairing Link</button>';
   card.querySelector("button").onclick = relink;
   document.body.append(card);
 }

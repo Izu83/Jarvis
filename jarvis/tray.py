@@ -1,6 +1,6 @@
 """A system-tray icon (the little arrow in the Windows taskbar) so Jarvis can run with no console window.
 
-Right-click the icon for a menu: pick the microphone, toggle whether Jarvis speaks when you use the Ctrl+Alt+J
+Right-click the icon for a menu: stop what Jarvis is doing, pick the microphone, toggle whether Jarvis speaks when you use the Ctrl+Alt+J
 shortcut, pair your phone (QR code + link), open the phone page or the log, restart or quit. The icon lives on its own thread with a tiny Windows message
 loop; quitting from it stops the whole process. No extra dependency — this uses pywin32, which Jarvis already needs.
 """
@@ -8,6 +8,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import webbrowser
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from .config import ROOT, set_setting, settings
 log = logging.getLogger("jarvis.tray")
 
 WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon is clicked
-ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR = 1023, 1024, 1025, 1026, 1027, 1028
+ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR, ID_STOP = 1023, 1024, 1025, 1026, 1027, 1028, 1029
 MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
@@ -44,9 +45,11 @@ def _ensure_ico() -> Path | None:
 
 
 class Tray:
-    def __init__(self, listener=None, on_quit=None):
+    def __init__(self, listener=None, on_quit=None, on_stop=None, busy=None):
         self.hwnd = None
         self.on_quit = on_quit       # cleanup before the process ends (stops the Claude Code session)
+        self.on_stop = on_stop       # stops the command Jarvis is working on
+        self.busy = busy or (lambda: False)   # is there one? (otherwise the Stop item is greyed out)
         self.listener = listener     # the VoiceListener, so we can list and switch microphones
         self._mic_ids = {}           # menu id -> device index (or None for the Windows default)
 
@@ -91,6 +94,10 @@ class Tray:
     def _on_tray(self, hwnd, msg, wparam, lparam):
         if lparam in (win32con.WM_RBUTTONUP, win32con.WM_LBUTTONUP):
             menu = win32gui.CreatePopupMenu()
+            if self.on_stop is not None:
+                idle = 0 if self.busy() else win32con.MF_GRAYED
+                win32gui.AppendMenu(menu, win32con.MF_STRING | idle, ID_STOP, "Stop what Jarvis is doing")
+                win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
             if self.listener is not None:
                 win32gui.AppendMenu(menu, win32con.MF_POPUP, self._mic_submenu(), "Microphone")
                 speak = win32con.MF_CHECKED if settings["speak_on_shortcut"] else win32con.MF_UNCHECKED
@@ -136,6 +143,9 @@ class Tray:
             new = not settings["speak_on_shortcut"]
             set_setting("speak_on_shortcut", new)
             log.info("Speak-on-shortcut turned %s from the tray.", "on" if new else "off")
+        elif cmd == ID_STOP and self.on_stop is not None:
+            log.info("Stop from the tray icon.")
+            threading.Thread(target=self.on_stop, daemon=True, name="tray-stop").start()
         elif cmd == ID_PAIR:
             log.info("Showing the pairing QR code.")
             self._open_pairing()

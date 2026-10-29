@@ -18,7 +18,7 @@ from .windows import enable_dpi_awareness  # noqa: E402
 
 enable_dpi_awareness()  # before anything touches windows
 
-from . import activity, memory, modes, nlu, speak  # noqa: E402
+from . import activity, memory, modes, nlu, speak, stopping  # noqa: E402
 from .config import ROOT, secret, settings  # noqa: E402
 
 log = logging.getLogger("jarvis")
@@ -267,6 +267,7 @@ def main() -> None:
     def run_job(tid, text, reply, chat, recent, progress, via, msg_id=None) -> None:
         current.update(via=via, chat=chat, msg_id=msg_id or "")
         working["text"] = text
+        stopping.begin()
         started = time.time()
         activity.set_status(tid, "running")
         log.info("Command: %s", text)
@@ -295,6 +296,10 @@ def main() -> None:
                 else:                                          # Claude is switched off: stay free
                     answer = ("I didn't catch that one, and Claude is switched off to save tokens. "
                               "Try a simpler command, or turn Claude back on in Settings.")
+        except stopping.Stopped:
+            log.info("Stopped by the user.")
+            step("Stopped", "Command")
+            answer = "Okay, I stopped."
         except Exception as e:
             log.exception("Command failed")
             answer, ok = f"Something went wrong: {e}", False
@@ -324,9 +329,29 @@ def main() -> None:
 
     threading.Thread(target=worker, daemon=True, name="worker").start()
 
+    def stop_command(target: str = "") -> None:
+        """The stop button. `target` is the phone message it was pressed on: if that one hasn't started yet it
+        just leaves the queue; if it's already done, nothing happens (a different command may be running now)."""
+        if target and target != current["msg_id"]:
+            with jobs.mutex:
+                job = next((j for j in jobs.queue if j[7] == target), None)
+                if job:
+                    jobs.queue.remove(job)
+            if job:
+                tid, reply = job[0], job[2]
+                log.info("Stop: dropped the queued command %r.", job[1])
+                activity.finish(tid, "Okay, I won't do that one.", ok=True)
+                if reply:
+                    reply("Okay, I won't do that one.", "", activity.steps_of(tid))
+            return
+        if working["text"]:
+            log.info("Stop: stopping %r.", working["text"])
+            stopping.stop()
+
     if settings["phone_enabled"] and not args.no_phone:
         from .remote import PhoneChannel
         phone = PhoneChannel(submit)
+        phone.on_stop = stop_command
         _bridge["phone"] = phone   # let tools push files to the phone via the approval bridge
         threading.Thread(target=phone.run, daemon=True, name="phone").start()
     proactive.set_handlers(run_scheduled, tell_user,
@@ -371,7 +396,8 @@ def main() -> None:
             from .tray import Tray
             # Quitting from the tray ends the process at once, so stop the Claude Code session first (it would
             # otherwise keep running in the background).
-            tray = Tray(listener=listener, on_quit=lambda: getattr(brain, "close", lambda: None)())
+            tray = Tray(listener=listener, on_quit=lambda: getattr(brain, "close", lambda: None)(),
+                        on_stop=stop_command, busy=lambda: bool(working["text"]))
             threading.Thread(target=tray.run, daemon=True, name="tray").start()
         except Exception:
             log.debug("couldn't start the tray icon", exc_info=True)
