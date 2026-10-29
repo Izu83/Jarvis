@@ -194,6 +194,24 @@ On the phone, **Settings › Memory** controls all of it:
 
 Outlook, Yahoo and iCloud are detected from the address; for anything else set `email_imap_host` / `email_smtp_host`.
 
+## Jarvis messages you
+
+- **More than one message.** While working, Jarvis can send extra chat bubbles with the `message_user` tool (a
+  heads-up before something slow, a result as soon as he has it, a long answer in a few texts); the final answer
+  comes last. From the PC microphone they're said out loud instead.
+- **Without a prompt.** "Every morning at 8 check my email and tell me what matters", "at 18:00 tell me the
+  weather", "in an hour check if the render finished": `schedule_task` saves the task in `.brain/schedule.json`
+  (once, daily, weekdays or weekly) and, when it's due, runs it like a command and sends the answer as a message.
+  Scheduled tasks show up with your reminders on the phone, and × cancels them. Reminders and finished watches now
+  land in the chat too.
+- **On his own** (Settings › Memory › Messages you on his own, `proactive` in `config.json`): *When asked* (only
+  the above), *Important* (default: plus a heads-up when an important email arrives, checked every 5 minutes, no
+  tokens) or *Chatty* (plus a good-morning message at `morning_time`). Between `quiet_hours` (23:00 to 08:00)
+  unasked messages still arrive, but without a notification.
+
+Messages wait in `.brain/inbox.json` until the phone confirms them, so they arrive even if the app was closed (with
+a notification first).
+
 ## Settings (`config.json`)
 
 | Key | What it does |
@@ -230,6 +248,8 @@ Outlook, Yahoo and iCloud are detected from the address; for anything else set `
 | `jarvis/nlu.py` | Free local parser for quick commands |
 | `jarvis/activity.py` | The saved log of every command and its steps (the phone's pills and Activity list) |
 | `jarvis/watchers.py` | Reminders and "tell me when…" watches |
+| `jarvis/proactive.py` | Scheduled tasks, new-email heads-ups and the good-morning message |
+| `jarvis/inbox.py` | Jarvis's messages waiting for the phone to pick them up |
 | `jarvis/mcp_server.py` | Gives Claude Code the Jarvis tools |
 | `jarvis/tools.py` | The actions Claude can take (schemas + implementations) |
 | `jarvis/windows.py` | Win32: monitors, window lookup, moving and tiling |

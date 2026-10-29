@@ -181,7 +181,12 @@ def parse_when(at: str = "", in_minutes: float = 0) -> float:
     now = dt.datetime.now()
     if in_minutes:
         return time.time() + float(in_minutes) * 60
-    text = (at or "").strip().lower().replace(".", ":")
+    text = (at or "").strip().lower()
+    # "in 5 minutes", "in 2 hours", "in_minutes=1": small models sometimes put the delay in 'at'
+    rel = re.fullmatch(r"(?:in[_ ]?(?:minutes\s*=\s*)?|\+)\s*(\d+(?:\.\d+)?)\s*(m|mins?|minutes?|h|hrs?|hours?)?", text)
+    if rel:
+        return time.time() + float(rel.group(1)) * (3600 if (rel.group(2) or "m").startswith("h") else 60)
+    text = text.replace(".", ":")
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
             return dt.datetime.strptime(text, fmt).timestamp()

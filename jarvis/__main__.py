@@ -133,10 +133,10 @@ def main() -> None:
     from .brain import make_brain
 
     phone = None
-    current = {"via": "pc"}   # where the command being worked on came from, so we ask there
+    current = {"via": "pc", "chat": None, "msg_id": ""}   # where the command being worked on came from
 
     def ask_user(title: str, detail: str, confirm: str) -> bool:
-        if current["via"] == "phone" and phone and phone.clients:
+        if current["via"] in ("phone", "schedule") and phone and phone.clients:
             log.info("Asking on the phone: %s", title)
             ok = phone.ask(title, detail, confirm)
         else:
@@ -162,20 +162,32 @@ def main() -> None:
                                                    "Jarvis app's settings so I can reach it when it's closed.")
 
     def notify(title: str, body: str, call: bool = False) -> None:
-        """A watch or reminder fired: always push to the phone, plus a banner if the app is open."""
+        """A watch or reminder fired: always push to the phone, and put it in the chat as a message from Jarvis."""
         from . import push
         if call:
             ring_phone(body)
             return
         ph = _bridge["phone"]
-        if ph and ph.clients:
-            ph._alert("watch", "success", "check", title, body, also_push=False)
-        if push.have_subs():
+        if ph:
+            ph.message(f"{title}: {body}" if body else title, notify=False)
+        if push.have_subs():   # straight away: a reminder must not wait to see if the app picks it up
             push.send_async(title, body, "watch", "./")
         elif not (ph and ph.clients):
             log.warning("Couldn't deliver '%s': no phone has notifications turned on.", title)
 
-    from . import watchers
+    def tell_user(text: str, chat=None, notify_too: bool = True) -> None:
+        """A message from Jarvis that nobody prompted just now (a scheduled task's result, a new email)."""
+        ph = _bridge["phone"]
+        if ph:
+            ph.message(text, chat, notify=notify_too)
+        else:
+            speak.say(text)
+
+    def run_scheduled(task: str, chat=None) -> None:
+        """A scheduled task (or the good-morning message) runs like a command; its answer arrives as a message."""
+        submit(task, reply=lambda answer, thinking="", steps=None: tell_user(answer, chat), chat=chat, via="schedule")
+
+    from . import proactive, watchers
     watchers.set_notifier(notify)
     watchers.load_reminders()
 
@@ -212,7 +224,26 @@ def main() -> None:
                                   bool(args.get("call")))
             return msg + (_reach_hint() if not args.get("call") else "")
         if name == "list_watches":
-            return watchers.listing()
+            return watchers.listing() + "\n" + proactive.listing()
+        if name == "message_user":
+            text = (args.get("text") or "").strip()
+            ph = _bridge["phone"]
+            if not text:
+                return "There was nothing to send."
+            if current["via"] == "pc" or not ph:
+                speak.say(text)
+                return "Said it out loud. Carry on, and don't repeat it in your final answer."
+            ph.message(text, current["chat"], reply_to=current["msg_id"])
+            return "Sent. Carry on, and don't repeat it in your final answer."
+        if name == "schedule_task":
+            try:
+                msg = proactive.schedule(args.get("task", ""), args.get("at", ""), args.get("in_minutes") or 0,
+                                         args.get("repeat", ""), current["chat"])
+            except ValueError as e:
+                return str(e)
+            return msg + _reach_hint()
+        if name == "cancel_scheduled":
+            return proactive.cancel(args.get("id", "")) or "There's no scheduled task with that id."
         return "Unknown action."
 
     os.environ.update(approval.serve(
@@ -226,15 +257,15 @@ def main() -> None:
                msg_id: str | None = None) -> None:
         tid = activity.start(text, via=via, chat=chat, msg_id=msg_id, status="queued")
         busy_with = working["text"]
-        jobs.put((tid, text, reply, chat, recent, progress, via))
+        jobs.put((tid, text, reply, chat, recent, progress, via, msg_id))
         if busy_with and progress:   # say so, instead of looking like nothing is happening
             try:
                 progress(f"Waiting for “{busy_with[:40]}” to finish…")
             except Exception:
                 log.debug("progress callback failed", exc_info=True)
 
-    def run_job(tid, text, reply, chat, recent, progress, via) -> None:
-        current["via"] = via
+    def run_job(tid, text, reply, chat, recent, progress, via, msg_id=None) -> None:
+        current.update(via=via, chat=chat, msg_id=msg_id or "")
         working["text"] = text
         started = time.time()
         activity.set_status(tid, "running")
@@ -298,6 +329,9 @@ def main() -> None:
         phone = PhoneChannel(submit)
         _bridge["phone"] = phone   # let tools push files to the phone via the approval bridge
         threading.Thread(target=phone.run, daemon=True, name="phone").start()
+    proactive.set_handlers(run_scheduled, tell_user,
+                           lambda: phone and phone.soon("activity", 0.3, phone.send_activity))
+    proactive.start()   # scheduled tasks, new-email heads-ups, the good-morning message
 
     listener = None
     if settings["voice_enabled"] and not args.no_voice:

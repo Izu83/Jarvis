@@ -21,7 +21,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import activity, approval, camera, media, modes, outbox, pc, push, screens, sysinfo, tools, watchers
+from . import (activity, approval, camera, inbox, media, modes, outbox, pc, proactive, push, screens, sysinfo,
+               tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
 
@@ -190,7 +191,7 @@ class PhoneChannel:
     def send_activity(self) -> None:
         """What Jarvis is doing / has done, and the reminders it's holding (cheap: no PC stats)."""
         self._publish({"kind": "activity", "id": "activity", "activity": activity.summary(),
-                       "watches": watchers.items()})
+                       "watches": watchers.items() + proactive.items()})
 
     def send_state(self) -> None:
         """Modes (shown as buttons) and live PC status (the phone's Control Center)."""
@@ -212,14 +213,15 @@ class PhoneChannel:
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
-                       "activity": activity.summary(), "watches": watchers.items()})
+                       "activity": activity.summary(), "watches": watchers.items() + proactive.items()})
 
     def send_memory(self) -> None:
         """What Jarvis remembers, for Settings > Memory on the phone."""
         from . import memory
         self._publish({"kind": "memory", "id": "memory", "about": memory.about(),
                        "facts": [f["text"] for f in memory.facts()][::-1],   # newest first
-                       "humour": settings.get("humour", "light"), "span": settings.get("memory_span", "normal")})
+                       "humour": settings.get("humour", "light"), "span": settings.get("memory_span", "normal"),
+                       "proactive": proactive.level()})
 
     def _later(self, seconds: float, fn, *args) -> None:
         threading.Timer(seconds, fn, args).start()
@@ -278,6 +280,30 @@ class PhoneChannel:
                     "A picture" if item["mime"].startswith("image/") else "A file")
             push.send_async("Jarvis", f"{what} is ready for you: {item['name']}. Open Jarvis to get it.",
                             "file-" + item["fid"], "./")
+
+    def message(self, text: str, chat: str | None = None, reply_to: str = "", notify: bool = True) -> None:
+        """A message from Jarvis that isn't the answer to a command: an extra one during a task (reply_to = that
+        command), or one he sends on his own. Kept until the phone confirms it, like files. If the phone doesn't
+        confirm it soon (the app is closed, or its connection is asleep), it also comes as a notification."""
+        text = (text or "").strip()
+        if not text:
+            return
+        item = inbox.add(text, chat or self.last_chat, reply_to)
+        self.deliver_messages()
+        if notify and push.have_subs():
+            self._later(0 if not self.clients else 12, self._push_if_unread, item["mid"], text)
+
+    def _push_if_unread(self, mid: str, text: str) -> None:
+        if any(i["mid"] == mid for i in inbox.due(force=True)):
+            push.send("Jarvis", text[:160], "msg-" + mid, "./")
+
+    def deliver_messages(self, force: bool = False) -> None:
+        """Send every message the phone hasn't confirmed yet."""
+        if not self.clients:
+            return
+        for item in inbox.due(force):
+            inbox.mark_sent(item["mid"])
+            self._publish(inbox.payload(item))
 
     def deliver_files(self, force: bool = False) -> None:
         """Send every file the phone hasn't confirmed yet (each read fresh from disk)."""
@@ -338,15 +364,19 @@ class PhoneChannel:
                            step_kind=last[-1]["k"] if last else "")
         elif kind == "sync":
             self.send_state()
-            self.deliver_files(force=True)   # anything that was waiting for the app to open
+            self.deliver_messages(force=True)   # anything that was waiting for the app to open
+            self.deliver_files(force=True)
         elif kind == "got_file":   # the phone has saved a file: stop re-sending it
             outbox.done(data.get("fid", ""))
+        elif kind == "got_msg":   # the phone has a message from Jarvis: stop re-sending it
+            inbox.done(data.get("mid", ""))
         elif kind == "fetch_reply":   # the app reloaded while a command ran: send it the answer it missed
             entry = activity.by_msg(data.get("msg", ""))
             if entry and entry["status"] in ("done", "error"):
                 self.reply(entry["msg_id"], entry["reply"] or "Done.", steps=entry["steps"])
         elif kind == "cancel_watch":
-            watchers.cancel(data.get("watch", ""))
+            if proactive.cancel(data.get("watch", "")) is None:   # a scheduled task, else a reminder / watch
+                watchers.cancel(data.get("watch", ""))
         elif kind == "screens":
             log.info("Phone: screenshots")
             self.send_screens(msg_id)
@@ -415,6 +445,9 @@ class PhoneChannel:
             if data.get("humour") in memory.HUMOUR:
                 set_setting("humour", data["humour"])
                 log.info("Humour set to %s from the phone.", data["humour"])
+            if data.get("proactive") in proactive.LEVELS:
+                set_setting("proactive", data["proactive"])
+                log.info("Messages on his own set to %s from the phone.", data["proactive"])
             if data.get("span") in memory.SPANS:
                 set_setting("memory_span", data["span"])
                 log.info("Memory span set to %s from the phone.", data["span"])

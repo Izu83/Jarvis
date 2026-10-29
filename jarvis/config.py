@@ -31,6 +31,12 @@ DEFAULTS = {
     # memory_span: how far back Jarvis rereads the conversation: "short" (2 h), "normal" (12 h), "long" (3 days), "max".
     "humour": "light",
     "memory_span": "normal",
+    # Messages Jarvis sends on his own (also on the phone: Settings > Memory). proactive: "off" (only what you ask
+    # for, like reminders and scheduled tasks), "normal" (+ a heads-up about new important email) or "chatty"
+    # (+ a good-morning message at morning_time). During quiet_hours [from, to] they arrive without a notification.
+    "proactive": "normal",
+    "morning_time": "08:30",
+    "quiet_hours": [23, 8],
     # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
     # anything it doesn't understand, it says so instead of asking Claude.
     "use_claude": True,

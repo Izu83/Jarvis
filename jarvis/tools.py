@@ -610,8 +610,49 @@ TOOLS = [
         },
     },
     {
+        "name": "message_user",
+        "description": "Send the user a message right now, as its own chat bubble on their phone, while you keep "
+                       "working (your final answer still comes as the last message). Use it to send more than one "
+                       "message: a quick heads-up before a long task ('On it, this takes a minute'), a result the "
+                       "moment you have it, or to split a long answer into a few natural messages. Don't repeat what "
+                       "you already sent in your final answer. On the PC (voice) it is said out loud instead.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string", "description": "The message, written like a text to them"}},
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "schedule_task",
+        "description": "Do something LATER on your own and message the user the result, once or on repeat. For "
+                       "'every morning at 8 check my email and tell me what matters', 'at 18:00 tell me the "
+                       "weather', 'on weekdays at 9 remind me what's on today', 'in an hour check if the render "
+                       "finished and tell me'. At that time 'task' runs like a command from the user, with all your "
+                       "tools, and your answer is sent to their phone as a message. For a plain fixed reminder text "
+                       "use remind_me instead. 'at' is HH:MM (24h) or 'YYYY-MM-DD HH:MM', or give 'in_minutes'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "What to do then, as an instruction to yourself"},
+                "at": {"type": "string"},
+                "in_minutes": {"type": "number"},
+                "repeat": {"type": "string", "enum": ["", "daily", "weekdays", "weekly"]},
+            },
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "cancel_scheduled",
+        "description": "Cancel a scheduled task by its id (from list_watches), or all of them with id 'all'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+        },
+    },
+    {
         "name": "list_watches",
-        "description": "List pending reminders and 'notify me when…' watches.",
+        "description": "List pending reminders, 'notify me when…' watches and scheduled tasks (with their ids).",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
@@ -714,7 +755,8 @@ def run(name: str, args: dict) -> str:
         return pc.get_clipboard() or "The clipboard has no text."
     if name == "send_screens_to_phone":
         return approval.run_tool("screens_photo", {})
-    if name in ("notify_when", "cancel_watches", "call_user", "remind_me", "list_watches", "camera_photo"):
+    if name in ("notify_when", "cancel_watches", "call_user", "remind_me", "list_watches", "camera_photo",
+                "message_user", "schedule_task", "cancel_scheduled"):
         return approval.run_tool(name, args)   # must run in the main Jarvis process, not this short-lived one
     if name == "gesture_control":
         return {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[args["action"]]()

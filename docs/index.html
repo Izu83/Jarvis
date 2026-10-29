@@ -117,6 +117,7 @@
   .press:active { transform: scale(.955); filter: brightness(1.06); transition-duration: .1s; }
   /* ---------- Appearance (wallpaper + accent pickers) ---------- */
   .opt-label { font-size: 13px; color: var(--label2); margin: 2px 0 11px 2px; letter-spacing: -.1px; }
+  .opt-note { font-size: 12.5px; line-height: 1.35; color: var(--label2); margin: 9px 2px 0; }
   .segment { display: flex; background: var(--fill); border-radius: 13px; padding: 3px; gap: 2px; }
   .segment button { flex: 1; height: 36px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--label2); display: flex; align-items: center; justify-content: center; gap: 7px; transition: color .2s, background .25s var(--ease); }
   .segment button svg.i { width: 16px; height: 16px; stroke-width: 2.1; }
@@ -852,6 +853,9 @@
         <div class="segment" id="humourSeg"></div>
         <div class="opt-label" style="margin-top: 17px;">Remembers the conversation for</div>
         <div class="segment" id="spanSeg"></div>
+        <div class="opt-label" style="margin-top: 17px;">Messages you on his own</div>
+        <div class="segment" id="proactiveSeg"></div>
+        <div class="opt-note" id="proactiveNote"></div>
       </div>
       <div class="group-title">Things Jarvis remembers</div>
       <div class="group" id="factList"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
@@ -1007,10 +1011,19 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-28.2";   // bump together with version.json
-const JNI = "JNIv11";   // Jarvis · Niko · Izu83 · version 11 — Jarvis's own release name
+const VERSION = "2026-10-29.1";   // bump together with version.json
+const JNI = "JNIv12";   // Jarvis · Niko · Izu83 · version 12 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv12", when: "Oct 29, 2026", title: "Jarvis texts back, and texts first", notes: [
+    "Jarvis can send you more than one message: a quick “on it” before something slow, a result the moment he has it, or a long answer split into a few texts.",
+    "Jarvis can message you without being asked in that moment. Say “every morning at 8 check my email and tell me what matters” or “at 18:00 tell me the weather”, and he does it then and texts you the answer.",
+    "Scheduled tasks show up with your reminders, and the × cancels them.",
+    "Reminders and finished watches now land in your chat as a message too, not just a notification.",
+    "A heads-up when an important email arrives (once email is set up).",
+    "Settings › Memory › Messages you on his own: When asked, Important or Chatty (adds a good-morning message). Nothing unasked buzzes your phone between 23:00 and 08:00.",
+    "Messages wait for you: if the app is closed, they arrive the moment you open it, with a notification first.",
+  ] },
   { v: "JNIv11", when: "Oct 28, 2026", title: "Clearer glass, a memory you control, and a sense of humour", notes: [
     "New Liquid Glass: clearer glass that lets the colours behind it through, a bright edge that catches the light, and a glow under your finger when you tap it.",
     "The tab bar is now a floating glass capsule, and your chat scrolls underneath it.",
@@ -1805,6 +1818,7 @@ async function onMessage(text) {
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
     if (data.kind === "art" && data.data) { addArt(data).catch(() => {}); return; }
     if (data.kind === "file" && data.data) { data.fid ? receiveFile(data) : addFileCard(data); return; }
+    if (data.kind === "msg") { receiveMsg(data); return; }
     if (data.kind === "tts") { Voice.onAudio(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
@@ -2533,6 +2547,12 @@ $("notifyTest").onclick = async () => {
 // ================= Settings › Memory: About me, humour, how far back, and the saved facts =================
 const HUMOURS = [["off", "Off"], ["light", "A little"], ["lots", "Lots"]];
 const SPANS = [["short", "2 hours"], ["normal", "12 hours"], ["long", "3 days"], ["max", "2 weeks"]];
+const PROACTIVE = [["off", "When asked"], ["normal", "Important"], ["chatty", "Chatty"]];
+const PROACTIVE_NOTE = {
+  off: "Only reminders and tasks you scheduled, like “every morning at 8 check my email”.",
+  normal: "Also tells you when an important email arrives. Quiet from 23:00 to 08:00.",
+  chatty: "Also sends a good-morning message at 08:30 and tells you about important emails.",
+};
 let mem = null;
 function segmentOf(box, items, sel, pick) {
   box.innerHTML = "";
@@ -2559,6 +2579,9 @@ function onMemory(d) {
   segmentOf($("humourSeg"), HUMOURS, d.humour, id => memSet({ humour: id },
     id === "off" ? "Strictly business from now on" : id === "lots" ? "Comedy mode on" : "A touch of humour it is"));
   segmentOf($("spanSeg"), SPANS, d.span, id => memSet({ span: id }, "Saved"));
+  const pro = d.proactive || "normal";
+  $("proactiveNote").textContent = PROACTIVE_NOTE[pro];
+  segmentOf($("proactiveSeg"), PROACTIVE, pro, id => { $("proactiveNote").textContent = PROACTIVE_NOTE[id]; memSet({ proactive: id }, "Saved"); });
   const list = $("factList"); list.innerHTML = "";
   if (!d.facts?.length) list.innerHTML = '<div class="row"><span class="grow sub-only">Nothing yet. Tell Jarvis “remember that…”, or add something below.</span></div>';
   for (const t of d.facts || []) {
@@ -2817,6 +2840,33 @@ async function receiveFile(data) {
   if (chat.id === db.current) { clearHome(); drawFile(m); scrollDown(); }
   else { chat.unread = true; saveDb(); updateBadges(); if (!$("drawer").hidden) renderSidebar(); }
   if (document.visibilityState !== "visible" || chat.id !== db.current) toast(fileKind(type) + " from your PC: " + data.name, "doc", "var(--blue)");
+}
+// A message from Jarvis that isn't the answer to a command: an extra one while he works on something (it goes just
+// above that command's live steps), or one he sends on his own (a reminder, a scheduled task, a new email).
+const gotMsgs = new Set();   // also kept in memory, for when storage is off (private mode)
+function receiveMsg(data) {
+  post({ type: "got_msg", id: newId(), mid: data.mid }).catch(() => {});
+  const seen = JSON.parse(load("jarvis.gotMsgs") || "[]");
+  if (gotMsgs.has(data.mid) || seen.includes(data.mid)) return;   // the PC sent it again before it heard our OK
+  gotMsgs.add(data.mid);
+  store("jarvis.gotMsgs", JSON.stringify([...seen, data.mid].slice(-200)));
+  const p = data.reply_to ? pending.get(data.reply_to) : null;
+  const chat = chatById(p?.chatId || data.chat) || current();
+  const ts = Math.min(data.ts || Date.now(), Date.now());
+  addMessage(chat, { who: "jarvis", text: data.text, ts });
+  if (chat.id === db.current) {
+    const log = $("log"), mark = log.lastElementChild;
+    bubble(data.text, "jarvis", ts);
+    const anchor = p?.step?.isConnected ? p.step : p?.el?.isConnected ? p.el : null;
+    if (anchor) {   // keep the "still working" pills and typing dots below it
+      const added = [];
+      for (let n = mark ? mark.nextElementSibling : log.firstElementChild; n; n = n.nextElementSibling) added.push(n);
+      anchor.before(...added);
+    }
+    scrollDown();
+  } else { chat.unread = true; saveDb(); updateBadges(); if (!$("drawer").hidden) renderSidebar(); }
+  if (document.visibilityState === "visible" && chat.id !== db.current) toast("Jarvis: " + data.text.slice(0, 80), "sparkles", "var(--blue)");
+  if (!p) speakText(data.text);
 }
 const fileUrls = new Map();   // fid -> object URL, made once per file
 function drawFile(m) {

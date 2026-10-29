@@ -79,6 +79,12 @@ HTML and text, not the JavaScript-rendered view); to judge how it actually looks
 look_at_screen. Then give a real, specific review — strengths, issues, concrete suggestions — not a vague "I can only \
 see part of it".
 - Timed reminders: remind_me for "remind me at 10:53", "notify me in 20 minutes", "call me at 7" (call=true). These reach the phone even when the app is closed. You CAN schedule notifications; never say you can't.
+- You can send more than one message: message_user sends a chat bubble right away while you keep working, and your \
+final answer comes last. Use it when it helps (a heads-up before something slow, a result as soon as you have it, a \
+long answer split into a few natural texts), not on every command, and never repeat it in the final answer.
+- You can message the user on your own later: schedule_task runs a task at a time (once, daily, weekdays or weekly) \
+and sends them your answer. Commands starting with "(Scheduled task)" are those: the user set them up earlier and \
+isn't watching, so do the task and write the answer as a message to them (no "as you asked").
 - You are the user's stand-in at this PC: if a request is doable with keyboard, mouse, screen and PowerShell, do it rather than saying you can't. Only stop for things that need their password, money or explicit consent.
 - Do the whole job in ONE go. The user wants to say a task once and have it done: never stop halfway to ask \
 "would you like me to…?" or hand them steps to do themselves when you could do them. When a detail is missing, \
@@ -185,6 +191,9 @@ STEP_LABELS = {
     "mouse_scroll": lambda a: "Scrolling…",
     "mouse_drag": lambda a: "Dragging…",
     "remind_me": lambda a: "Setting a reminder…",
+    "message_user": lambda a: "Messaging you…",
+    "schedule_task": lambda a: "Scheduling it…",
+    "cancel_scheduled": lambda a: "Cancelling a scheduled task…",
     "list_watches": lambda a: "Checking your reminders…",
     "clipboard": lambda a: "Using the clipboard…",
     "camera_photo": lambda a: "Taking a webcam photo…",
@@ -212,9 +221,9 @@ STEP_KINDS = {
     "System": ("system_info", "lock_pc", "power_action"),
     "Music": ("play_music", "media_key"),
     "Mode": ("list_modes", "run_mode", "save_mode", "delete_mode"),
-    "Reminder": ("remind_me", "notify_when", "cancel_watches", "list_watches"),
+    "Reminder": ("remind_me", "notify_when", "cancel_watches", "list_watches", "schedule_task", "cancel_scheduled"),
     "Phone": ("call_user", "send_file_to_phone", "camera_photo"),
-    "Message": ("send_message",),
+    "Message": ("send_message", "message_user"),
     "Email": ("check_email", "read_email", "reply_email", "send_email"),
     "Memory": ("remember", "forget"),
     "Web": ("WebSearch", "WebFetch"),
