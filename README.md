@@ -36,7 +36,8 @@ Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─�
    ```
 3. **Phone page on GitHub Pages** (`https://izu83.github.io/Jarvis/`)
    - In the GitHub repo go to *Settings → Pages → Build and deployment → Deploy from a branch → `main` / `/docs`*.
-   - Run `run.bat --pair` and scan the QR code with the iPhone Camera app (it's also saved as `pair-phone.svg`).
+   - Right-click the tray icon › **Pair your phone (QR code)…** and scan the code with the iPhone Camera app, or
+     copy the link from that window. (`run.bat --pair` prints the same in a console and saves `pair-phone.svg`.)
    - In Safari tap *Share → Add to Home Screen*. Jarvis now opens like an app.
 
 GitHub Pages on a *private* repo needs a paid GitHub plan; on a free account the repo has to be public. That's safe:
@@ -52,8 +53,8 @@ run.bat --no-voice     # phone only
 run.bat --startup      # start Jarvis hidden at every login (--startup-off to stop)
 ```
 
-Jarvis lives in the taskbar tray (under the ^ arrow): right-click its icon to pick a microphone, restart Jarvis, open
-the log or quit. `run.bat` and `Jarvis.vbs` both start it that way, with no console window. Only one Jarvis runs at
+Jarvis lives in the taskbar tray (under the ^ arrow): right-click its icon to pick a microphone, pair your phone (a
+window with the QR code and the pairing link), restart Jarvis, open the log or quit. `run.bat` and `Jarvis.vbs` both start it that way, with no console window. Only one Jarvis runs at
 a time.
 
 Say **"Hey Jarvis"** or press **Ctrl+Alt+J**, give the command, then pause. A pop-up in the top-right of the main
@@ -268,6 +269,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |
 | `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |
 | `jarvis/autostart.py` | `--startup` / `--startup-off` |
 | `tests/` | `pytest` tests for the parts that don't need Windows (parser, reminders, activity, modes) |
