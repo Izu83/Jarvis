@@ -17,7 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import memory, stopping, tools, usage
+from . import health, memory, partial, stopping, tools, usage
 from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.brain")
@@ -323,6 +323,7 @@ class ClaudeCodeBrain:
             "--mcp-config", str(self.mcp_config), "--strict-mcp-config",
             "--allowedTools", "mcp__jarvis," + BUILTIN_TOOLS,
             "--add-dir", *_drives(),
+            "--include-partial-messages",   # the answer word by word, for the phone (partial.py)
             "--no-session-persistence",
             "--effort", settings["claude_code_effort"],
         ]
@@ -437,6 +438,7 @@ class ClaudeCodeBrain:
             stopping.check()   # it was ended by a stop, not a crash
             return "My Claude Code session crashed; I restarted it. Please try again."
         deadline = time.time() + TASK_SECONDS
+        live = ""   # the text being written right now (the answer, unless a tool call follows it)
         while True:
             try:
                 event = self.events.get(timeout=max(1, deadline - time.time()))
@@ -451,6 +453,19 @@ class ClaudeCodeBrain:
                     raise stopping.Stopped()
                 return ("Claude Code stopped unexpectedly. If this keeps happening, run 'claude' in a "
                         "terminal and check you're logged in.")
+            if event.get("type") == "stream_event":
+                se = event.get("event") or {}
+                if se.get("type") == "message_start" and live:
+                    live = ""
+                    partial.clear()
+                elif se.get("type") == "content_block_start" and (se.get("content_block") or {}).get("type") == "tool_use":
+                    if live:   # that was commentary before an action, not the answer
+                        live = ""
+                        partial.clear()
+                elif se.get("type") == "content_block_delta" and (se.get("delta") or {}).get("type") == "text_delta":
+                    live += se["delta"].get("text", "")
+                    partial.update(live)
+                continue
             if event.get("type") == "assistant":
                 for block in event.get("message", {}).get("content", []):
                     bt = block.get("type")
@@ -479,8 +494,10 @@ class ClaudeCodeBrain:
                                 + (u.get("cache_creation_input_tokens") or 0), u.get("output_tokens") or 0)
             if event.get("is_error"):
                 log.error("Claude Code error: %s", event.get("result"))
+                health.claude_error(event.get("result") or "")
                 return event.get("result") or "Claude Code reported an error (maybe a usage limit)."
             self.failed = False
+            health.claude_ok()
             return (event.get("result") or "Done.").strip()
 
 

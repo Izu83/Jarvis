@@ -34,6 +34,16 @@ class Resp:
     def raise_for_status(self):
         pass
 
+    # /api/chat is streamed now: one chunk carrying the whole message, marked done
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def iter_lines(self):
+        yield json.dumps({**self.data, "done": True}).encode()
+
 
 @pytest.fixture
 def team(monkeypatch):

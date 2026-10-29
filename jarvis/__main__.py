@@ -18,7 +18,8 @@ from .windows import enable_dpi_awareness  # noqa: E402
 
 enable_dpi_awareness()  # before anything touches windows
 
-from . import activity, memory, modes, nlu, speak, stopping  # noqa: E402
+from . import activity, health, memory, modes, nlu, speak, stopping  # noqa: E402
+from . import partial as partial_text  # noqa: E402
 from .config import ROOT, secret, settings  # noqa: E402
 
 log = logging.getLogger("jarvis")
@@ -254,7 +255,8 @@ def main() -> None:
     working = {"text": None}   # the command being worked on right now, if any
 
     def submit(text: str, reply=None, chat=None, recent=None, progress=None, via: str = "pc",
-               msg_id: str | None = None) -> None:
+               msg_id: str | None = None, partial=None) -> None:
+        """Queue a command. `partial` (optional) gets the answer's text as it's written, for the phone."""
         busy_with = working["text"]
         if busy_with and stopping.is_stop_phrase(text):   # "Jarvis, stop" mid-task: don't queue it, stop
             stop_command()
@@ -262,17 +264,18 @@ def main() -> None:
                 reply("Okay, stopping.", "", [])
             return
         tid = activity.start(text, via=via, chat=chat, msg_id=msg_id, status="queued")
-        jobs.put((tid, text, reply, chat, recent, progress, via, msg_id))
+        jobs.put((tid, text, reply, chat, recent, progress, via, msg_id, partial))
         if busy_with and progress:   # say so, instead of looking like nothing is happening
             try:
                 progress(f"Waiting for “{busy_with[:40]}” to finish…")
             except Exception:
                 log.debug("progress callback failed", exc_info=True)
 
-    def run_job(tid, text, reply, chat, recent, progress, via, msg_id=None) -> None:
+    def run_job(tid, text, reply, chat, recent, progress, via, msg_id=None, partial=None) -> None:
         current.update(via=via, chat=chat, msg_id=msg_id or "")
         working["text"] = text
         stopping.begin()
+        partial_text.set_sink(partial)
         started = time.time()
         activity.set_status(tid, "running")
         log.info("Command: %s", text)
@@ -331,6 +334,7 @@ def main() -> None:
                 log.exception("Delivering a command's result failed; carrying on with the next one.")
             finally:
                 working["text"] = None
+                partial_text.set_sink(None)
 
     threading.Thread(target=worker, daemon=True, name="worker").start()
 
@@ -362,6 +366,7 @@ def main() -> None:
     proactive.set_handlers(run_scheduled, tell_user,
                            lambda: phone and phone.soon("activity", 0.3, phone.send_activity))
     proactive.start()   # scheduled tasks, new-email heads-ups, the good-morning message
+    health.set_sender(lambda text: tell_user(text))   # "Claude's login expired: here's the fix" and the like
 
     listener = None
     if settings["voice_enabled"] and not args.no_voice:

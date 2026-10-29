@@ -115,6 +115,8 @@ which you can also edit by hand.
   button. He stops within a second or so (a command still waiting its turn is just taken off the list). `/stop` does
   the same for whatever he's doing, even from another chat.
 - **Send again / edit**: press and hold one of your messages to send it again, edit it first, or copy it.
+- **Answers as they're written**: the reply bubble fills in word by word (Claude and the local models both
+  stream); commentary before an action is taken back off when the action starts.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
 - **Everything at the bottom**: like most iPhone apps there's no bar at the top. The tab bar at the bottom has
   Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
@@ -174,6 +176,32 @@ Share button to send it a link or text. Siri reads the answer out.
 A Shortcut can't do the app's encryption, so it uses its own key (`JARVIS_SIRI_KEY` in `.env`) over the same HTTPS
 tunnel: it looks up the PC's current address on the relay (`<topic>-s`), then asks `<address>/ask` with the key and
 the question in headers. Answers that take longer than 45 seconds come to the app as a message instead.
+
+## Live screen
+
+`/live` shows one monitor live (as fast as the link carries, usually 2-3 pictures a second). Tap to click, press
+and hold to right-click, pinch to zoom; the bar at the bottom types text, presses Enter / Backspace / Esc and
+scrolls. Switch monitors at the top; ✕ (or Esc) closes it and stops the pictures.
+
+## Away mode
+
+`/away` (or "I'm leaving", "away mode on"): while it's on, a real hand on the mouse or keyboard gets you a message
+and a webcam photo (kept in `.brain/away/`). Jarvis's own clicks and the live screen don't count: Windows marks
+them as generated input. `/away` again, or "I'm back", turns it off; `/lock` locks the PC.
+
+## Bulgarian
+
+Settings › **Language you speak**: English, Български or Both (`voice_language` in `config.json`). Bulgarian uses the
+multilingual Whisper model (`whisper_model_multi`, "small", downloaded once to `.brain/whisper`); in Both, each
+command counts as English only when Whisper is sure it's English, otherwise Bulgarian. Replies written in Cyrillic
+are spoken with `edge_voice_bg` (bg-BG-KalinaNeural). Phone dictation follows the same setting.
+
+## Self-check
+
+When something Jarvis depends on breaks he messages you once, with the fix, and again when it works:
+Claude's login or usage limit, email login, the microphone, the local models (Ollama), and Windows running out of
+memory (the page file is on C:, so a full C: makes programs fail at random). `/health`, "health check" or "are you
+okay?" checks everything now. See `jarvis/health.py`.
 
 ## Screens on your phone
 
@@ -291,6 +319,9 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
+| `jarvis/health.py` | The self-check: problems reported once with the fix, `/health` |
+| `jarvis/partial.py` | The answer as it's written, throttled, for the phone |
 | `jarvis/siri.py` | The "Ask Jarvis" Siri / Share shortcut's key and question handling |
 | `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |
 | `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |

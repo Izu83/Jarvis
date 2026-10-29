@@ -10,17 +10,48 @@ import winsound
 import numpy as np
 import sounddevice as sd
 
-from .config import set_setting, settings
+from . import health
+from .config import ROOT, set_setting, settings
 
 log = logging.getLogger("jarvis.voice")
+
+# Which languages you speak to Jarvis in (config "voice_language", also in the phone's Settings): "en", "bg", or
+# "both" (each command is checked for English vs Bulgarian first). Bulgarian needs a multilingual Whisper model,
+# "small" by default, kept on this drive (.brain/whisper) since C: is nearly full.
+LANGUAGES = ("en", "bg", "both")
+PROMPTS = {"en": "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3.",
+           "bg": "Хей Джарвис, отвори Spotify, Discord и Chrome. Сложи ги на монитор 3."}
 
 RATE = 16000
 CHUNK = 1280  # 80 ms, the frame size openWakeWord expects
 PRE_ROLL_CHUNKS = 22  # keep ~1.8 s before the wake word so words right after it aren't lost
 
 # Vocabulary hint so Whisper spells app names right
-WHISPER_PROMPT = "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3."
-WAKE_PREFIX = re.compile(r"^\W*(hey|hi|ok|okay)?\W*(jarvis|jervis|javis)\W*", re.IGNORECASE)
+WHISPER_PROMPT = PROMPTS["en"]
+WAKE_PREFIX = re.compile(r"^\W*(hey|hi|ok|okay|хей|ей)?\W*(jarvis|jervis|javis|джарвис|джарвиз)\W*", re.IGNORECASE)
+
+
+_listeners: list = []
+
+
+def language_changed() -> None:
+    """The voice language was changed (phone Settings): load the right Whisper now, not on the next command."""
+    for listener in _listeners:
+        if getattr(listener, "loaded_for", None) and model_for(language()) != model_for(listener.loaded_for):
+            threading.Thread(target=listener._load_whisper, daemon=True, name="whisper-reload").start()
+
+
+def language() -> str:
+    lang = settings.get("voice_language", "en")
+    return lang if lang in LANGUAGES else "en"
+
+
+def model_for(lang: str) -> str:
+    """English-only models (".en") are faster and better at English; Bulgarian needs a multilingual one."""
+    if lang == "en":
+        return settings["whisper_model"]
+    name = settings.get("whisper_model_multi", "small")
+    return name[:-3] if name.endswith(".en") else name
 
 
 def _beep(freq: int) -> None:
@@ -61,6 +92,9 @@ class VoiceListener:
         self._active = threading.Event()   # True while actively recording a command
         self._cancel = threading.Event()   # stop the command currently being recorded
         self._reopen = threading.Event()   # re-open the audio stream (the mic was changed)
+        self.loaded_for, self.last_lang = None, "en"
+        self.skip = 0   # samples of pre-roll (with the wake word) at the start of the recording
+        _listeners.append(self)
 
     def trigger(self) -> None:
         """The Ctrl+Alt+J shortcut: start listening, or — if already listening — stop."""
@@ -79,7 +113,6 @@ class VoiceListener:
         self._reopen.set()
 
     def _load_models(self):
-        from faster_whisper import WhisperModel
         from openwakeword.model import Model
         from openwakeword.utils import download_models
 
@@ -87,8 +120,20 @@ class VoiceListener:
         log.info("Loading wake word model '%s'...", name)
         download_models(model_names=[name])
         self.wake = Model(wakeword_models=[name], inference_framework="onnx")
-        log.info("Loading Whisper '%s' (first run downloads it)...", settings["whisper_model"])
-        self.whisper = WhisperModel(settings["whisper_model"], device="cpu", compute_type="int8")
+        self._load_whisper()
+
+    def _load_whisper(self) -> None:
+        """(Re)load Whisper for the current voice language. Called again when the language changes."""
+        from faster_whisper import WhisperModel
+        lang = language()
+        name = model_for(lang)
+        log.info("Loading Whisper '%s' for %s (first run downloads it)...", name,
+                 {"en": "English", "bg": "Bulgarian", "both": "English and Bulgarian"}[lang])
+        # the English models are already in the usual cache; new multilingual ones go to D:, C: is nearly full
+        root = None if name.endswith(".en") else str(ROOT / ".brain" / "whisper")
+        self.whisper = WhisperModel(name, device="cpu", compute_type="int8", download_root=root)
+        self.loaded_for = lang
+        self.last_lang = "bg" if lang == "bg" else "en"
 
     def _callback(self, indata, _frames, _time, status):
         if status:
@@ -97,16 +142,31 @@ class VoiceListener:
 
     def run(self) -> None:
         self._load_models()
+        fails = 0   # in a row: one blip isn't worth a message, a mic that stays broken is
         while True:
             self._reopen.clear()
             dev = settings["input_device"]
+            opened = 0.0
             try:
                 with sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=CHUNK,
                                     callback=self._callback, device=dev):
                     log.info("Listening on %s. Say \"Hey Jarvis, ...\" or press Ctrl+Alt+J.", device_name(dev))
+                    opened = time.time()
+                    if fails >= 3:
+                        health.fixed("mic", "The microphone works again.")
                     self._wake_loop()
+            except MemoryError:   # not the mic's fault: Windows ran out of memory to hand out
+                log.exception("Out of memory while listening; retrying in 2 s.")
+                health.out_of_memory()
+                time.sleep(2)
+                continue
             except Exception:
                 log.exception("Microphone error; retrying in 2 s (try a different mic in the tray).")
+                fails = 1 if opened and time.time() - opened > 60 else fails + 1   # it had worked a while
+                if fails >= 3:
+                    health.problem("mic", f"I can't use the microphone ({device_name(dev)}), so \"Hey Jarvis\" "
+                                   "doesn't work on the PC. Check it's plugged in, or pick another one: right-click "
+                                   "the tray icon › Microphone.")
                 time.sleep(2)
 
     def _wake_loop(self) -> None:
@@ -131,6 +191,8 @@ class VoiceListener:
             self._cancel.clear()
             self._active.set()
             noise = float(np.percentile([_rms(c) for c in recent], 20))
+            # the wake word is at the end of the pre-roll; with the shortcut there's no wake word to skip
+            self.skip = len(recent) * CHUNK if source == "wake" else 0
             audio = self._record(list(recent), noise)
             self._active.clear()
             self.wake.reset()
@@ -200,21 +262,41 @@ class VoiceListener:
     def _quick_transcribe(self, audio: np.ndarray) -> str:
         """A fast, rough pass for the live pop-up (the accurate pass runs once you stop talking)."""
         samples = audio.astype(np.float32) / 32768.0
-        segments, _ = self.whisper.transcribe(samples, language="en", beam_size=1,
-                                              condition_on_previous_text=False, initial_prompt=WHISPER_PROMPT)
+        lang = self.last_lang   # in "both", the language of your last command is the best quick guess
+        segments, _ = self.whisper.transcribe(samples, language=lang, beam_size=1,
+                                              condition_on_previous_text=False, initial_prompt=PROMPTS[lang])
         text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
         return WAKE_PREFIX.sub("", text).strip(" ,.")
 
+    def _language_of(self, samples: np.ndarray) -> str:
+        """English or Bulgarian? Whisper is near-certain (0.99+) about English when it is English, but calls short
+        Bulgarian anything from Russian to Polish or Albanian, so: English when it's sure, Bulgarian otherwise.
+        The "Hey Jarvis" at the start (English either way) is left out of the guess."""
+        setting = language()
+        if setting != "both":
+            return setting
+        try:
+            words = samples[self.skip:] if len(samples) - self.skip > RATE // 2 else samples
+            _, _, probs = self.whisper.detect_language(words)
+            return "en" if dict(probs).get("en", 0) >= 0.5 else "bg"
+        except Exception:
+            log.debug("language detection failed", exc_info=True)
+            return self.last_lang
+
     def _transcribe(self, audio: np.ndarray) -> str:
+        if language() != self.loaded_for and model_for(language()) != model_for(self.loaded_for):
+            self._load_whisper()   # the language was changed in Settings
+        self.loaded_for = language()
         samples = audio.astype(np.float32) / 32768.0
+        lang = self.last_lang = self._language_of(samples)
         segments, _ = self.whisper.transcribe(
-            samples, language="en",
+            samples, language=lang,
             beam_size=5,                           # search wider for the right words (base used greedy = more mistakes)
             temperature=[0.0, 0.2, 0.4],           # retry a little hotter if a pass looks like a hallucination
             condition_on_previous_text=False,      # each command is independent; stops it echoing an earlier one
             vad_filter=True, vad_parameters=dict(min_silence_duration_ms=300),
             no_speech_threshold=0.7,
-            initial_prompt=WHISPER_PROMPT)
+            initial_prompt=PROMPTS[lang])
         # Whisper hallucinates words like "You" on silence; drop only segments it's quite sure aren't speech
         text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
         log.info("Heard: %r", text)

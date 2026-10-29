@@ -68,11 +68,16 @@ DEFAULTS = {
     "wake_word_model": "hey_jarvis",
     "wake_threshold": 0.5,
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
+    # Which language you talk to Jarvis in: "en", "bg" (Bulgarian) or "both". Bulgarian uses the multilingual
+    # whisper_model_multi (a ~480 MB download the first time, kept in .brain/whisper).
+    "voice_language": "en",
+    "whisper_model_multi": "small",
     "speak_replies": True,
     "speak_on_shortcut": True,  # speak the reply aloud when you start a command with the Ctrl+Alt+J shortcut
     # Voice: "edge" = Microsoft's free natural neural voices (online, no key); "windows" = the built-in offline voice.
     "tts_engine": "edge",
     "edge_voice": "en-US-AriaNeural",  # a natural female voice; e.g. en-US-JennyNeural, en-US-AvaNeural, en-GB-SoniaNeural
+    "edge_voice_bg": "bg-BG-KalinaNeural",  # used for replies written in Bulgarian (bg-BG-BorislavNeural = male)
     "tts_voice": "",  # the built-in Windows voice name (offline fallback), e.g. "Zira"; empty = default
     "input_device": None,       # which microphone to listen on (device index); None = Windows default
     # How long Jarvis listens. Bigger = waits longer for you, less chance of cutting you off.

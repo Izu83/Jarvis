@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, camera, inbox, media, modes, outbox, pc, proactive, push, screens, siri,
+from . import (activity, approval, away, camera, inbox, media, modes, outbox, pc, proactive, push, screens, siri,
                stopping, sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
@@ -91,6 +91,8 @@ class PhoneChannel:
         activity.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
         watchers.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
         stopping.on_stop(self._drop_asks)
+        away.set_handler(self._away_alert)
+        self._frame_lock = threading.Lock()   # one live-screen picture at a time
 
     def _drop_asks(self) -> None:
         """Stop pressed: any permission prompt still waiting is answered No and taken off the phone."""
@@ -223,6 +225,7 @@ class PhoneChannel:
                        "use_claude": settings["use_claude"],
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
+                       "voice_language": settings.get("voice_language", "en"),
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
                        "activity": activity.summary(), "watches": watchers.items() + proactive.items()})
@@ -263,6 +266,56 @@ class PhoneChannel:
             return
         self._publish({"kind": "image", "id": msg_id, "monitors": [], "title": "Camera",
                        "data": base64.b64encode(jpeg).decode()})
+
+    def _away_alert(self) -> None:
+        """Away mode saw a real hand on the mouse or keyboard: tell the phone, with a webcam photo if there is one."""
+        self.message("🚨 Someone is using your PC right now (away mode is on). Type /lock to lock it, or /away "
+                     "when it's you.")
+        try:
+            jpeg = camera.capture()
+        except Exception as e:
+            self.message(f"I couldn't take a webcam photo of them: {e}.", notify=False)
+            return
+        folder = ROOT / ".brain" / "away"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / time.strftime("away-%Y%m%d-%H%M%S.jpg")
+        path.write_bytes(jpeg)
+        self.send_file({"path": str(path), "name": path.name, "size": len(jpeg), "mime": "image/jpeg"})
+
+    def send_frame(self, msg_id: str, monitor) -> None:
+        """One picture of a monitor for the live screen. Skipped if the last one is still being made."""
+        if not self._frame_lock.acquire(blocking=False):
+            return
+        try:
+            jpeg, info = screens.capture_monitor(int(monitor) if monitor else None)
+            mons = [{"monitor": n, "label": _short_label(n)} for n in info.pop("all")]
+            self._publish({"kind": "frame", "id": msg_id, **info, "monitors": mons,
+                           "data": base64.b64encode(jpeg).decode()})
+        except Exception as e:
+            log.warning("Live screen picture failed: %s", e)
+        finally:
+            self._frame_lock.release()
+
+    def live_input(self, d: dict) -> None:
+        """A tap, scroll or typing from the live screen on the phone, done on the PC."""
+        from . import ui
+        from . import windows as win
+        away.note_own_input()
+        act = d.get("act", "")
+        try:
+            b = win.get_monitor(int(d.get("monitor") or 0)).bounds
+            x = round(b.x + min(1.0, max(0.0, float(d.get("x", .5)))) * (b.w - 1))
+            y = round(b.y + min(1.0, max(0.0, float(d.get("y", .5)))) * (b.h - 1))
+            if act in ("click", "right", "double"):
+                ui.mouse_click(x, y, "right" if act == "right" else "left", act == "double")
+            elif act == "scroll":
+                ui.mouse_scroll(max(-15, min(15, int(d.get("amount", 0)))), x, y)
+            elif act == "type":
+                ui.type_text(str(d.get("text", ""))[:2000])
+            elif act == "key":
+                ui.press_keys(str(d.get("keys", ""))[:40])
+        except Exception as e:
+            log.warning("Live screen %s failed: %s", act, e)
 
     def send_voice(self, req: str, text: str) -> None:
         """Speak text with the PC pop-up's neural voice and send the MP3 to the phone (no tokens)."""
@@ -407,6 +460,15 @@ class PhoneChannel:
         elif kind == "camera":
             log.info("Phone: camera photo")
             self.send_camera(msg_id)
+        elif kind == "live":   # the live screen wants its next picture
+            self.send_frame(msg_id, data.get("monitor"))
+        elif kind == "live_input":
+            self.live_input(data)
+        elif kind == "away":   # /away on the phone: instant, even while a command is running
+            self.reply(msg_id, away.toggle())
+        elif kind == "health":   # /health on the phone
+            from . import health
+            self.reply(msg_id, health.check_now())
         elif kind == "watch":
             self.watch()
         elif kind == "tts":   # the phone wants a reply read aloud in Jarvis's own voice
@@ -447,7 +509,12 @@ class PhoneChannel:
                            "Apple refused the notification. Turn the switch off and on again (details in jarvis.log).")
         elif kind == "set":   # a settings toggle from the phone
             key, value = data.get("key"), bool(data.get("value"))
-            if key == "use_claude":
+            if key == "voice_language" and data.get("value") in ("en", "bg", "both"):
+                set_setting("voice_language", data["value"])
+                log.info("Voice language set to %s from the phone.", data["value"])
+                from . import voice
+                voice.language_changed()
+            elif key == "use_claude":
                 set_setting("use_claude", value)
                 log.info("Claude turned %s from the phone.", "on" if value else "off")
             elif key == "local_first":
@@ -518,7 +585,9 @@ class PhoneChannel:
             self.on_command(text, lambda text, think="", steps=None, i=msg_id: self._reply_or_push(i, text, think, steps),
                             chat=data.get("chat"), recent=data.get("recent"),
                             progress=lambda text, k="", i=msg_id: self.reply(i, text, done=False, step_kind=k),
-                            via="phone", msg_id=msg_id)
+                            via="phone", msg_id=msg_id,
+                            partial=lambda text, i=msg_id: self._publish({"kind": "partial", "id": i,
+                                                                          "text": text[-8000:]}))
 
     async def _http(self, connection, request):
         """Plain HTTP requests on the phone port: only the Siri Shortcut's /ask (see siri.py). Anything else

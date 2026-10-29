@@ -356,6 +356,24 @@ def _watch_app(m, text):
     return tools.run("notify_when", {"kind": "process_exits", "name": app, "label": f"{app} closed"})
 
 
+@simple(r"^(((turn|switch) (on|off) )?away mode( on| off)?|i'?m (leaving|going out|heading out)( now)?|i'?m back)[.!]*$")
+def _away(m, text):
+    from . import away
+    low = text.lower()
+    if re.search(r"\b(off|back)\b", low):
+        return away.turn_off()
+    if re.search(r"\bon\b|leaving|going out|heading out", low):
+        return away.turn_on()
+    return away.toggle()
+
+
+@simple(r"^(health check|self[- ]?check|check yourself|run a (health|self[- ]?)check|are you (ok|okay|alright|"
+        r"working)|is everything (ok|okay|working)|what'?s (broken|wrong with you))[?.!]*$")
+def _health(m, text):
+    from . import health
+    return health.check_now()
+
+
 @simple(r"^(stop watching|cancel (the )?(watch|watches|notifications?|reminders?)|forget (the )?watch(es)?)$")
 def _watch_cancel(m, text):
     return tools.run("cancel_watches", {})

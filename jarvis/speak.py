@@ -29,12 +29,21 @@ def _play_mp3(path: str) -> None:
         raise OSError("MCI couldn't open the audio")
 
 
+def voice_for(text: str) -> str:
+    """A Bulgarian voice for a reply written in Cyrillic, otherwise the usual one."""
+    letters = [c for c in text if c.isalpha()]
+    cyrillic = sum("Ѐ" <= c <= "ӿ" for c in letters)
+    if letters and cyrillic / len(letters) > 0.3:
+        return settings.get("edge_voice_bg", "bg-BG-KalinaNeural")
+    return settings["edge_voice"]
+
+
 def _edge_say(text: str, out: str) -> bool:
     """Synthesise with edge-tts to an MP3 file. Returns False if it's unavailable (e.g. no internet)."""
     import edge_tts
 
     async def go():
-        await edge_tts.Communicate(text, settings["edge_voice"]).save(out)
+        await edge_tts.Communicate(text, voice_for(text)).save(out)
 
     try:
         asyncio.run(go())

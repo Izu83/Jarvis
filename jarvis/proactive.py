@@ -15,6 +15,7 @@ import logging
 import threading
 import time
 
+from . import health
 from .config import ROOT, settings
 
 log = logging.getLogger("jarvis.proactive")
@@ -244,7 +245,7 @@ def _morning_due(now: dt.datetime) -> bool:
 
 
 def _loop() -> None:
-    next_mail = time.time() + 60
+    next_mail, mail_fails = time.time() + 60, 0
     while True:
         time.sleep(TICK)
         try:
@@ -266,9 +267,16 @@ def _loop() -> None:
             try:
                 _check_mail()
                 next_mail = time.time() + MAIL_EVERY
+                mail_fails = 0
+                health.fixed("email", "I can read your email again.")
             except Exception as e:
                 log.info("Couldn't check for new email (%s); trying again later.", e)
                 next_mail = time.time() + MAIL_RETRY
+                mail_fails += 1
+                # three in a row (not one network hiccup); not set up at all is your choice, not a fault
+                if mail_fails >= 3 and "isn't set up" not in str(e):
+                    health.problem("email", f"I can't check your email ({str(e)[:160]}). If you changed your "
+                                   "Google password, make a new app password and run `run.bat --email` on the PC.")
 
 
 def _ensure_loop() -> None:

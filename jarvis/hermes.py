@@ -25,7 +25,7 @@ import time
 
 import requests
 
-from . import memory, outbox, stopping, tools, usage
+from . import health, memory, outbox, partial, stopping, tools, usage
 from .brain import MAX_TOOL_ROUNDS, describe_step, make_brain_named, step_kind, system_prompt
 from .config import ROOT, settings
 
@@ -110,6 +110,18 @@ _resting: dict[str, float] = {}
 
 def resting(model: str) -> bool:
     return _resting.get(model, 0) > time.time()
+
+
+def _ran_out_of_memory() -> bool:
+    """Did Ollama's last error come from Windows refusing memory? (the end of .brain/ollama.log says so)"""
+    try:
+        with open(ROOT / ".brain" / "ollama.log", "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 6000))
+            tail = f.read().decode("utf-8", "replace")
+        return "Memory allocation failure" in tail or "out of memory" in tail.lower()
+    except OSError:
+        return False
 
 
 def local_status() -> list[dict]:
@@ -265,6 +277,9 @@ class HermesBrain:
             _resting[self.team[key][0]] = time.time() + REST_SECONDS
             log.warning("%s keeps failing; skipping it for %d minutes (Claude covers). See .brain/ollama.log.",
                         self.team[key][1], REST_SECONDS // 60)
+            health.problem("local_" + key, f"The local model {self.team[key][1]} keeps failing, so Claude covers "
+                           f"for it for {REST_SECONDS // 60} minutes. If it keeps happening, restart Jarvis from the "
+                           f"tray; .brain/ollama.log on the PC says why.")
 
     def _plan(self, command: str, followup: bool = False) -> list[str]:
         """Which local models try this command, in order."""
@@ -308,8 +323,12 @@ class HermesBrain:
             time.sleep(0.5)
             if self._server_up():
                 log.info("Ollama is up.")
+                health.fixed("ollama", "The local models are running again.")
                 return True
         log.warning("Started Ollama but it didn't answer in time.")
+        if settings.get("local_first"):
+            health.problem("ollama", "The local models' server (Ollama) won't start, so Claude does everything for "
+                           "now. Restarting the PC usually fixes it.")
         return False
 
     def close(self) -> None:
@@ -373,12 +392,15 @@ class HermesBrain:
             try:
                 answer = self._run(key, command)
                 self._strikes[key] = 0   # it answered (even if not confidently): it works
+                health.fixed("local_" + key)
                 if answer is not None:
                     return answer
                 log.info("%s couldn't finish confidently.", name)
             except requests.RequestException as e:
                 log.info("%s didn't answer (%s).", name, e)
                 self._strike(key)
+                if _ran_out_of_memory():
+                    health.out_of_memory()
             except Exception:
                 log.exception("%s failed.", name)
                 self._strike(key)
@@ -463,7 +485,7 @@ class HermesBrain:
             "model": model,
             "messages": [{"role": "system", "content": system}, *turn],
             "tools": self.tools,
-            "stream": False,
+            "stream": True,   # so the answer shows on the phone as it's written (partial.py)
             "keep_alive": "30m",   # keep the model warm in VRAM between commands
             # The tool list alone is ~6.5k tokens, so a small window silently cut off the instructions.
             "options": {"temperature": 0.6 if think else 0.3, "num_ctx": int(settings.get("local_ctx", 16384))},
@@ -471,14 +493,44 @@ class HermesBrain:
         if think and not self._no_think:
             body["think"] = True
         # stopping.wait: a slow model answer must not hold up the stop button
-        r = stopping.wait(requests.post, f"{self.host}/api/chat", json=body,
-                          timeout=THINK_TIMEOUT if think else CHAT_TIMEOUT)
-        if r.status_code == 400 and "think" in body:   # this Ollama doesn't know "think": ask again without it
-            self._no_think = True
+        try:
+            return stopping.wait(self._stream, body, THINK_TIMEOUT if think else CHAT_TIMEOUT)
+        except requests.HTTPError as e:
+            if e.response is None or e.response.status_code != 400 or "think" not in body:
+                raise
+            self._no_think = True   # this Ollama doesn't know "think": ask again without it
             body.pop("think")
-            r = stopping.wait(requests.post, f"{self.host}/api/chat", json=body, timeout=THINK_TIMEOUT)
-        r.raise_for_status()
-        return r.json().get("message", {}) or {}
+            return stopping.wait(self._stream, body, THINK_TIMEOUT)
+
+    def _stream(self, body: dict, timeout: float) -> dict:
+        """One streamed /api/chat call, put back together into one message. The visible text goes to the phone as
+        it arrives, unless it looks like a tool call written out as text."""
+        msg = {"role": "assistant", "content": "", "thinking": ""}
+        calls: list = []
+        start = time.time()
+        with requests.post(f"{self.host}/api/chat", json=body, stream=True, timeout=(10, timeout)) as r:
+            r.raise_for_status()
+            for line in r.iter_lines():
+                if not line:
+                    continue
+                if time.time() - start > timeout:
+                    raise requests.Timeout(f"no full answer within {timeout:.0f} s")
+                chunk = json.loads(line)
+                if chunk.get("error"):
+                    raise requests.HTTPError(chunk["error"])
+                part = chunk.get("message") or {}
+                msg["content"] += part.get("content") or ""
+                msg["thinking"] += part.get("thinking") or ""
+                calls += part.get("tool_calls") or []
+                text = msg["content"].lstrip()
+                if text and not calls and not text.startswith(("{", "[", "<", "`")):
+                    partial.update(_MARKDOWN.sub("", text))
+                if chunk.get("done"):
+                    break
+        if calls:
+            msg["tool_calls"] = calls
+            partial.clear()
+        return msg
 
 
 def _text_calls(content: str) -> list[dict]:

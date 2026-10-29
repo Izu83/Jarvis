@@ -42,6 +42,21 @@ def capture_desktop(max_width: int = 2600, quality: int = 78) -> tuple[bytes, li
     return buf.getvalue(), layout
 
 
+def capture_monitor(number: int | None = None, max_width: int = 1400, quality: int = 60) -> tuple[bytes, dict]:
+    """One monitor, small and quick, for the phone's live screen. Defaults to the one you're working on."""
+    number = number or _default_monitor()
+    m = win.get_monitor(number)
+    b = m.bounds
+    shot = ImageGrab.grab(bbox=(b.x, b.y, b.x + b.w, b.y + b.h), all_screens=True)
+    scale = min(1.0, max_width / b.w)
+    if scale < 1:
+        shot = shot.resize((round(b.w * scale), round(b.h * scale)), Image.BILINEAR)
+    buf = io.BytesIO()
+    shot.save(buf, "JPEG", quality=quality)
+    others = [x.number for x in sorted(win.list_monitors(), key=lambda x: x.bounds.x)]
+    return buf.getvalue(), {"monitor": m.number, "w": b.w, "h": b.h, "all": others}
+
+
 # ---------------------------------------------------------------- screenshots Claude looks at (costs tokens)
 
 def _shot_dir():

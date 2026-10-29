@@ -266,6 +266,7 @@
   .rem svg.i { width: 18px; height: 18px; color: var(--orange); flex: none; }
   .rem .x-btn { margin-left: auto; }
   @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.96); } }
+  .bubble.writing::after { content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; vertical-align: -2px; background: currentColor; animation: blink 1s steps(1) infinite; }
   .typing { display: inline-flex; gap: 5px; padding: 5px 2px; }
   .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--label2); animation: blink 1.3s infinite; }
   .typing i:nth-child(2) { animation-delay: .18s; } .typing i:nth-child(3) { animation-delay: .36s; }
@@ -654,6 +655,25 @@
   .seg { position: absolute; z-index: 2; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 20px); display: flex; padding: 3px; border-radius: 18px; gap: 2px; }
   .seg button { height: 32px; padding: 0 14px; border-radius: 15px; font-size: 14px; font-weight: 600; color: rgba(255,255,255,.75); transition: background .25s, color .25s; }
   .seg button.on { background: rgba(255,255,255,.9); color: #000; }
+  /* ---------- live screen: your PC, refreshed a few times a second; tap = click (✕ closes it) ---------- */
+  .live { position: fixed; inset: 0; z-index: 45; background: #000; animation: fade .25s both; touch-action: none; }
+  .live.closing { animation: fadeOut .3s var(--ease) both; }
+  .live-stage { position: absolute; inset: 0; overflow: hidden; }
+  .live-stage img { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; }
+  .live-top { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 10px); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; }
+  .live-top .seg { position: static; transform: none; }
+  .live-badge { margin-left: auto; height: 32px; padding: 0 12px; border-radius: 16px; display: flex; align-items: center; gap: 6px; color: #fff; font-size: 13px; font-weight: 600; background: rgba(0,0,0,.5); }
+  .live-badge .dot { width: 8px; height: 8px; }
+  #liveClose { width: 44px; height: 44px; color: #fff; }
+  #liveClose svg.i { width: 20px; height: 20px; stroke-width: 2.6; }
+  .live-bar { position: absolute; z-index: 2; left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 24px; }
+  .live-bar input { flex: 1; min-width: 0; height: 38px; border: 0; outline: 0; border-radius: 19px; padding: 0 14px; background: rgba(255,255,255,.12); color: #fff; font: inherit; font-size: 16px; }
+  .live-bar input::placeholder { color: rgba(255,255,255,.55); }
+  .live-bar button { height: 38px; min-width: 38px; padding: 0 9px; border-radius: 19px; color: #fff; background: rgba(255,255,255,.1); font-size: 15px; font-weight: 600; flex: none; }
+  .live-hint { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 68px); text-align: center; color: rgba(255,255,255,.6); font-size: 13px; pointer-events: none; transition: opacity .6s; }
+  .live-ring { position: absolute; z-index: 1; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 2px solid #fff; pointer-events: none; animation: ring .5s var(--ease) forwards; }
+  .live-ring.right { border-color: var(--orange); }
+  @keyframes ring { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
   .hint { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 20px); left: 16px; color: rgba(255,255,255,.6); font-size: 13px; }
 </style>
 </head>
@@ -924,6 +944,12 @@
         <label class="row"><span class="grow">Read replies aloud</span><span class="switch"><input type="checkbox" id="speakToggle"><span></span></span></label>
         <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle"><span></span></span></label>
       </div>
+      <div class="group-title">Language you speak</div>
+      <div class="group" style="padding: 15px 16px 17px;">
+        <div class="segment" id="langSeg"></div>
+        <div class="opt-note" id="langNote"></div>
+      </div>
+      <div class="group-foot">For “Hey Jarvis” on your PC and dictation here. Replies in Bulgarian are read in a Bulgarian voice either way.</div>
       <div class="group-title">Notifications</div>
       <div class="group">
         <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
@@ -1041,13 +1067,39 @@
   <div class="seg glass" id="seg"></div>
 </div>
 
+<!-- Live screen (/live): your PC a few times a second. Tap = click, hold = right-click, pinch to zoom, ✕ closes -->
+<div class="live" id="live" hidden>
+  <div class="live-stage" id="liveStage"><img id="liveImg" alt="Your PC's screen" draggable="false"></div>
+  <div class="live-top">
+    <div class="seg glass" id="liveSeg"></div>
+    <span class="live-badge"><span class="dot" id="liveDot"></span><span id="liveRate">Connecting…</span></span>
+    <button class="round glass press" id="liveClose" aria-label="Close the live screen"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <span class="live-hint" id="liveHint">Tap to click · hold to right-click · pinch to zoom</span>
+  <div class="live-bar glass">
+    <input id="liveText" placeholder="Type…" enterkeyhint="send" autocomplete="off" autocapitalize="off">
+    <button class="press" data-key="enter" aria-label="Enter">⏎</button>
+    <button class="press" data-key="backspace" aria-label="Backspace">⌫</button>
+    <button class="press" data-key="esc" aria-label="Escape">Esc</button>
+    <button class="press" data-scroll="4" aria-label="Scroll up">▲</button>
+    <button class="press" data-scroll="-4" aria-label="Scroll down">▼</button>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.5";   // bump together with version.json
-const JNI = "JNIv15";   // Jarvis · Niko · Izu83 · version 15 — Jarvis's own release name
+const VERSION = "2026-10-29.6";   // bump together with version.json
+const JNI = "JNIv16";   // Jarvis · Niko · Izu83 · version 16 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv16", when: "Oct 29, 2026", title: "Live screen, away mode & Bulgarian", notes: [
+    "Answers appear word by word as Jarvis writes them, instead of all at once at the end.",
+    "/live shows your PC's screen live. Tap to click, hold to right-click, pinch to zoom, type and scroll from the bar at the bottom. Switch monitors at the top; ✕ closes it.",
+    "/away: if anyone uses your PC's mouse or keyboard while you're out, you get a message and a webcam photo. Type /away again when you're back. /lock locks the PC.",
+    "Talk to Jarvis in Bulgarian. Settings › Language you speak: English, Български or Both. Replies in Bulgarian are read in a Bulgarian voice.",
+    "Jarvis checks on himself. If Claude's login runs out, email stops working, the microphone breaks or Windows runs out of memory, he messages you what's wrong and how to fix it. /health checks everything now.",
+  ] },
   { v: "JNIv15", when: "Oct 29, 2026", title: "Siri, stop by voice & more", notes: [
     "“Hey Siri, Ask Jarvis”: make the shortcut once (Settings › Siri & Share shows how) and Siri reads Jarvis's answer out. It's in every app's Share button too.",
     "Say or type “stop” (or “Jarvis, stop”, “never mind”) while he's busy and he stops right away. /stop works too.",
@@ -1887,6 +1939,8 @@ async function onMessage(text) {
     if (data.kind === "state") { onState(data); return; }
     if (data.kind === "memory") { onMemory(data); return; }
     if (data.kind === "siri") { onSiri(data); return; }
+    if (data.kind === "partial") { onPartial(data); return; }
+    if (data.kind === "frame") { Live.frame(data); return; }
     if (data.kind === "activity") { onActivity(data.activity, data.watches); return; }
     if (data.kind === "sys") { onSys(data.sys); return; }
     if (data.kind === "image" && data.data) { addScreenshot(data.id, data).catch(() => {}); return; }
@@ -1927,12 +1981,25 @@ async function onMessage(text) {
     addMessage(chat, { who: "jarvis", text: data.text, thinking: data.thinking || "" });
     if (p.chatId === db.current && p.el?.isConnected) {
       if (p.steps?.length) drawSteps(p); else p.step?.remove();   // the steps stay, now all done
-      p.el.classList.remove("error"); p.el.innerHTML = rich(data.text); addThoughts(p.el, data.thinking); addActions(p.el, Date.now()); scrollDown();
+      p.el.classList.remove("error", "writing"); p.el.innerHTML = rich(data.text); addThoughts(p.el, data.thinking); addActions(p.el, Date.now()); scrollDown();
     }
     if (p.onReply) p.onReply(data.text);
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
     speakText(data.text);
     if (!$("drawer").hidden) renderSidebar();
+}
+// The answer as it's being written: shown in the reply bubble (with a blinking cursor) until the real one lands.
+// Empty text = what came so far was Jarvis thinking out loud before using a tool, so it goes back to the dots.
+function onPartial(data) {
+  const p = pending.get(data.id);
+  if (!p || p.kind !== "cmd" || p.finished) return;
+  clearTimeout(p.ackTimer); p.acked = true;
+  if (p.chatId !== db.current || !p.el?.isConnected) return;
+  const log = $("log"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  if (!data.text) { p.el.classList.remove("writing"); p.el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; return; }
+  p.el.classList.add("writing");
+  p.el.innerHTML = rich(data.text);
+  if (atEnd) scrollDown(false);
 }
 function sync() { post({ type: "sync", id: newId() }).catch(() => {}); }
 // The socket can look open while it's actually dead (iOS freezes it in the background). After coming back, ask for
@@ -2089,7 +2156,21 @@ function renderLocal(list) {
            `<span class="value lstate"><span class="dot ${cls}"></span>${label}</span></div>`; }).join("")
     : `<div class="row"><span class="grow">No local models set up</span></div>`;
 }
+const LANGS = [["en", "English"], ["bg", "Български"], ["both", "Both"]];
+const LANG_NOTE = { en: "English only: the fastest and most accurate for English.",
+                    bg: "Bulgarian only. The first time, your PC downloads a bigger speech model (about 480 MB).",
+                    both: "Each command is checked for English or Bulgarian. A bit slower; the first time, your PC downloads a bigger speech model (about 480 MB)." };
+let voiceLang = load("jarvis.voiceLang") || "en";
+const dictationLang = () => voiceLang === "bg" ? "bg-BG" : voiceLang === "en" ? "en-US" : (navigator.language || "en-US");
+function renderLang() {
+  segmentOf($("langSeg"), LANGS, voiceLang, id => {
+    voiceLang = id; store("jarvis.voiceLang", id); $("langNote").textContent = LANG_NOTE[id];
+    post({ type: "set", key: "voice_language", value: id, id: newId() }).then(() => toast("Saved", "check"), () => toast("Can't reach your PC right now.", "x", "var(--red)"));
+  });
+  $("langNote").textContent = LANG_NOTE[voiceLang];
+}
 function onState(data) {
+  if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
@@ -2234,7 +2315,11 @@ function slashCommands() {
     { name: "camera", alias: ["cam", "webcam", "photo", "selfie"], icon: "camera", tint: "#ff9f0a", desc: "A photo from your PC's webcam", run: () => requestCamera() },
     { name: "system", alias: ["stats", "pc"], icon: "chart", tint: "#30b0c7", desc: "CPU, memory, disks and network", run: openSystem },
     { name: "control", alias: ["music", "media", "volume"], icon: "music", tint: "#30d158", desc: "Music, volume, clipboard and lock", run: openControl },
+    { name: "live", alias: ["remote", "desktop", "mirror"], icon: "display", tint: "#5e5ce6", desc: "Your PC's screen live: tap to click", run: () => Live.show() },
     { name: "stop", alias: ["cancel"], icon: "stop", tint: "#ff453a", desc: "Stop what Jarvis is doing", run: stopAnything },
+    { name: "away", alias: ["leaving", "back"], icon: "shield", tint: "#ff9f0a", desc: "Away mode: a photo if someone uses your PC", run: () => askQuick("away") },
+    { name: "lock", alias: [], icon: "lock", tint: "#8e8e93", desc: "Lock your PC", run: () => quick("lock") },
+    { name: "health", alias: ["check", "status"], icon: "check", tint: "#30d158", desc: "Is everything working?", run: () => askQuick("health") },
     { name: "call", alias: [], icon: "phone", tint: "#34c759", desc: "Talk to Jarvis out loud", run: () => Call.open(false) },
     { name: "newmode", alias: ["mode"], icon: "plus", tint: "#8e8e93", desc: "Make a new mode",
       run: () => { text.value = "Create a mode called "; autosize(); text.focus(); } },
@@ -2450,6 +2535,13 @@ async function stopCommand() {
   try { await post({ type: "stop", id: newId(), target: b.id }); }
   catch { b.p.stopping = false; autosize(); toast("Can't reach your PC right now.", "x", "var(--red)"); }
 }
+async function askQuick(type) {   // instant PC answers (even while a command runs) that belong in the chat
+  const id = newId();
+  track(id, { kind: "quick", timeout: 15000, onReply: t => {
+    const chat = current(); addMessage(chat, { who: "jarvis", text: t }); bubble(t, "jarvis"); scrollDown();
+  } });
+  try { await post({ type, id }); } catch { fail(id, "Can't reach your PC right now."); }
+}
 async function stopAnything() {   // /stop: this chat's command, or else whatever Jarvis is doing (from anywhere)
   if (busyCmd()) return stopCommand();
   try { await post({ type: "stop", id: newId(), target: "" }); toast("Asked Jarvis to stop", "stop"); }
@@ -2488,7 +2580,7 @@ if (!Recognition) $("mic").hidden = true;
 $("mic").onclick = () => {
   if (listening) { rec.stop(); return; }
   rec = new Recognition();
-  rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = false;
+  rec.lang = dictationLang(); rec.interimResults = true; rec.continuous = false;
   rec.onstart = () => { listening = true; $("mic").classList.add("on"); text.value = ""; text.placeholder = "Listening…"; autosize(); };
   rec.onresult = e => { text.value = [...e.results].map(r => r[0].transcript).join(""); autosize(); };
   rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Use the mic key on your keyboard", "mic", "var(--orange)"); };
@@ -2593,6 +2685,151 @@ function openViewer(shot, index) {
   stage.addEventListener("pointercancel", e => pts.delete(e.pointerId));
 })();
 $("viewerClose").onclick = () => hideAnimated($("viewer"));
+
+// ================= live screen: one monitor, refreshed as fast as pictures arrive; tap/hold/pinch, ✕ to close =================
+const Live = {
+  open: false, monitor: null, s: 1, x: 0, y: 0, fit: 1, iw: 0, ih: 0, url: null, timer: null, times: [],
+  show() {
+    if (!key) return;
+    this.open = true; this.times = []; this.iw = 0;
+    $("liveRate").textContent = "Connecting…"; $("liveDot").className = "dot warn";
+    $("liveHint").style.opacity = "1"; setTimeout(() => { $("liveHint").style.opacity = "0"; }, 4000);
+    $("live").hidden = false;
+    this.request();
+  },
+  close() {
+    if (!this.open) return;
+    this.open = false; clearTimeout(this.timer); $("liveText").blur();
+    hideAnimated($("live"), () => { if (this.url) { URL.revokeObjectURL(this.url); this.url = null; } $("liveImg").removeAttribute("src"); });
+  },
+  request(delay = 0) {   // ask for the next picture; if it never comes, ask again
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      if (!this.open) return;
+      if (document.hidden) { this.request(1500); return; }
+      post({ type: "live", id: newId(), monitor: this.monitor }).catch(() => { $("liveRate").textContent = "Reconnecting…"; $("liveDot").className = "dot bad"; });
+      this.timer = setTimeout(() => this.request(), 5000);
+    }, delay);
+  },
+  frame(d) {
+    if (!this.open) return;
+    const url = URL.createObjectURL(new Blob([b64bytes(d.data)], { type: "image/jpeg" }));
+    const img = $("liveImg"), old = this.url, changed = d.monitor !== this.monitor;
+    this.url = url;
+    img.onload = () => {
+      if (old) URL.revokeObjectURL(old);
+      const fresh = changed || img.naturalWidth !== this.iw;
+      this.iw = img.naturalWidth; this.ih = img.naturalHeight;
+      img.style.width = this.iw + "px"; img.style.height = this.ih + "px";
+      if (fresh) this.fitView();
+      this.apply();
+    };
+    img.src = url;
+    this.monitor = d.monitor;
+    this.renderSeg(d.monitors || []);
+    const now = Date.now();
+    this.times = this.times.filter(t => now - t < 3000).concat(now);
+    $("liveRate").textContent = `Live · ${Math.max(1, Math.round(this.times.length / 3))} fps`; $("liveDot").className = "dot ok";
+    this.request(300);   // the next one, a moment after this one arrived (never more than the link can carry)
+  },
+  renderSeg(mons) {
+    const seg = $("liveSeg"), sig = mons.map(m => m.monitor).join() + "|" + this.monitor;
+    if (seg.dataset.sig === sig) return;
+    seg.dataset.sig = sig; seg.innerHTML = "";
+    seg.style.display = mons.length > 1 ? "" : "none";
+    for (const m of mons) {
+      const b = document.createElement("button");
+      b.textContent = m.label; b.classList.toggle("on", m.monitor === this.monitor);
+      b.onclick = () => { if (m.monitor !== this.monitor) { this.monitor = m.monitor; this.iw = 0; this.request(); } };
+      seg.append(b);
+    }
+  },
+  fitView() {
+    const st = $("liveStage");
+    this.fit = Math.min(st.clientWidth / this.iw, st.clientHeight / this.ih);
+    this.s = 1; this.clamp();
+  },
+  clamp() {
+    const st = $("liveStage"), w = this.iw * this.fit * this.s, h = this.ih * this.fit * this.s;
+    this.x = w <= st.clientWidth ? (st.clientWidth - w) / 2 : Math.min(0, Math.max(st.clientWidth - w, this.x));
+    this.y = h <= st.clientHeight ? (st.clientHeight - h) / 2 : Math.min(0, Math.max(st.clientHeight - h, this.y));
+  },
+  apply() { $("liveImg").style.transform = `translate(${this.x}px,${this.y}px) scale(${this.s * this.fit})`; },
+  at(cx, cy) {   // a point on the phone -> where it is on the monitor (0..1), or null if it's off the picture
+    const r = $("liveStage").getBoundingClientRect();
+    const fx = (cx - r.left - this.x) / (this.iw * this.fit * this.s), fy = (cy - r.top - this.y) / (this.ih * this.fit * this.s);
+    return fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1 ? { x: fx, y: fy } : null;
+  },
+  send(input) {
+    if (this.monitor == null) return;
+    post({ type: "live_input", id: newId(), monitor: this.monitor, ...input }).catch(() => toast("Can't reach your PC right now.", "x", "var(--red)"));
+    this.request(150);   // show the result quickly
+  },
+  tap(cx, cy, act) {
+    const p = this.at(cx, cy);
+    if (!p || !this.iw) return;
+    const ring = document.createElement("span");
+    ring.className = "live-ring" + (act === "right" ? " right" : "");
+    ring.style.left = cx + "px"; ring.style.top = cy + "px";
+    $("live").append(ring); setTimeout(() => ring.remove(), 520);
+    this.send({ act, ...p });
+  },
+};
+(() => {
+  const st = $("liveStage"), pts = new Map();
+  let start = null, moved = false, holdTimer = null, held = false;
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  st.addEventListener("pointerdown", e => {
+    st.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = false; held = false;
+    start = { s: Live.s, x: Live.x, y: Live.y, d: pts.size === 2 ? dist() : 0, m: pts.size === 2 ? mid() : { x: e.clientX, y: e.clientY } };
+    clearTimeout(holdTimer);
+    if (pts.size === 1) holdTimer = setTimeout(() => { if (!moved && pts.size === 1) { held = true; Live.tap(e.clientX, e.clientY, "right"); } }, 550);
+  });
+  st.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2 && start.d) {   // pinch around the fingers' midpoint
+      const m = mid(), k = Math.min(6 / start.s, Math.max(1 / start.s, dist() / start.d));
+      Live.s = start.s * k; Live.x = m.x - (start.m.x - start.x) * k; Live.y = m.y - (start.m.y - start.y) * k;
+      moved = true;
+    } else if (pts.size === 1) {
+      const dx = e.clientX - start.m.x, dy = e.clientY - start.m.y;
+      if (Math.abs(dx) + Math.abs(dy) > 8) moved = true;
+      if (moved) { Live.x = start.x + dx; Live.y = start.y + dy; }
+    }
+    if (moved) { clearTimeout(holdTimer); Live.clamp(); Live.apply(); }
+  });
+  const up = e => {
+    const wasTap = pts.size === 1 && !moved && !held;
+    pts.delete(e.pointerId); clearTimeout(holdTimer);
+    if (pts.size === 1) { const p = [...pts.values()][0]; start = { s: Live.s, x: Live.x, y: Live.y, d: 0, m: p }; return; }
+    if (wasTap) Live.tap(e.clientX, e.clientY, "click");
+  };
+  st.addEventListener("pointerup", up);
+  st.addEventListener("pointercancel", e => { pts.delete(e.pointerId); clearTimeout(holdTimer); });
+  st.addEventListener("contextmenu", e => e.preventDefault());
+  $("liveClose").onclick = () => Live.close();
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && Live.open && document.activeElement !== $("liveText")) Live.close(); });
+  $("liveText").addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const t = $("liveText").value;
+    if (t) { Live.send({ act: "type", text: t }); $("liveText").value = ""; }
+  });
+  document.querySelectorAll("#live [data-key]").forEach(b => b.onclick = () => {
+    const t = $("liveText").value;   // whatever is typed goes first, then the key
+    if (t) { Live.send({ act: "type", text: t }); $("liveText").value = ""; }
+    Live.send({ act: "key", keys: b.dataset.key });
+  });
+  document.querySelectorAll("#live [data-scroll]").forEach(b => b.onclick = () => {
+    const r = $("liveStage").getBoundingClientRect();
+    const p = Live.at(r.left + r.width / 2, r.top + r.height / 2) || { x: .5, y: .5 };   // where you're looking
+    Live.send({ act: "scroll", amount: +b.dataset.scroll, ...p });
+  });
+  addEventListener("resize", () => { if (Live.open && Live.iw) { Live.fitView(); Live.apply(); } });
+  document.addEventListener("visibilitychange", () => { if (Live.open && !document.hidden) Live.request(); });
+})();
 
 // ================= chrome =================
 $("menuBtn").onclick = openDrawer;
@@ -2844,7 +3081,7 @@ const Call = {
     if (!Recognition) { this.manual = true; this.setState("idle"); $("callStatus").textContent = "Tap the mic to talk"; return; }
     this.setState("listening"); $("callTranscript").textContent = "";
     const rec = this.rec = new Recognition();
-    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = false;
+    rec.lang = dictationLang(); rec.interimResults = true; rec.continuous = false;
     let finalText = "";
     rec.onresult = e => { let interim = ""; finalText = ""; for (const r of e.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
     rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { this.manual = true; $("callStatus").textContent = "Allow the microphone to talk"; } };
@@ -2876,7 +3113,7 @@ const Call = {
     if (!Recognition) { $("callStatus").textContent = "Speech isn't available here"; return; }
     this.abort(); this.holding = true; $("callTalk").classList.add("on"); this.setState("listening"); $("callTranscript").textContent = "";
     const rec = this.rec = new Recognition();
-    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = true;
+    rec.lang = dictationLang(); rec.interimResults = true; rec.continuous = true;
     let finalText = "";
     rec.onresult = ev => { let interim = ""; finalText = ""; for (const r of ev.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
     rec.onerror = ev => { if (ev.error === "not-allowed" || ev.error === "service-not-allowed") $("callStatus").textContent = "Allow the microphone to talk"; };
@@ -3266,6 +3503,7 @@ async function start() {
   if (/[?&]call=1/.test(location.search)) { window.history.replaceState(null, "", location.pathname); setTimeout(() => Call.open(true, ""), 400); }
 }
 applyAppearance(); renderAppearance();   // set the chosen wallpaper/accent before anything shows
+renderLang();
 checkForUpdate();
 ensureSW();
 navigator.serviceWorker?.addEventListener("message", e => { if (e.data?.type === "call" && cfg) Call.open(true, ""); });
