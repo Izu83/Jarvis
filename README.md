@@ -179,9 +179,15 @@ the question in headers. Answers that take longer than 45 seconds come to the ap
 
 ## Live screen
 
-`/live` shows one monitor live (as fast as the link carries, usually 2-3 pictures a second). Tap to click, press
-and hold to right-click, pinch to zoom; the bar at the bottom types text, presses Enter / Backspace / Esc and
-scrolls. Switch monitors at the top; ✕ (or Esc) closes it and stops the pictures.
+`/live` streams one monitor at up to 20 pictures a second (about 16 measured through the Cloudflare tunnel; it
+needs ~5 Mbit/s, so it's smoother on Wi-Fi than on weak mobile data). Tap to click, press and hold to right-click,
+pinch to zoom; the bar at the bottom types text, presses Enter / Backspace / Esc and scrolls. Switch monitors at the
+top; ✕ (or Esc) closes it and stops the pictures.
+
+How it's fast (`jarvis/live.py`): mss grabs a monitor in ~25 ms (PIL's ImageGrab took ~125 ms), moving pictures are
+halved with `Image.reduce` and sent as binary WebSocket messages (no base64), the phone confirms each one and at
+most 6 are on the way at once (a slow link gets fewer, smaller pictures rather than a growing delay), an unchanged
+screen isn't resent, and once it stops changing one full-size picture follows for sharp zooming.
 
 ## Away mode
 
@@ -321,6 +327,7 @@ a notification first).
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
 | `jarvis/health.py` | The self-check: problems reported once with the fix, `/health` |
+| `jarvis/live.py` | The live screen stream: mss capture, confirmed pictures, adaptive size |
 | `jarvis/partial.py` | The answer as it's written, throttled, for the phone |
 | `jarvis/siri.py` | The "Ask Jarvis" Siri / Share shortcut's key and question handling |
 | `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |

@@ -30,6 +30,7 @@ log = logging.getLogger("jarvis.remote")
 
 CMD_AAD = b"jarvis-cmd"
 REPLY_AAD = b"jarvis-reply"
+FRAME_AAD = b"jarvis-frame"   # live-screen pictures: binary WebSocket messages (no base64, ~45% smaller)
 WATCH_INTERVAL = 3          # seconds between live stats while the System page is open
 ANNOUNCE_EVERY = 4 * 3600   # re-announce the address before the relay forgets it (12 h)
 MAX_AGE_MS = 120_000
@@ -92,7 +93,9 @@ class PhoneChannel:
         watchers.set_on_change(lambda: self.soon("activity", 0.3, self.send_activity))
         stopping.on_stop(self._drop_asks)
         away.set_handler(self._away_alert)
-        self._frame_lock = threading.Lock()   # one live-screen picture at a time
+        self._frame_lock = threading.Lock()   # one live-screen picture at a time (the old, one-at-a-time way)
+        from .live import LiveStream
+        self.live = LiveStream(self._publish_frame, _short_label)
 
     def _drop_asks(self) -> None:
         """Stop pressed: any permission prompt still waiting is answered No and taken off the phone."""
@@ -137,7 +140,17 @@ class PhoneChannel:
         for ws in list(self.clients):
             asyncio.run_coroutine_threadsafe(self._send(ws, text), self.loop)
 
-    async def _send(self, ws, text: str) -> None:
+    def _publish_frame(self, header: dict, jpeg: bytes | None) -> None:
+        """A live-screen picture, sealed as one binary message: 2-byte header length, header JSON, then the JPEG."""
+        if not self.clients or not self.loop:
+            return
+        head = json.dumps(header).encode()
+        iv = secrets.token_bytes(12)
+        data = iv + self.aes.encrypt(iv, len(head).to_bytes(2, "big") + head + (jpeg or b""), FRAME_AAD)
+        for ws in list(self.clients):
+            asyncio.run_coroutine_threadsafe(self._send(ws, data), self.loop)
+
+    async def _send(self, ws, text: str | bytes) -> None:
         try:
             await ws.send(text)
         except ConnectionClosed:
@@ -460,10 +473,17 @@ class PhoneChannel:
         elif kind == "camera":
             log.info("Phone: camera photo")
             self.send_camera(msg_id)
-        elif kind == "live":   # the live screen wants its next picture
+        elif kind == "live":   # the live screen wants its next picture (an older phone page)
             self.send_frame(msg_id, data.get("monitor"))
+        elif kind == "live_start":   # the live screen opened (or switched monitor): stream pictures
+            self.live.start(data.get("monitor"))
+        elif kind == "live_ack":
+            self.live.ack(data.get("seq", 0))
+        elif kind == "live_stop":
+            self.live.stop()
         elif kind == "live_input":
             self.live_input(data)
+            self.live.poke()
         elif kind == "away":   # /away on the phone: instant, even while a command is running
             self.reply(msg_id, away.toggle())
         elif kind == "health":   # /health on the phone

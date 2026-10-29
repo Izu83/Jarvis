@@ -1089,10 +1089,15 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-29.6";   // bump together with version.json
-const JNI = "JNIv16";   // Jarvis · Niko · Izu83 · version 16 — Jarvis's own release name
+const VERSION = "2026-10-29.7";   // bump together with version.json
+const JNI = "JNIv17";   // Jarvis · Niko · Izu83 · version 17 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv17", when: "Oct 29, 2026", title: "A smoother live screen", notes: [
+    "/live now streams at up to 20 pictures a second (about 16 measured through the internet link), instead of 2.",
+    "When the screen stops moving you get one full-sharpness picture, so zoomed-in text is crisp. Your zoom stays put.",
+    "An unchanged screen isn't sent again, and on a slow connection pictures get a little smaller instead of falling behind.",
+  ] },
   { v: "JNIv16", when: "Oct 29, 2026", title: "Live screen, away mode & Bulgarian", notes: [
     "Answers appear word by word as Jarvis writes them, instead of all at once at the end.",
     "/live shows your PC's screen live. Tap to click, hold to right-click, pinch to zoom, type and scroll from the bar at the bottom. Switch monitors at the top; ✕ closes it.",
@@ -1916,7 +1921,8 @@ function openSocket(url) {
       if (!opened) { clearTimeout(giveUp); resolve(false); return; }
       if (ws === sock) { ws = null; renderStatus(false); if (document.visibilityState === "visible") retryTimer = setTimeout(connect, 1500); }
     };
-    sock.onmessage = e => onMessage(e.data);
+    sock.binaryType = "arraybuffer";   // live-screen pictures come as binary messages
+    sock.onmessage = e => typeof e.data === "string" ? onMessage(e.data) : onFrame(e.data);
   });
 }
 async function ensureConnected(ms = 9000) {
@@ -2686,51 +2692,73 @@ function openViewer(shot, index) {
 })();
 $("viewerClose").onclick = () => hideAnimated($("viewer"));
 
-// ================= live screen: one monitor, refreshed as fast as pictures arrive; tap/hold/pinch, ✕ to close =================
+// ================= live screen: one monitor streamed from the PC; tap/hold/pinch, ✕ to close =================
+// The PC sends pictures as fast as the link carries (up to 20 a second) and waits for each to be confirmed here,
+// so a slow connection gets fewer pictures instead of a growing delay.
+const FRAME_AAD = "jarvis-frame";
+async function onFrame(buf) {   // binary message: sealed [2-byte header length][header JSON][JPEG]
+  let plain;
+  try { plain = new Uint8Array(await unseal(new Uint8Array(buf), FRAME_AAD)); } catch { return; }
+  const n = (plain[0] << 8) | plain[1];
+  const head = JSON.parse(dec.decode(plain.subarray(2, 2 + n)));
+  Live.frame(head, plain.subarray(2 + n));
+}
 const Live = {
-  open: false, monitor: null, s: 1, x: 0, y: 0, fit: 1, iw: 0, ih: 0, url: null, timer: null, times: [],
+  open: false, monitor: null, s: 1, x: 0, y: 0, fit: 1, iw: 0, ih: 0, url: null, timer: null, times: [], lastSeen: 0,
   show() {
     if (!key) return;
     this.open = true; this.times = []; this.iw = 0;
     $("liveRate").textContent = "Connecting…"; $("liveDot").className = "dot warn";
     $("liveHint").style.opacity = "1"; setTimeout(() => { $("liveHint").style.opacity = "0"; }, 4000);
     $("live").hidden = false;
-    this.request();
+    this.start();
+  },
+  start() {   // (re)start the stream; a watchdog restarts it if pictures stop coming (a dropped connection)
+    if (!this.open) return;
+    this.lastSeen = Date.now();
+    post({ type: "live_start", id: newId(), monitor: this.monitor }).catch(() => { $("liveRate").textContent = "Reconnecting…"; $("liveDot").className = "dot bad"; });
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      if (!this.open || document.hidden) return;
+      if (Date.now() - this.lastSeen > 4000) { this.lastSeen = Date.now(); $("liveDot").className = "dot warn"; post({ type: "live_start", id: newId(), monitor: this.monitor }).catch(() => {}); }
+    }, 1000);
   },
   close() {
     if (!this.open) return;
-    this.open = false; clearTimeout(this.timer); $("liveText").blur();
+    this.open = false; clearInterval(this.timer); $("liveText").blur();
+    post({ type: "live_stop", id: newId() }).catch(() => {});
     hideAnimated($("live"), () => { if (this.url) { URL.revokeObjectURL(this.url); this.url = null; } $("liveImg").removeAttribute("src"); });
   },
-  request(delay = 0) {   // ask for the next picture; if it never comes, ask again
-    clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      if (!this.open) return;
-      if (document.hidden) { this.request(1500); return; }
-      post({ type: "live", id: newId(), monitor: this.monitor }).catch(() => { $("liveRate").textContent = "Reconnecting…"; $("liveDot").className = "dot bad"; });
-      this.timer = setTimeout(() => this.request(), 5000);
-    }, delay);
-  },
-  frame(d) {
+  ack(seq) { post({ type: "live_ack", id: newId(), seq }).catch(() => {}); },
+  frame(d, jpeg) {
     if (!this.open) return;
-    const url = URL.createObjectURL(new Blob([b64bytes(d.data)], { type: "image/jpeg" }));
-    const img = $("liveImg"), old = this.url, changed = d.monitor !== this.monitor;
+    this.lastSeen = Date.now();
+    if (d.still) { this.ack(d.seq); this.rate(); return; }   // nothing changed on screen
+    if (!jpeg && d.data) jpeg = b64bytes(d.data);              // an older PC sends pictures as text
+    if (d.monitor !== this.monitor) { this.monitor = d.monitor; this.iw = 0; }
+    this.renderSeg(d.monitors || []);
+    const url = URL.createObjectURL(new Blob([jpeg], { type: "image/jpeg" }));
+    const img = $("liveImg"), old = this.url;
     this.url = url;
     img.onload = () => {
       if (old) URL.revokeObjectURL(old);
-      const fresh = changed || img.naturalWidth !== this.iw;
-      this.iw = img.naturalWidth; this.ih = img.naturalHeight;
-      img.style.width = this.iw + "px"; img.style.height = this.ih + "px";
+      // sized by the monitor, not the picture: moving = half size, still = full size, and zoom stays put
+      const w = d.w || img.naturalWidth, h = d.h || img.naturalHeight, fresh = w !== this.iw || h !== this.ih;
+      this.iw = w; this.ih = h;
+      img.style.width = w + "px"; img.style.height = h + "px";
       if (fresh) this.fitView();
       this.apply();
+      if (d.seq) this.ack(d.seq);   // shown: the PC may send the next one
     };
     img.src = url;
-    this.monitor = d.monitor;
-    this.renderSeg(d.monitors || []);
+    this.times.push(Date.now());
+    this.rate();
+  },
+  rate() {
     const now = Date.now();
-    this.times = this.times.filter(t => now - t < 3000).concat(now);
-    $("liveRate").textContent = `Live · ${Math.max(1, Math.round(this.times.length / 3))} fps`; $("liveDot").className = "dot ok";
-    this.request(300);   // the next one, a moment after this one arrived (never more than the link can carry)
+    this.times = this.times.filter(t => now - t < 2000);
+    const fps = Math.round(this.times.length / 2);
+    $("liveRate").textContent = fps ? `Live · ${fps} fps` : "Live · no changes"; $("liveDot").className = "dot ok";
   },
   renderSeg(mons) {
     const seg = $("liveSeg"), sig = mons.map(m => m.monitor).join() + "|" + this.monitor;
@@ -2740,7 +2768,7 @@ const Live = {
     for (const m of mons) {
       const b = document.createElement("button");
       b.textContent = m.label; b.classList.toggle("on", m.monitor === this.monitor);
-      b.onclick = () => { if (m.monitor !== this.monitor) { this.monitor = m.monitor; this.iw = 0; this.request(); } };
+      b.onclick = () => { if (m.monitor !== this.monitor) { this.monitor = m.monitor; this.iw = 0; this.start(); } };
       seg.append(b);
     }
   },
@@ -2763,7 +2791,7 @@ const Live = {
   send(input) {
     if (this.monitor == null) return;
     post({ type: "live_input", id: newId(), monitor: this.monitor, ...input }).catch(() => toast("Can't reach your PC right now.", "x", "var(--red)"));
-    this.request(150);   // show the result quickly
+    // the PC sends a fresh picture right after any input
   },
   tap(cx, cy, act) {
     const p = this.at(cx, cy);
@@ -2828,7 +2856,7 @@ const Live = {
     Live.send({ act: "scroll", amount: +b.dataset.scroll, ...p });
   });
   addEventListener("resize", () => { if (Live.open && Live.iw) { Live.fitView(); Live.apply(); } });
-  document.addEventListener("visibilitychange", () => { if (Live.open && !document.hidden) Live.request(); });
+  document.addEventListener("visibilitychange", () => { if (!Live.open) return; if (document.hidden) post({ type: "live_stop", id: newId() }).catch(() => {}); else Live.start(); });
 })();
 
 // ================= chrome =================
