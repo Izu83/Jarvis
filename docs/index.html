@@ -693,7 +693,8 @@
   .v-btn.on { color: #03141c; background: #7fe3ff; box-shadow: none; }
   .v-btn.main { width: 68px; height: 68px; margin-top: -9px; color: #fff; background: rgba(255,255,255,.15); }
   .v-btn.main svg.i { width: 28px; height: 28px; }
-  #voiceView[data-state="listening"] .v-btn.main, #voiceView[data-state="hearing"] .v-btn.main { color: #03141c; background: #5ad8ff; box-shadow: 0 0 28px -4px #5ad8ff; }
+  #voiceView[data-state="listening"] .v-btn.main, #voiceView[data-state="hearing"] .v-btn.main { color: #03190f; background: #3cffaa; box-shadow: 0 0 28px -4px #3cffaa; }
+  #voiceView[data-state="listening"] .v-status, #voiceView[data-state="hearing"] .v-status { color: #8dffcc; }
   #voiceView[data-state="speaking"] .v-btn.main { background: rgba(255,255,255,.22); }
 
   /* permission alert (iOS UIAlertController look) */
@@ -1197,7 +1198,7 @@
 
 <!-- call screen -->
 <div id="callScreen" hidden data-state="idle">
-  <div class="cavatar"><img src="avatar.jpg" alt=""></div>
+  <div class="cavatar"><img src="icon-512.png" alt=""></div>
   <div class="cname">Jarvis</div>
   <div class="cstatus" id="callStatus"></div>
   <div class="ctranscript" id="callTranscript"></div>
@@ -1237,10 +1238,15 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.2";   // bump together with version.json
+const VERSION = "2026-10-31.3";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv24", when: "Oct 31, 2026", title: "The orb is Jarvis", notes: [
+    "The orb has a look for every moment: mint green with a heartbeat while it listens (it swells and sends out a ring every beat), brighter with ripples for every word while you talk, violet and spinning with two circling arcs while it works, and cyan pulsing with Jarvis's voice. Now and then a point sparkles.",
+    "The orb is Jarvis's icon now: on your Home Screen, in notifications, on the call screen, in your PC's tray and as a small live orb in the “Hey Jarvis” pop-up.",
+    "To get the new Home Screen icon, remove Jarvis from your Home Screen and add it again (iPhone keeps the old picture until then).",
+  ] },
   { v: "JNIv23", when: "Oct 31, 2026", title: "Where & when", notes: [
     "At the top of both Chat and Voice: where your PC is, its local time to the second and today's date.",
     "In the chat it works like an iPhone title: scroll down and the big clock slides away into a small pill under Chat / Voice, and messages fade out under the top instead of showing through.",
@@ -3430,15 +3436,29 @@ $("callDecline").addEventListener("pointerup", () => Call.close());
 $("callAccept").onclick = () => Call.answer();
 
 // ================= the orb: a sphere of glowing points and threads that breathes, listens and talks =================
+// Each state has its own look, and the orb eases from one to the next:
+//   idle: cyan, slowly turning and breathing, with the odd sparkle
+//   listening: mint green with a heartbeat: it swells and sends out a ring every beat ("I'm all ears")
+//   hearing: brighter mint; your voice ripples the shell and every syllable sends out a ring
+//   working: violet, spinning fast, a band of light sweeping it and two arcs circling it
+//   speaking: cyan; Jarvis's voice ripples the shell and its louder moments send out rings
 const Orb = {
-  pts: [], links: [], raf: 0, on: false, t: 0, last: 0, state: "idle", lv: 0, spin: 0, think: 0, dpr: 1,
-  col: [70, 215, 255], source: () => 0,
+  pts: [], links: [], rings: [], raf: 0, on: false, t: 0, last: 0, state: "idle", lv: 0, spin: 0, dpr: 1,
+  beat: 0, pop: 0, lastRing: 0, avg: 0, source: () => 0,
   calm: matchMedia("(prefers-reduced-motion: reduce)"),
-  COLORS: { idle: [70, 215, 255], listening: [120, 235, 255], hearing: [150, 245, 255], working: [140, 150, 255],
-            speaking: [70, 232, 238], error: [255, 120, 110] },
+  LOOKS: {
+    idle:      { col: [70, 215, 255],  spin: .14, breathe: .025, amp: .7, think: 0, heart: 0 },
+    listening: { col: [60, 255, 170],  spin: .2,  breathe: .012, amp: 1,  think: 0, heart: 1 },
+    hearing:   { col: [125, 255, 205], spin: .26, breathe: .01,  amp: 1.35, think: 0, heart: 0 },
+    working:   { col: [150, 120, 255], spin: .85, breathe: .015, amp: .5, think: 1, heart: 0 },
+    speaking:  { col: [60, 225, 255],  spin: .3,  breathe: .012, amp: 1.15, think: 0, heart: 0 },
+    error:     { col: [255, 110, 100], spin: .05, breathe: .02,  amp: .4, think: 0, heart: 0 },
+  },
+  look: null,
   init() {
     if (this.pts.length) return;
     this.cv = $("orb"); this.g = this.cv.getContext("2d");
+    this.look = { ...this.LOOKS.idle, col: [...this.LOOKS.idle.col] };
     const N = 250, turn = Math.PI * (3 - Math.sqrt(5)), gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * .5;
     const add = (x, y, z, knot) => {
       const m = Math.hypot(x, y, z), dust = !knot && Math.random() < .16;   // a few float loose around it
@@ -3475,32 +3495,58 @@ const Orb = {
     if (go && !this.raf) { this.resize(); this.last = 0; this.raf = requestAnimationFrame(t => this.frame(t)); }
     if (!go && this.raf) { cancelAnimationFrame(this.raf); this.raf = 0; }
   },
+  setState(state) {
+    if (state === this.state) return;
+    // a little "pop" and a ring when it starts listening or talking, so a tap always gets an answer you can see
+    if (["listening", "hearing", "speaking"].includes(state) && !["listening", "hearing"].includes(this.state)) { this.pop = 1; this.ring(.9); }
+    this.state = state; this.beat = 0;
+  },
+  ring(strength) { if (this.rings.length < 8) this.rings.push({ t: this.t, s: strength, col: [...this.look.col] }); },
   frame(now) {
     this.raf = requestAnimationFrame(t => this.frame(t));
     const dt = this.last ? Math.min(.05, (now - this.last) / 1000) : .016; this.last = now; this.t += dt;
-    const calm = this.calm.matches ? .35 : 1, want = Math.max(0, Math.min(1, this.source() || 0));
+    const calm = this.calm.matches ? .35 : 1, L = this.look, to = this.LOOKS[this.state] || this.LOOKS.idle, k = Math.min(1, dt * 3);
+    for (const key of ["spin", "breathe", "amp", "think", "heart"]) L[key] += (to[key] - L[key]) * k;
+    for (let i = 0; i < 3; i++) L.col[i] += (to.col[i] - L.col[i]) * k;
+    const want = Math.max(0, Math.min(1, this.source() || 0));
     this.lv += (want - this.lv) * (want > this.lv ? .45 : .1);   // quick to swell, slow to settle
-    this.think += ((this.state === "working" ? 1 : 0) - this.think) * Math.min(1, dt * 3);
-    const speed = { idle: .16, listening: .22, hearing: .26, working: .75, speaking: .3, error: .06 }[this.state] ?? .16;
-    this.spin += dt * (speed + this.lv * .5) * (.4 + .6 * calm);
-    const to = this.COLORS[this.state] || this.COLORS.idle, k = Math.min(1, dt * 3);
-    for (let i = 0; i < 3; i++) this.col[i] += (to[i] - this.col[i]) * k;
-    this.draw(this.lv * calm);
+    // rings: a heartbeat while it waits for you, and the louder moments of a voice
+    if (this.state === "listening" && (this.beat += dt) > 1.15) { this.beat = 0; this.pop = Math.max(this.pop, .55); this.ring(.75); }
+    this.avg += (this.lv - this.avg) * Math.min(1, dt * 2);   // how loud it's been lately
+    if ((this.state === "hearing" || this.state === "speaking") && this.lv - this.avg > .14 && this.lv > .3 && this.t - this.lastRing > .3) {
+      this.lastRing = this.t; this.ring(this.state === "hearing" ? .45 + this.lv * .5 : .3 + this.lv * .35);
+    }
+    this.pop *= Math.exp(-dt * 5);
+    this.spin += dt * (L.spin + this.lv * .5) * (.4 + .6 * calm);
+    this.draw(this.lv * L.amp * calm, calm);
   },
-  draw(lv) {
-    const g = this.g, W = this.cv.width, c = W / 2, R = W * .3, t = this.t, [r, gr, b] = this.col.map(Math.round);
+  draw(lv, calm) {
+    const g = this.g, W = this.cv.width, c = W / 2, R = W * .3, t = this.t, L = this.look, [r, gr, b] = L.col.map(Math.round);
+    const rgba = (a, rr = r, gg = gr, bb = b) => `rgba(${rr},${gg},${bb},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
     g.globalCompositeOperation = "source-over"; g.clearRect(0, 0, W, W);
-    const glow = g.createRadialGradient(c, c, 0, c, c, R * 1.7);
-    glow.addColorStop(0, `rgba(${r},${gr},${b},${.1 + .22 * lv + .06 * this.think})`);
-    glow.addColorStop(.55, `rgba(${r},${gr},${b},${.035 + .06 * lv})`);
-    glow.addColorStop(1, `rgba(${r},${gr},${b},0)`);
+    const swell = 1 + this.pop * .07 * calm;
+    // the soft light inside, brighter with the voice and the heartbeat
+    const glow = g.createRadialGradient(c, c, 0, c, c, R * 1.75);
+    glow.addColorStop(0, rgba(.1 + .24 * lv + .06 * L.think + .18 * this.pop));
+    glow.addColorStop(.5, rgba(.035 + .07 * lv + .05 * this.pop));
+    glow.addColorStop(1, rgba(0));
     g.fillStyle = glow; g.fillRect(0, 0, W, W);
+    g.globalCompositeOperation = "lighter";
+    // rings going out from the orb
+    this.rings = this.rings.filter(q => t - q.t < 1.5);
+    for (const q of this.rings) {
+      const age = (t - q.t) / 1.5, e = 1 - (1 - age) ** 3;
+      g.beginPath(); g.arc(c, c, R * (1.04 + e * .62), 0, Math.PI * 2);
+      const col = q.col.map(Math.round).join(","), a = q.s * (1 - age) ** 1.6;
+      g.lineWidth = this.dpr * (5 + 6 * (1 - age)); g.strokeStyle = `rgba(${col},${(.12 * a).toFixed(3)})`; g.stroke();   // its glow
+      g.lineWidth = this.dpr * (1.2 + 1.8 * (1 - age)); g.strokeStyle = `rgba(${col},${(.75 * a).toFixed(3)})`; g.stroke();
+    }
     const ay = this.spin, ax = .38 + .18 * Math.sin(t * .23), sy = Math.sin(ay), cy = Math.cos(ay), sx = Math.sin(ax), cx = Math.cos(ax);
-    const breath = 1 + .025 * Math.sin(t * 1.25), band = Math.sin(t * 1.6);
+    const breath = swell + L.breathe * Math.sin(t * 1.25), band = Math.sin(t * 1.6);
     for (const p of this.pts) {
       // the shell ripples with the voice; while working, a bright band sweeps up and down it
       const wave = Math.sin(p.x * 3.1 + t * 2.3) * Math.sin(p.y * 2.7 - t * 1.9 + p.seed * .2) * Math.sin(p.z * 3.3 + t * 1.6);
-      const sweep = this.think * .09 * Math.exp(-((p.y - band) ** 2) * 14);
+      const sweep = L.think * .09 * Math.exp(-((p.y - band) ** 2) * 14);
       const s = R * p.shell * (breath + lv * (.08 + .3 * wave) + sweep + (p.dust ? .03 * Math.sin(t * .8 + p.seed) : 0));
       const x = p.x * s, y = p.y * s, z = p.z * s;
       const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;    // spin
@@ -3508,24 +3554,42 @@ const Orb = {
       const f = 3.2 / (3.2 - z2 / R);                       // nearer is bigger
       p.px = c + x1 * f; p.py = c + y2 * f; p.d = Math.max(0, Math.min(.999, (z2 / R + 1.3) / 2.6));
     }
-    g.globalCompositeOperation = "lighter";
     const lines = [[], [], [], []];   // four depth layers, one stroke each
     for (const [i, j] of this.links) { const a = this.pts[i], q = this.pts[j]; lines[((a.d + q.d) * 2) | 0].push(a, q); }
-    lines.forEach((L, k) => {
-      if (!L.length) return;
+    const lift = 1 + lv * 1.2 + this.pop * .8;
+    lines.forEach((Ln, k) => {
+      if (!Ln.length) return;
       g.beginPath();
-      for (let n = 0; n < L.length; n += 2) { g.moveTo(L[n].px, L[n].py); g.lineTo(L[n + 1].px, L[n + 1].py); }
-      const a = (.06 + k * .08) * (1 + lv * 1.2);
-      if (k > 1) { g.lineWidth = this.dpr * 2.6; g.strokeStyle = `rgba(${r},${gr},${b},${a * .22})`; g.stroke(); }   // soft glow on the near side
-      g.lineWidth = this.dpr * .7; g.strokeStyle = `rgba(${r},${gr},${b},${a})`; g.stroke();
+      for (let n = 0; n < Ln.length; n += 2) { g.moveTo(Ln[n].px, Ln[n].py); g.lineTo(Ln[n + 1].px, Ln[n + 1].py); }
+      const a = (.06 + k * .08) * lift;
+      if (k > 1) { g.lineWidth = this.dpr * 2.6; g.strokeStyle = rgba(a * .22); g.stroke(); }   // soft glow on the near side
+      g.lineWidth = this.dpr * .7; g.strokeStyle = rgba(a); g.stroke();
     });
-    const dots = [[], [], [], []];
-    for (const p of this.pts) dots[(p.d * 4) | 0].push(p);
-    dots.forEach((L, k) => {
+    const dots = [[], [], [], []], sparks = [];
+    for (const p of this.pts) {
+      dots[(p.d * 4) | 0].push(p);
+      if (p.d > .4 && Math.sin(t * .9 + p.seed * 13) > .996) sparks.push(p);   // now and then a point flares
+    }
+    dots.forEach((Ln, k) => {
       g.beginPath();
-      for (const p of L) { const s = this.dpr * p.size * (.8 + k * .45) * (1 + lv * .5); g.rect(p.px - s / 2, p.py - s / 2, s, s); }
-      g.fillStyle = `rgba(${Math.min(255, r + 60)},${Math.min(255, gr + 30)},${b},${.25 + k * .22})`; g.fill();
+      for (const p of Ln) { const s = this.dpr * p.size * (.8 + k * .45) * (1 + lv * .5); g.rect(p.px - s / 2, p.py - s / 2, s, s); }
+      g.fillStyle = rgba(.25 + k * .22, Math.min(255, r + 60), Math.min(255, gr + 30), b); g.fill();
     });
+    for (const p of sparks) {
+      const f = (Math.sin(t * .9 + p.seed * 13) - .996) / .004, s = this.dpr * (2 + 5 * f);
+      const sp = g.createRadialGradient(p.px, p.py, 0, p.px, p.py, s * 2);
+      sp.addColorStop(0, `rgba(255,255,255,${(.9 * f).toFixed(3)})`); sp.addColorStop(1, rgba(0));
+      g.fillStyle = sp; g.fillRect(p.px - s * 2, p.py - s * 2, s * 4, s * 4);
+    }
+    if (L.think > .02) {   // working: two arcs circling it in opposite directions
+      const a1 = t * 2.4, a2 = -t * 1.7 + 1.3;
+      g.lineCap = "round";
+      for (const [a, len, rr, w] of [[a1, 1.1, 1.3, 2.2], [a2, .6, 1.42, 1.4]]) {
+        g.beginPath(); g.arc(c, c, R * rr, a, a + len);
+        g.lineWidth = this.dpr * w; g.strokeStyle = rgba(.55 * L.think); g.stroke();
+      }
+      g.lineCap = "butt";
+    }
   },
 };
 
@@ -3631,7 +3695,7 @@ const VoiceMode = {
   },
   set(state, status, caption, you = false) {
     this.state = state; $("voiceView").dataset.state = state;
-    Orb.state = state === "transcribing" || state === "thinking" ? "working" : state;
+    Orb.setState(state === "transcribing" || state === "thinking" ? "working" : state);
     Orb.source = state === "listening" || state === "hearing" ? () => Mic.level : state === "speaking" ? () => Voice.level() : () => 0;
     const st = $("vStatus");
     if (status === "…") st.innerHTML = '<span class="cdots"><i></i><i></i><i></i></span>';

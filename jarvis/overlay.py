@@ -28,6 +28,8 @@ import threading
 import tkinter as tk
 import tkinter.font as tkfont
 
+from .orb import Orb
+
 try:
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageGrab, ImageTk
 except Exception:      # no Pillow: the plain dark panel
@@ -43,13 +45,21 @@ TEXT = "#f3f4f8"
 MUTED = "#aeb4c2"
 W = 360                  # window width
 PAD = 18                 # screen-edge margin
-COLORS = {"listening": "#3b82f6", "thinking": "#c164f2", "speaking": "#32d365"}
+COLORS = {"listening": "#3cffaa", "thinking": "#9678ff", "speaking": "#3ce1ff"}   # the orb's colours, as on the phone
+SPIN = {"listening": .35, "thinking": 1.6, "speaking": .55}   # how fast the little orb turns (radians a second)
 LABELS = {"listening": "Listening…", "thinking": "Working…", "speaking": "Jarvis"}
 MAX_H = 330              # tallest the window gets; the backdrop is grabbed this tall
 TINT = (18, 19, 28)      # the glass's dark tint over the blurred screen…
 TINT_ALPHA = 0.62        # …strong enough that white text stays readable over a white page
 REFRESH_MS = 1000
 WDA_EXCLUDEFROMCAPTURE = 0x11
+
+
+def _mix(color: str, amount: float) -> str:
+    """The colour faded towards the glass (Tk has no see-through colours): amount 1 = full colour, 0 = the glass."""
+    a = max(0.0, min(1.0, amount))
+    r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(round(t + (v - t) * a) for v, t in zip((r, g, b), TINT))
 
 
 def _primary_size():
@@ -105,6 +115,8 @@ class Overlay:
         self.visible = False
         self.anim = False
         self.pulse = 0.0
+        self.spin = 0.0
+        self.orb = Orb(shell=55, knots=2, per_knot=9, dust=.08, seed=3)   # a small, simpler Jarvis orb
         self.h = 70
         self.y_on, self.y_off = PAD, -200
         self.y = self.target = self.y_off
@@ -200,14 +212,7 @@ class Overlay:
         else:
             self._round(c, 2, top + 1, W - 2, top + h, 22, fill=BORDER, outline="")   # soft border
             self._round(c, 3, top + 2, W - 3, top + h - 1, 21, fill=PANEL, outline="") # panel
-        # pulsing ring = the Jarvis "icon"
-        cx, cy = 38, top + h / 2
-        rr = 12 + 2.2 * math.sin(self.pulse)
-        c.create_oval(cx - 15, cy - 15, cx + 15, cy + 15, outline=RING_BG, width=2)
-        c.create_arc(cx - 15, cy - 15, cx + 15, cy + 15, start=self.pulse * 40 % 360, extent=90,
-                     style="arc", outline=accent, width=3)
-        c.create_oval(cx - rr, cy - rr, cx + rr, cy + rr, outline=accent, width=2)
-        c.create_oval(cx - 3.5, cy - 3.5, cx + 3.5, cy + 3.5, fill=accent, outline="")
+        self._draw_orb(c, 38, top + h / 2, accent)
         # label + text
         c.create_text(72, top + 15, anchor="w", text=LABELS.get(self.state, "Jarvis"), fill=accent, font=self.sub_font)
         c.create_text(72, top + 24, anchor="nw", text=self.text or "", fill=TEXT, font=self.txt_font, width=W - 104)
@@ -216,6 +221,26 @@ class Overlay:
         self._xbox = (bx - 13, by - 13, bx + 13, by + 13)
         c.create_oval(bx - 11, by - 11, bx + 11, by + 11, fill=RING_BG, outline="")
         c.create_text(bx, by - 1, text="✕", fill=MUTED, font=self.x_font)
+
+    def _draw_orb(self, c, cx, cy, accent):
+        """Jarvis's face: a small live orb in the state's colour. Listening, it beats and sends out a ring; working,
+        it spins fast; speaking, it ripples."""
+        t = self.pulse / 9.6   # seconds, near enough (the pulse grows 0.16 a frame)
+        level = 0.0
+        if self.state == "listening":
+            beat = (t % 1.15) / 1.15
+            level = .5 * math.exp(-beat * 9)
+            ring = 18 + 9 * beat   # the heartbeat ring
+            c.create_oval(cx - ring, cy - ring, cx + ring, cy + ring, outline=_mix(accent, 1 - beat), width=1.5)
+        elif self.state == "speaking":
+            level = .35 + .3 * math.sin(t * 9) * math.sin(t * 3.7)
+        pts = self.orb.project(t, self.spin, 15, cx, cy, level)
+        for i, j in self.orb.links:
+            (x1, y1, d1), (x2, y2, d2) = pts[i], pts[j]
+            c.create_line(x1, y1, x2, y2, fill=_mix(accent, .25 + .6 * (d1 + d2) / 2), width=1)
+        for x, y, d in pts:
+            s = .6 + 1.1 * d
+            c.create_rectangle(x - s, y - s, x + s, y + s, fill=_mix(accent, .35 + .65 * d), outline="")
 
     def _click(self, ev):
         x1, y1, x2, y2 = self._xbox
@@ -232,6 +257,7 @@ class Overlay:
                     if self.target <= self.y_off + 1:
                         self.visible = False
             self.pulse += 0.16
+            self.spin += SPIN.get(self.state, .4) / 60
             self._draw()
             self._place_y(self.y)
         self.root.after(16, self._tick)

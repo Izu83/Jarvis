@@ -137,8 +137,13 @@ which you can also edit by hand.
 ## Voice mode
 
 The phone app has two modes, switched at the top: **Chat** and **Voice**. Voice hides the chat and shows only Jarvis,
-a sphere of glowing points and threads. It breathes while it waits, swells with your voice while you talk, swirls
-while Jarvis works and pulses with every word he says. Everything said in Voice mode is saved in the chat as usual.
+a sphere of glowing points and threads. Each moment has its own look: cyan and slowly breathing while it waits;
+mint green with a heartbeat (a ring every beat) while it listens; ripples and a ring for every word while you talk;
+violet, spinning, with two circling arcs while Jarvis works; and cyan, pulsing with every word he says.
+
+The orb is also Jarvis's icon everywhere: the Home Screen, notifications, the call screen, the PC's tray and a small
+live orb in the "Hey Jarvis" pop-up (mint listening, violet working, cyan speaking). `jarvis/orb.py` holds the
+shape; `python -m jarvis.orb` redraws the icons in `docs/`. Everything said in Voice mode is saved in the chat as usual.
 
 - **Talking**: tap the orb (or the big button) and speak. The phone notices when you've stopped by itself. Tap the
   orb while Jarvis is talking to cut in.
@@ -406,6 +411,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/orb.py` | The Jarvis orb: the icons, the tray icon and the pop-up's live orb |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
 | `jarvis/cleandisk.py` | /cleandisk: scan a disk into safe / your call / leave alone, clean what's ticked |
 | `jarvis/faceid.py` | Face ID for permissions: stores the phone's public key, checks each signed Allow |

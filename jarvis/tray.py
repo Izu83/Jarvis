@@ -27,17 +27,15 @@ MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+
 
 
 def _ensure_ico() -> Path | None:
-    """Windows tray icons must be .ico; build one once from the app's PNG (cached in .brain)."""
-    cache = ROOT / ".brain" / "tray.ico"
+    """Windows tray icons must be .ico; build one once from the Jarvis orb (cached in .brain). It's the simple, bold
+    orb on a see-through background, so it reads at 16 px on the taskbar."""
+    cache = ROOT / ".brain" / "tray-orb.ico"
     if cache.exists():
         return cache
-    src = ROOT / "docs" / "icon-192.png"
-    if not src.exists():
-        return None
     try:
-        from PIL import Image
+        from . import orb
         cache.parent.mkdir(parents=True, exist_ok=True)
-        Image.open(src).convert("RGBA").save(cache, sizes=[(16, 16), (24, 24), (32, 32), (48, 48)])
+        orb.still(256, bold=True, background=False).save(cache, sizes=[(16, 16), (24, 24), (32, 32), (48, 48)])
         return cache
     except Exception:
         log.debug("couldn't build tray.ico", exc_info=True)
