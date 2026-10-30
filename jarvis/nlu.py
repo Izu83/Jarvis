@@ -401,6 +401,13 @@ def _briefing(m, text):
     return briefing.compose()
 
 
+@simple(r"^((the |my |an? )?(evening )?recap|how was my day|how('?s| has) my day (been|gone)|"
+        r"sum (up )?my day|my day in review)( please)?[?.!]*$")
+def _recap(m, text):
+    from . import recap
+    return recap.compose()
+
+
 @simple(r"^(stop watching|cancel (the )?(watch|watches|notifications?|reminders?)|forget (the )?watch(es)?)$")
 def _watch_cancel(m, text):
     return tools.run("cancel_watches", {})

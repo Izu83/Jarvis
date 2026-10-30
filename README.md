@@ -119,7 +119,8 @@ which you can also edit by hand.
   stream); commentary before an action is taken back off when the action starts.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
 - **Where and when**: at the top of both Chat and Voice, behind everything else: where your PC is (the town and
-  country, from its internet connection or `weather_city`), its local time to the second (HH:MM:SS) and the date.
+  country, from its internet connection or `weather_city`) with the weather there now, its local time to the second
+  (HH:MM:SS) and the date.
   In the chat it behaves like an iPhone large title: scroll down and it slides away into a small pill under the
   Chat / Voice switch, while messages fade out under the top of the screen instead of showing through it.
 - **Everything at the bottom**: apart from the Chat / Voice switch and the clock, there's no bar at the top. The tab bar at the bottom has
@@ -155,6 +156,18 @@ shape; `python -m jarvis.orb` redraws the icons in `docs/`. Everything said in V
   "that's all") to stop, or just stay quiet for a few seconds.
 - **Answers out loud** come in Jarvis's own neural voice, split into sentences: the first plays while the rest are
   still being made, so he starts talking sooner.
+- **Words as you talk**: while you speak, the phone sends what it has so far every 0.8 s and the PC writes back a
+  quick rough version, so the caption fills in live; the careful version follows when you stop.
+- **Interrupt by voice** (Settings › Voice mode, on by default): while Jarvis talks, say "stop", "wait" or "hold on"
+  and he stops and listens; "Jarvis, open Chrome" stops him and does that straight away. Only a phrase that starts
+  that way counts, so his own voice coming back through the mic doesn't stop him. The mic stays on while he talks,
+  so on some iPhones he sounds a little quieter; switch it off if that bothers you.
+- **Jarvis's voice** (Settings › Jarvis's voice): Ryan (a British man, like the films, the default), Thomas,
+  Andrew, Sonia or Aria; tap one to hear it. It's used on the PC too. Bulgarian replies get a Bulgarian voice of
+  the same kind (Borislav or Kalina).
+- **Straight into Voice mode**: the link `…/?voice=1` (Settings › Voice mode › Copy) opens Jarvis in Voice mode,
+  already listening. Put it on Back Tap or the Action Button with a Shortcut that opens the link; it opens in
+  Safari, so pair Safari once too.
 - **Captions** show what Jarvis heard and what he's saying; turn them off for just the orb.
 - `/voice` opens Voice mode, and a call from Jarvis opens it once you answer.
 
@@ -249,6 +262,14 @@ scheduled tasks, unread email and how the PC is doing, in one message, with no t
 internet connection is in when that's empty. The calendar is optional: paste your Google Calendar's *Secret address
 in iCal format* in Settings (kept in `.env` as `CALENDAR_ICS_URL`); repeating events count. "Say it out loud on the
 PC" (`briefing_speak`) also reads it out on the PC. With humour on, it ends with a line for the day.
+
+## Evening recap
+
+Every evening at `recap_time` (Settings › Evening recap, 21:30 by default): what Jarvis did for you today (a few of
+the commands), your time in apps on the PC, tomorrow's first calendar events and reminders, and tomorrow's weather.
+No tokens. `/recap` or "how was my day" gets it any time. App time comes from `jarvis/apptime.py`: once a minute the
+app in front counts as a minute, but only if you used the mouse or keyboard in the last two minutes. It's kept for a
+week in `.brain/apptime.json` and never leaves the PC except as that one line.
 
 ## Cleaning up a disk
 
@@ -387,8 +408,9 @@ a notification first).
 | `jarvis/nlu.py` | Free local parser for quick commands |
 | `jarvis/activity.py` | The saved log of every command and its steps (the phone's pills and Activity list) |
 | `jarvis/watchers.py` | Reminders and "tell me when…" watches |
-| `jarvis/proactive.py` | Scheduled tasks, new-email heads-ups and when the morning briefing goes out |
-| `jarvis/briefing.py` | The morning briefing: weather, calendar (iCal), reminders, email, PC |
+| `jarvis/proactive.py` | Scheduled tasks, new-email heads-ups and when the morning briefing and evening recap go out |
+| `jarvis/briefing.py` | The morning briefing: weather, calendar (iCal), reminders, email, PC; the clock's place and weather |
+| `jarvis/recap.py`, `apptime.py` | The evening recap, and the minutes you spend in each app |
 | `jarvis/findfile.py` | Find my file: kind / time / name search in your own folders, pick from a list |
 | `jarvis/nap.py` | Nap: locked, screens off, kept awake so the phone can wake it |
 | `jarvis/quips.py` | Canned wit for quick replies and the briefing, as often as the humour setting says |

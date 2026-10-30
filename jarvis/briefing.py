@@ -80,20 +80,61 @@ def place() -> dict | None:
         return None
     cache.update(place=found, place_for=city)
     _save_cache(cache)
+    _sky.clear()
+    _sky["t"] = 0.0   # a new place: its weather, not the old one's
     return found
 
 
 _looking = threading.Lock()
 _looked = 0.0
+_sky: dict = {"t": 0.0}   # the weather right now, for the clock: {"t" tried, "at" got, "temp", "icon"}
+_sky_lock = threading.Lock()
+
+
+def sky_icon(code: int, day: bool = True) -> str:
+    """The weather as one emoji (WMO code, as Open-Meteo gives it)."""
+    if code == 0:
+        return "☀️" if day else "🌙"
+    if code in (1, 2):
+        return "🌤️" if day else "☁️"
+    if code == 3:
+        return "☁️"
+    if code in (45, 48):
+        return "🌫️"
+    if code in (71, 73, 75, 77, 85, 86):
+        return "🌨️"
+    if code in (80, 81, 82):
+        return "🌦️"
+    if code >= 95:
+        return "⛈️"
+    return "🌧️" if code >= 51 else "☁️"
+
+
+def _look_at_sky(where: dict) -> None:
+    try:
+        r = requests.get("https://api.open-meteo.com/v1/forecast", timeout=TIMEOUT, params={
+            "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto",
+            "current": "temperature_2m,weather_code,is_day"}).json()["current"]
+        _sky.update(at=time.time(), temp=round(r["temperature_2m"]),
+                    icon=sky_icon(int(r["weather_code"]), bool(r.get("is_day", 1))))
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        log.debug("Couldn't get the weather for the clock.")
+    finally:
+        _sky_lock.release()
 
 
 def where_now() -> dict:
-    """Where the PC is, for the clock on the phone: {"name", "country", "tz", "offset"} (offset: the PC's own
-    minutes from UTC, used when the phone doesn't know the time zone). Never waits on the internet: the place
-    comes from the cache, and is looked up in the background when it's missing (at most every 10 minutes)."""
+    """Where the PC is, for the clock on the phone: {"name", "country", "tz", "offset", "temp", "sky"} (offset: the
+    PC's own minutes from UTC, used when the phone doesn't know the time zone; temp and sky: the weather there now,
+    when known). Never waits on the internet: the place comes from the cache and is looked up in the background
+    when it's missing (at most every 10 minutes); the weather is refreshed in the background every 15 minutes."""
     global _looked
     cache = _cache()
     p = cache.get("place") or {}
+    # the weather next to it: every 15 minutes, in the background
+    if p.get("lat") is not None and time.time() - _sky["t"] > 900 and _sky_lock.acquire(blocking=False):
+        _sky["t"] = time.time()
+        threading.Thread(target=_look_at_sky, args=(p,), daemon=True, name="sky").start()
     fresh = "tz" in p and cache.get("place_for") == (settings.get("weather_city") or "").strip()
     if not fresh and time.time() - _looked > 600 and _looking.acquire(blocking=False):
         _looked = time.time()
@@ -104,8 +145,10 @@ def where_now() -> dict:
             finally:
                 _looking.release()
         threading.Thread(target=look, daemon=True, name="where").start()
+    fresh_sky = time.time() - _sky.get("at", 0) < 7200
     return {"name": p.get("name", ""), "country": p.get("country", ""), "tz": p.get("tz", ""),
-            "offset": time.localtime().tm_gmtoff // 60}
+            "offset": time.localtime().tm_gmtoff // 60,
+            **({"temp": _sky["temp"], "sky": _sky["icon"]} if fresh_sky else {})}
 
 
 def weather() -> str | None:
@@ -128,6 +171,24 @@ def weather() -> str | None:
         return line
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
         log.info("Couldn't get the weather.")
+        return None
+
+
+def forecast(days_ahead: int = 1) -> str | None:
+    """One line about a coming day's weather: "Tomorrow in Botevgrad: 14° / 6°, light rain, 60% chance of rain"."""
+    where = place()
+    if not where:
+        return None
+    try:
+        day = requests.get("https://api.open-meteo.com/v1/forecast", timeout=TIMEOUT, params={
+            "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": days_ahead + 1,
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code"}).json()["daily"]
+        code, rain = day["weather_code"][days_ahead], (day.get("precipitation_probability_max") or [None] * 9)[days_ahead]
+        line = (f"{sky_icon(code)} Tomorrow in {where['name']}: {round(day['temperature_2m_max'][days_ahead])}° / "
+                f"{round(day['temperature_2m_min'][days_ahead])}°, {WEATHER.get(code, 'mixed')}")
+        return line + (f", {rain}% chance of rain." if rain is not None and rain >= 30 else ".")
+    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
+        log.info("Couldn't get tomorrow's weather.")
         return None
 
 

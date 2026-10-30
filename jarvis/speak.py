@@ -29,21 +29,34 @@ def _play_mp3(path: str) -> None:
         raise OSError("MCI couldn't open the audio")
 
 
-def voice_for(text: str) -> str:
-    """A Bulgarian voice for a reply written in Cyrillic, otherwise the usual one."""
+# The voices you can pick on the phone (Settings › Jarvis's voice): name, accent, male?
+VOICES = {
+    "en-GB-RyanNeural": ("Ryan", "British", True),       # the closest to the films
+    "en-GB-ThomasNeural": ("Thomas", "British", True),
+    "en-US-AndrewNeural": ("Andrew", "American", True),
+    "en-GB-SoniaNeural": ("Sonia", "British", False),
+    "en-US-AriaNeural": ("Aria", "American", False),
+}
+
+
+def voice_for(text: str, voice: str | None = None) -> str:
+    """A Bulgarian voice for a reply written in Cyrillic (a man's if Jarvis's voice is a man's), otherwise the
+    chosen one."""
+    voice = voice or settings["edge_voice"]
     letters = [c for c in text if c.isalpha()]
     cyrillic = sum("Ѐ" <= c <= "ӿ" for c in letters)
     if letters and cyrillic / len(letters) > 0.3:
-        return settings.get("edge_voice_bg", "bg-BG-KalinaNeural")
-    return settings["edge_voice"]
+        male = VOICES.get(voice, ("", "", False))[2]
+        return "bg-BG-BorislavNeural" if male else settings.get("edge_voice_bg", "bg-BG-KalinaNeural")
+    return voice
 
 
-def _edge_say(text: str, out: str) -> bool:
+def _edge_say(text: str, out: str, voice: str | None = None) -> bool:
     """Synthesise with edge-tts to an MP3 file. Returns False if it's unavailable (e.g. no internet)."""
     import edge_tts
 
     async def go():
-        await edge_tts.Communicate(text, voice_for(text)).save(out)
+        await edge_tts.Communicate(text, voice_for(text, voice)).save(out)
 
     try:
         asyncio.run(go())
@@ -53,12 +66,13 @@ def _edge_say(text: str, out: str) -> bool:
         return False
 
 
-def synth(text: str) -> bytes | None:
-    """The same neural voice as MP3 bytes, for the phone to play (its own browser voices sound robotic)."""
+def synth(text: str, voice: str | None = None) -> bytes | None:
+    """The same neural voice as MP3 bytes, for the phone to play (its own browser voices sound robotic). voice: one
+    of VOICES instead of the chosen one (the phone's "play a sample")."""
     fd, out = tempfile.mkstemp(suffix=".mp3", prefix="jarvis_phone_")
     os.close(fd)
     try:
-        return open(out, "rb").read() if _edge_say(text, out) else None
+        return open(out, "rb").read() if _edge_say(text, out, voice if voice in VOICES else None) else None
     finally:
         try:
             os.remove(out)

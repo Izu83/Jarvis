@@ -41,6 +41,12 @@ def b64e(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
+def _pcm(b64: str) -> bytes:
+    """A voice recording from the phone (url-safe base64, no padding)."""
+    b64 = b64 or ""
+    return base64.urlsafe_b64decode(b64 + "=" * (-len(b64) % 4))
+
+
 def b64d(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
@@ -74,6 +80,7 @@ def pairing_link() -> str:
 class PhoneChannel:
     def __init__(self, on_command):
         self.on_command = on_command
+        self._parts = {}   # Voice mode: what the phone has recorded so far, per recording, for the live words
         self.on_stop = lambda target="": None   # the stop button (set by __main__)
         self.topic, key = ensure_keys()
         self.aes = AESGCM(key)
@@ -247,7 +254,7 @@ class PhoneChannel:
                        "use_claude": settings["use_claude"],
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
-                       "voice_language": settings.get("voice_language", "en"),
+                       "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
                        "away": away.is_on(), "away_since": away.since(), "faceid": faceid.enabled(),
                        "nap": nap.is_on(), "nap_since": nap.since(),
                        "brain": settings["brain"], "usage": usage.summary(),
@@ -268,7 +275,8 @@ class PhoneChannel:
         where = briefing._cache().get("place") or {}
         return {"on": bool(settings.get("briefing", True)), "time": settings.get("morning_time", "08:30"),
                 "speak": bool(settings.get("briefing_speak")), "city": settings.get("weather_city", ""),
-                "place": where.get("name", ""), "calendar": briefing.calendar_set()}
+                "place": where.get("name", ""), "calendar": briefing.calendar_set(),
+                "recap": bool(settings.get("recap", True)), "recap_time": settings.get("recap_time", "21:30")}
 
     def _set_briefing(self, b: dict) -> None:
         """Settings › Morning briefing on the phone."""
@@ -277,8 +285,11 @@ class PhoneChannel:
             set_setting("briefing", b["on"])
         if isinstance(b.get("speak"), bool):
             set_setting("briefing_speak", b["speak"])
-        if isinstance(b.get("time"), str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", b["time"]):
-            set_setting("morning_time", b["time"])
+        for key, setting in (("time", "morning_time"), ("recap_time", "recap_time")):
+            if isinstance(b.get(key), str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", b[key]):
+                set_setting(setting, b[key])
+        if isinstance(b.get("recap"), bool):
+            set_setting("recap", b["recap"])
         if isinstance(b.get("city"), str):
             set_setting("weather_city", b["city"].strip()[:60])
             briefing.place()   # look it up now, so the phone can show what it found
@@ -368,23 +379,49 @@ class PhoneChannel:
         except Exception as e:
             log.warning("Live screen %s failed: %s", act, e)
 
-    def send_voice(self, req: str, text: str) -> None:
-        """Speak text with the PC pop-up's neural voice and send the MP3 to the phone (no tokens)."""
+    def send_voice(self, req: str, text: str, voice: str | None = None) -> None:
+        """Speak text with the PC pop-up's neural voice and send the MP3 to the phone (no tokens). voice: try
+        another of speak.VOICES (Settings › Jarvis's voice plays a sample)."""
         from . import speak
-        audio = speak.synth(text[:4000]) if text.strip() else None
+        audio = speak.synth(text[:4000], voice) if text.strip() else None
         self._publish({"kind": "tts", "id": "tts", "req": req,
                        **({"data": base64.b64encode(audio).decode()} if audio else {"error": True})})
 
-    def send_words(self, req: str, pcm_b64: str) -> None:
+    def send_words(self, req: str, pcm_b64: str, keep_wake: bool = False) -> None:
         """Voice mode: what the phone recorded, as words (Whisper on this PC, no tokens)."""
         from . import voice
+        getattr(self, "_parts", {}).pop(req, None)   # the live words for this one are done
         try:
-            pcm_b64 = pcm_b64 or ""
-            text, lang = voice.transcribe_phone(base64.urlsafe_b64decode(pcm_b64 + "=" * (-len(pcm_b64) % 4)))
+            text, lang = voice.transcribe_phone(_pcm(pcm_b64), keep_wake)
             self._publish({"kind": "stt", "id": "stt", "req": req, "text": text, "lang": lang})
         except Exception as e:
             log.warning("Couldn't transcribe the phone's recording: %s", e)
             self._publish({"kind": "stt", "id": "stt", "req": req, "error": True})
+
+    def words_so_far(self, req: str, pcm_b64: str) -> None:
+        """Voice mode: another piece of what you're saying. The words so far go back to the phone while you talk
+        (a quick, rough pass; one at a time per recording, so a slow pass never queues up behind itself)."""
+        from . import voice
+        now = time.time()
+        for k in [k for k, v in self._parts.items() if now - v["ts"] > 60]:
+            self._parts.pop(k, None)
+        part = self._parts.setdefault(req, {"pcm": bytearray(), "busy": False, "ts": now})
+        part["pcm"] += _pcm(pcm_b64)
+        part["ts"] = now
+        if part["busy"]:
+            return
+        part["busy"] = True
+
+        def run():
+            try:
+                text = voice.quick_phone(bytes(part["pcm"]))
+                if text and req in self._parts:
+                    self._publish({"kind": "stt_partial", "id": "stt", "req": req, "text": text})
+            except Exception as e:
+                log.debug("Live words failed: %s", e)
+            finally:
+                part["busy"] = False
+        threading.Thread(target=run, daemon=True, name="phone-stt-live").start()
 
     def send_art(self, art_id: str) -> None:
         jpeg = media.art(art_id)
@@ -605,11 +642,17 @@ class PhoneChannel:
         elif kind == "watch":
             self.watch()
         elif kind == "tts":   # the phone wants a reply read aloud in Jarvis's own voice
-            threading.Thread(target=self.send_voice, args=(data.get("req", ""), data.get("text", "")),
+            threading.Thread(target=self.send_voice, args=(data.get("req", ""), data.get("text", ""), data.get("voice")),
                              daemon=True, name="phone-tts").start()
         elif kind == "stt":   # Voice mode on the phone: you talked, it recorded, Whisper here writes it down
-            threading.Thread(target=self.send_words, args=(data.get("req", ""), data.get("pcm", "")),
+            threading.Thread(target=self.send_words, args=(data.get("req", ""), data.get("pcm", ""),
+                                                           bool(data.get("keep_wake"))),
                              daemon=True, name="phone-stt").start()
+        elif kind == "stt_part":   # …and while you're still talking, a piece at a time
+            self.words_so_far(str(data.get("req", ""))[:40], data.get("pcm", ""))
+        elif kind == "recap":   # /recap on the phone: the evening recap now
+            from . import recap
+            threading.Thread(target=lambda: self.reply(msg_id, recap.compose()), daemon=True, name="recap").start()
         elif kind == "answer":
             self._answer(data)
         elif kind == "faceid_add":   # Settings: Face ID for permissions, on
@@ -678,6 +721,11 @@ class PhoneChannel:
                 log.info("Voice language set to %s from the phone.", data["value"])
                 from . import voice
                 voice.language_changed()
+            elif key == "edge_voice":
+                from . import speak
+                if data.get("value") in speak.VOICES:
+                    set_setting("edge_voice", data["value"])
+                    log.info("Jarvis's voice set to %s from the phone.", speak.VOICES[data["value"]][0])
             elif key == "use_claude":
                 set_setting("use_claude", value)
                 log.info("Claude turned %s from the phone.", "on" if value else "off")

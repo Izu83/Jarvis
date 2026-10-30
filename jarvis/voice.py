@@ -310,6 +310,7 @@ class VoiceListener:
 _PHANTOMS = {"you", "thank you for watching", "thanks for watching", "субтитри", "абонирайте се"}
 _phone_model = None   # (name, model): only when the PC's own listener hasn't loaded one
 _phone_lock = threading.Lock()
+_phone_lang = "en"    # the language you last spoke on the phone (the live words' best guess in "both")
 
 
 def _model_for_phone():
@@ -327,10 +328,27 @@ def _model_for_phone():
         return _phone_model[1]
 
 
-def transcribe_phone(pcm: bytes) -> tuple[str, str]:
+def _samples(pcm: bytes) -> np.ndarray:
+    return np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768.0
+
+
+def quick_phone(pcm: bytes) -> str:
+    """A fast, rough pass over what you've said so far, for the words that appear while you talk."""
+    samples = _samples(pcm)
+    if len(samples) < RATE // 2:
+        return ""
+    lang = language() if language() != "both" else _phone_lang
+    segments, _ = _model_for_phone().transcribe(samples, language=lang, beam_size=1, condition_on_previous_text=False,
+                                                initial_prompt=PROMPTS[lang])
+    return " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
+
+
+def transcribe_phone(pcm: bytes, keep_wake: bool = False) -> tuple[str, str]:
     """Voice mode on the phone records you (16 kHz, mono, 16-bit) and sends it here: the same Whisper as
-    "Hey Jarvis" turns it into words. Returns (text, language); text is "" when there were no real words."""
-    samples = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768.0
+    "Hey Jarvis" turns it into words. Returns (text, language); text is "" when there were no real words.
+    keep_wake: leave a leading "Jarvis" in (cutting in on Jarvis by voice listens for it)."""
+    global _phone_lang
+    samples = _samples(pcm)
     if len(samples) < RATE // 4:
         return "", "en"
     model = _model_for_phone()
@@ -346,9 +364,11 @@ def transcribe_phone(pcm: bytes) -> tuple[str, str]:
         vad_filter=True, vad_parameters=dict(min_silence_duration_ms=300), no_speech_threshold=0.7,
         initial_prompt=PROMPTS[lang])
     text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
-    text = WAKE_PREFIX.sub("", text).strip(" ,")
+    if not keep_wake:
+        text = WAKE_PREFIX.sub("", text).strip(" ,")
     if re.sub(r"[^\w\s]", "", text).strip().lower() in _PHANTOMS:
         text = ""
+    _phone_lang = lang
     log.info("Heard on the phone: %r", text)
     return text, lang
 

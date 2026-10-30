@@ -510,6 +510,10 @@
   .clean-go { position: sticky; bottom: 0; padding: 14px 16px calc(env(safe-area-inset-bottom) + 8px); }
   .clean-go button { width: 100%; height: 50px; border-radius: 25px; color: #fff; font-size: 17px; font-weight: 600; background: var(--accent-grad); box-shadow: 0 6px 18px -6px var(--accent-glow); }
   .clean-go button:disabled { opacity: .4; }
+  /* Settings › Jarvis's voice */
+  .voice-opt .tick { color: var(--accent); width: 20px; height: 20px; stroke-width: 2.4; }
+  .link-row .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .link-row .mini { flex: none; }
   /* Settings › Morning briefing */
   .row-input { flex: none; width: 128px; border: 0; outline: 0; background: transparent; color: var(--label2); font: inherit; font-size: 17px; text-align: right; padding: 13px 0; }
   .row-input::placeholder { color: var(--label3); }
@@ -1031,6 +1035,12 @@
         </div>
         <button class="row btn" id="briefNow">Send It Now</button>
       </div>
+      <div class="group-title">Evening recap</div>
+      <div class="group">
+        <label class="row"><span class="grow">Every evening<span class="sub">What Jarvis did for you, your time in apps, and tomorrow's calendar and weather. No tokens.</span></span><span class="switch"><input type="checkbox" id="recapOn"><span></span></span></label>
+        <label class="row"><span class="grow">Time</span><input type="time" id="recapTime" class="row-input"></label>
+        <button class="row btn" id="recapNow">Send It Now</button>
+      </div>
       <div class="group-title">Things Jarvis remembers</div>
       <div class="group" id="factList"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
       <div class="group" style="margin-top:12px">
@@ -1085,6 +1095,15 @@
         <label class="row"><span class="grow">Read replies aloud</span><span class="switch"><input type="checkbox" id="speakToggle"><span></span></span></label>
         <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle"><span></span></span></label>
       </div>
+      <div class="group-title">Jarvis's voice</div>
+      <div class="group" id="voiceList"></div>
+      <div class="group-foot">Tap one to hear it. Replies in Bulgarian are read by a Bulgarian voice of the same kind.</div>
+      <div class="group-title">Voice mode</div>
+      <div class="group">
+        <label class="row"><span class="grow">Interrupt by voice<span class="sub">Say “stop”, “wait” or “Jarvis, …” while he's talking</span></span><span class="switch"><input type="checkbox" id="bargeToggle"><span></span></span></label>
+        <div class="row link-row"><span class="grow">Open straight into Voice mode<span class="sub" id="voiceLink"></span></span><button class="mini press" id="voiceLinkCopy">Copy</button></div>
+      </div>
+      <div class="group-foot">With Interrupt on, the microphone stays on while Jarvis talks, so on some iPhones he sounds a little quieter. For one move into Voice mode: make a Shortcut that opens the link, then set it in Settings › Accessibility › Touch › Back Tap (or on the Action Button). It opens in Safari, so pair Safari once with your pairing link too.</div>
       <div class="group-title">Language you speak</div>
       <div class="group" style="padding: 15px 16px 17px;">
         <div class="segment" id="langSeg"></div>
@@ -1238,10 +1257,18 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.3";   // bump together with version.json
+const VERSION = "2026-10-31.4";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv25", when: "Oct 31, 2026", title: "Jarvis's voice & the evening recap", notes: [
+    "A proper Jarvis voice: Ryan, a British man, like the films. Settings › Jarvis's voice has five to pick from; tap one to hear it. Your PC speaks with it too.",
+    "Voice mode writes your words as you say them, not only after you stop.",
+    "Cut in by voice: while Jarvis talks, say “stop” or “wait”, or “Jarvis, open Chrome” to stop him and go straight to that. Settings › Voice mode › Interrupt by voice.",
+    "Straight into Voice mode: Settings › Voice mode has a link that opens Jarvis already listening. Put it on Back Tap or the Action Button.",
+    "The weather now sits next to the place at the top.",
+    "Evening recap at 21:30: what Jarvis did for you today, your time in apps on the PC, and tomorrow's calendar and weather. No tokens. /recap or “how was my day” gets it now; Settings › Evening recap sets the time.",
+  ] },
   { v: "JNIv24", when: "Oct 31, 2026", title: "The orb is Jarvis", notes: [
     "The orb has a look for every moment: mint green with a heartbeat while it listens (it swells and sends out a ring every beat), brighter with ripples for every word while you talk, violet and spinning with two circling arcs while it works, and cyan pulsing with Jarvis's voice. Now and then a point sparkles.",
     "The orb is Jarvis's icon now: on your Home Screen, in notifications, on the call screen, in your PC's tray and as a small live orb in the “Hey Jarvis” pop-up.",
@@ -1633,10 +1660,10 @@ const Voice = {
   },
   // Speak text; onend runs once when it finishes, fails or is stopped by a newer speak(). The PC makes every
   // piece at once and the first one plays while the rest are still being made.
-  async speak(text, onend = () => {}) {
+  async speak(text, onend = () => {}, voice = null) {
     this.stop();
     const token = this.token, halted = new Promise(r => this.halts.push(r));
-    const parts = speechParts(speakable(text)), audio = parts.map(t => this.fetch(t));
+    const parts = speechParts(speakable(text)), audio = parts.map(t => this.fetch(t, voice));
     for (let i = 0; i < parts.length && token === this.token; i++) {
       const mp3 = await Promise.race([audio[i], halted]);
       if (token !== this.token) break;
@@ -1645,12 +1672,12 @@ const Voice = {
     if (token === this.token) this.env = null;
     onend();
   },
-  fetch(text) {   // the MP3 (base64) from the PC, or null if it can't make one
+  fetch(text, voice = null) {   // the MP3 (base64) from the PC, or null if it can't make one
     const req = newId();
     return new Promise(resolve => {
       const timer = setTimeout(() => { this.pending.delete(req); resolve(null); }, 15000);
       this.pending.set(req, d => { clearTimeout(timer); resolve(d); });
-      post({ type: "tts", id: newId(), req, text }).catch(() => { clearTimeout(timer); this.pending.delete(req); resolve(null); });
+      post({ type: "tts", id: newId(), req, text, ...(voice ? { voice } : {}) }).catch(() => { clearTimeout(timer); this.pending.delete(req); resolve(null); });
     });
   },
   play(b64, text, token) {
@@ -2221,6 +2248,7 @@ async function onMessage(text) {
     if (data.kind === "msg") { receiveMsg(data); return; }
     if (data.kind === "tts") { Voice.onAudio(data); return; }
     if (data.kind === "stt") { VoiceMode.onWords(data); return; }
+    if (data.kind === "stt_partial") { VoiceMode.onPartial(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
     if (data.kind === "ask") { showAsk(data); return; }
@@ -2457,6 +2485,7 @@ function renderLang() {
 }
 let awayOn = false, awaySince = 0, napOn = false, napSince = 0;
 function onState(data) {
+  if (data.voice && data.voice !== jarvisVoice) { jarvisVoice = data.voice; store("jarvis.voice", data.voice); renderVoices(); }
   if (data.where) Clock.set(data.where);
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
   if (typeof data.away === "boolean" && (data.away !== awayOn || data.away_since !== awaySince)) {
@@ -2617,6 +2646,7 @@ function slashCommands() {
     { name: "nap", alias: ["sleep"], icon: "moon", tint: "#5856d6", desc: "Screens off, but you can still wake it from here", run: () => quick("nap") },
     { name: "wake", alias: ["wakeup"], icon: "sun", tint: "#ffb020", desc: "Wake your PC from a nap", run: () => quick("nap_off") },
     { name: "lock", alias: [], icon: "lock", tint: "#8e8e93", desc: "Lock your PC", run: () => quick("lock") },
+    { name: "recap", alias: ["evening", "day", "night"], icon: "moon", tint: "#5e5ce6", desc: "Your day, and tomorrow", run: () => askQuick("recap", 45000) },
     { name: "briefing", alias: ["morning", "brief", "today"], icon: "sun", tint: "#ffb020", desc: "Weather, calendar, email and your PC", run: () => askQuick("briefing", 45000) },
     { name: "find", alias: ["file", "search"], icon: "search", tint: "#0a84ff", desc: "Find a file and send it here",
       run: () => { text.value = "Send me the "; autosize(); text.focus(); } },
@@ -3317,6 +3347,8 @@ function renderBriefing(b) {
   $("briefPlace").textContent = b.place ? (b.city ? `Found: ${b.place}` : `Auto: ${b.place}`) : (b.city ? "Couldn't find that place" : "");
   $("briefCalState").textContent = b.calendar ? "Connected" : "Not connected";
   $("briefCalOff").hidden = !b.calendar;
+  if (typeof b.recap === "boolean") $("recapOn").checked = b.recap;
+  if (b.recap_time && document.activeElement !== $("recapTime")) $("recapTime").value = b.recap_time;
 }
 function briefSet(change, msg) {
   post({ type: "briefing_set", ...change, id: newId() })
@@ -3336,6 +3368,9 @@ $("briefCalSave").onclick = () => {
   $("briefCalUrl").value = ""; $("briefCalHow").hidden = true;
 };
 $("briefCalOff").onclick = () => { briefSet({ calendar: "" }, "Calendar removed"); $("briefCalHow").hidden = true; };
+$("recapOn").onchange = e => briefSet({ recap: e.target.checked }, e.target.checked ? "Recap on" : "Recap off");
+$("recapTime").onchange = e => e.target.value && briefSet({ recap_time: e.target.value }, `Every evening at ${e.target.value}`);
+$("recapNow").onclick = () => { closeSheets(); askQuick("recap", 45000); toast("Putting your recap together…", "check", "var(--green)"); };
 $("briefNow").onclick = () => { closeSheets(); askQuick("briefing", 45000); toast("Putting your briefing together…", "check", "var(--green)"); };
 const saveAbout = () => {
   const v = $("aboutText").value.trim();
@@ -3616,19 +3651,23 @@ const Mic = {
   },
   // Resolves { pcm } (16 kHz, 16-bit, mono) once you've said something and paused,
   // or { error: "silent" | "stopped" | "denied" | "failed" }.
-  record({ waitMs = 9000, maxMs = 20000, onSpeech } = {}) {
-    this.stop?.();
+  // onChunk(pcm): each new piece while you talk (for the words that appear as you speak).
+  // keep: leave the microphone on afterwards (listening for "stop" while Jarvis talks: switching it on and off
+  // mid-sentence makes the iPhone's sound stutter). louder: how much louder than the room speech must be.
+  record({ waitMs = 9000, maxMs = 20000, onSpeech, onChunk, keep = false, louder = 1 } = {}) {
+    this.stop?.(true);
     return new Promise(async resolve => {
       let done = false, chunks = [], pre = [], preLen = 0, speaking = false, loud = 0, quiet = 0, noise = 0, frames = 0, pos = 0, speechAt = 0;
-      const join = () => { const out = new Int16Array(chunks.reduce((n, c) => n + c.length, 0)); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; } return out; };
-      const finish = res => { if (done) return; done = true; clearTimeout(watchdog); this.close(); resolve(res); };
-      this.stop = () => finish({ error: "stopped" });
+      const join = (list = chunks) => { const out = new Int16Array(list.reduce((n, c) => n + c.length, 0)); let o = 0; for (const c of list) { out.set(c, o); o += c.length; } return out; };
+      const finish = (res, hold = keep) => { if (done) return; done = true; clearTimeout(watchdog); this.close(hold); resolve(res); };
+      this.stop = (hold = false) => finish({ error: "stopped" }, hold);
       this.flush = () => finish(speaking ? { pcm: join() } : { error: "silent" });
       const watchdog = setTimeout(() => { if (!frames) finish({ error: "failed" }); }, 4000);
       try {
         this.wake();
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
-        if (done) { stream.getTracks().forEach(t => t.stop()); return; }
+        const live = this.stream?.getTracks().some(t => t.readyState === "live");
+        const stream = live ? this.stream : await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+        if (done) { if (!live && !keep) stream.getTracks().forEach(t => t.stop()); else this.stream = stream; return; }
         this.stream = stream;
         if (this.ctx.state !== "running") await this.ctx.resume();
       } catch (e) { finish({ error: e?.name === "NotAllowedError" ? "denied" : "failed" }); return; }
@@ -3644,7 +3683,7 @@ const Mic = {
         frames++;
         // the room's own noise level, learnt while you're not talking; speech is well above it
         noise = frames === 1 ? Math.min(rms, .02) : speaking ? noise : noise * .96 + Math.min(rms, noise * 2) * .04;
-        const on = Math.max(.012, noise * 3), off = Math.max(.008, noise * 1.8);
+        const on = Math.max(.012, noise * 3) * louder, off = Math.max(.008, noise * 1.8) * louder;
         this.level = Math.min(1, Math.max(0, (rms - off * .8) / .1));
         const out = new Int16Array(Math.ceil(x.length / ratio) + 2); let k = 0;   // down to 16 kHz: average each group
         for (; pos + ratio <= x.length; pos += ratio) {
@@ -3658,36 +3697,39 @@ const Mic = {
           pre.push(pcm); preLen += pcm.length;
           while (preLen > 8000 && pre.length > 1) preLen -= pre.shift().length;   // the half second before you started
           loud = rms > on && frames > 2 ? loud + 1 : 0;
-          if (loud >= 2) { speaking = true; speechAt = now; chunks = pre; onSpeech?.(); }
+          if (loud >= 2) { speaking = true; speechAt = now; chunks = pre.slice(); onSpeech?.(); onChunk?.(join(pre)); }
           else if (now - started > waitMs) finish({ error: "silent" });
         } else {
-          chunks.push(pcm);
+          chunks.push(pcm); onChunk?.(pcm);
           quiet = rms < off ? quiet + x.length / ctx.sampleRate : 0;
           if (quiet > .9 || now - speechAt > maxMs) finish({ pcm: join() });
         }
       };
     });
   },
-  close() {   // let go of the mic completely, so Jarvis's voice plays at full volume on iPhone
+  close(hold = false) {   // let go of the mic completely (unless held), so Jarvis's voice plays at full volume on iPhone
     for (const n of this.nodes) try { n.disconnect(); } catch {}
     if (this.nodes[1]) this.nodes[1].onaudioprocess = null;
     this.nodes = []; this.level = 0; this.stop = this.flush = null;
-    this.stream?.getTracks().forEach(t => t.stop()); this.stream = null;
+    if (!hold) { this.stream?.getTracks().forEach(t => t.stop()); this.stream = null; }
   },
+  release() { this.stop?.(); this.close(); },
 };
 
 // ================= Voice mode: tap the orb and talk. Jarvis answers out loud; the chat is hidden but keeps every word =================
 const VoiceMode = {
-  on: false, state: "idle", turn: 0, waits: new Map(), rec: null, dictation: false,
-  auto: load("jarvis.voiceAuto") !== "0", cc: load("jarvis.voiceCC") !== "0",
-  BYE: /^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye|довиждане|чао)\b/i,
+  on: false, state: "idle", turn: 0, waits: new Map(), rec: null, dictation: false, liveReq: "",
+  auto: load("jarvis.voiceAuto") !== "0", cc: load("jarvis.voiceCC") !== "0", barge: load("jarvis.barge") !== "0",
+  // cutting Jarvis off by voice: "stop", "wait", "Jarvis, …" (what follows "Jarvis" is a new command)
+  CUT: /^[\s,.!?-]*(hey\s+)?(jarvis|stop|wait|hold on|hang on|enough|shut up|pause|quiet|cancel|never ?mind|спри|чакай|стоп|джарвис)(?=$|[\s,.!?-])[\s,.!?-]*/i,
+  BYE: /^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye|довиждане|чао)(?=$|[\s,.!?-])/i,
   enter(listenNow) {
     this.on = true; Orb.init(); Orb.run(true); this.renderToggles();
     if (listenNow) this.listen(); else if (this.state === "idle") this.set("idle", undefined, "");
   },
   leave() { this.halt(); this.on = false; Orb.run(false); },
   halt(state = "idle") {   // stop listening and talking; a command already sent still finishes and lands in the chat
-    this.turn++; Mic.stop?.(); this.stopDictation(); Voice.stop(); this.set(state);
+    this.turn++; Mic.release(); this.stopDictation(); Voice.stop(); this.set(state);
   },
   start(opening) {   // a call from Jarvis was answered
     const turn = ++this.turn;
@@ -3728,29 +3770,65 @@ const VoiceMode = {
     if (this.dictation || !Mic.supported()) { this.dictate(turn); return; }
     this.set("listening", undefined, "");
     Mic.tone(880);
-    const res = await Mic.record({ waitMs, onSpeech: () => { if (turn === this.turn) this.set("hearing"); } });
+    // the words appear as you talk: what you've said goes to the PC a piece at a time, and it writes back
+    const req = this.liveReq = newId();
+    let piece = [], sent = 0;
+    const flush = () => {
+      if (!piece.length) return;
+      const out = new Int16Array(piece.reduce((n, c) => n + c.length, 0)); let o = 0;
+      for (const c of piece) { out.set(c, o); o += c.length; }
+      piece = [];
+      post({ type: "stt_part", id: newId(), req, seq: sent++, pcm: b64e(out.buffer) }).catch(() => {});
+    };
+    const ticker = setInterval(flush, 800);
+    const res = await Mic.record({ waitMs, onSpeech: () => { if (turn === this.turn) this.set("hearing", undefined, ""); },
+                                   onChunk: pcm => piece.push(pcm) });
+    clearInterval(ticker);
     if (turn !== this.turn || !this.on) return;
     if (res.error === "denied") { this.set("error", "Jarvis can't hear you", "Allow the microphone when your iPhone asks, then tap the orb."); return; }
     if (res.error === "failed") { this.dictation = true; this.dictate(turn); return; }   // no recording here: use dictation
     if (res.error) { this.set("idle", undefined, ""); return; }   // nothing said, or stopped
     Mic.tone(660);
     this.set("transcribing", "…", "");
-    const words = await this.transcribe(res.pcm);
+    const words = await this.transcribe(res.pcm, { req });
+    this.liveReq = "";
     if (turn !== this.turn || !this.on) return;
     if (words === null) { this.set("error", "Can't reach your PC", "Is Jarvis running? Tap the orb to try again."); return; }
     if (!words) { if (this.auto) this.listen(7000); else this.set("idle", "Didn't catch that", ""); return; }
     this.ask(words, turn);
   },
-  async transcribe(pcm) {   // your recording → words, by Whisper on your PC. null = couldn't reach it
+  async transcribe(pcm, { req = newId(), keepWake = false } = {}) {   // your recording → words, by Whisper on your PC. null = couldn't reach it
     if (!(await ensureConnected())) return null;
-    const req = newId();
     return new Promise(resolve => {
       const timer = setTimeout(() => { this.waits.delete(req); resolve(null); }, 30000);
       this.waits.set(req, d => { clearTimeout(timer); resolve(d.error ? null : (d.text || "").trim()); });
-      post({ type: "stt", id: newId(), req, pcm: b64e(pcm.buffer) }).catch(() => { clearTimeout(timer); this.waits.delete(req); resolve(null); });
+      post({ type: "stt", id: newId(), req, pcm: b64e(pcm.buffer), ...(keepWake ? { keep_wake: true } : {}) })
+        .catch(() => { clearTimeout(timer); this.waits.delete(req); resolve(null); });
     });
   },
   onWords(d) { const fn = this.waits.get(d.req); if (fn) { this.waits.delete(d.req); fn(d); } },
+  onPartial(d) {   // the words so far, while you're still talking
+    if (d.req === this.liveReq && this.state === "hearing" && d.text) { $("vCaption").textContent = d.text; $("vCaption").classList.add("you"); }
+  },
+  // While Jarvis talks, the mic listens for you cutting in. Only what starts with "stop", "wait", "Jarvis"… counts,
+  // so his own voice coming back through the mic doesn't stop him.
+  async watch(turn) {
+    while (this.on && turn === this.turn && this.state === "speaking") {
+      const res = await Mic.record({ waitMs: 60000, maxMs: 3500, keep: true, louder: 1.6 });
+      if (!this.on || turn !== this.turn || this.state !== "speaking") return;
+      if (res.error === "denied" || res.error === "failed" || res.error === "stopped") return;
+      if (!res.pcm) continue;
+      const said = await this.transcribe(res.pcm, { keepWake: true });
+      if (!this.on || turn !== this.turn || this.state !== "speaking") return;
+      const cut = said && said.match(this.CUT);
+      if (!cut) continue;
+      const rest = said.slice(cut[0].length).trim();
+      Voice.stop();
+      if (rest.split(/\s+/).length >= 2) this.ask(rest, ++this.turn);   // "Jarvis, open Chrome": straight on to that
+      else this.listen();
+      return;
+    }
+  },
   ask(words, turn) {
     if (this.BYE.test(words)) { this.set("speaking", "", words, true); this.speak("Bye.", turn, false); return; }
     this.set("thinking", undefined, words, true);
@@ -3763,8 +3841,9 @@ const VoiceMode = {
     this.set("speaking", "", text);
     Voice.speak(text, () => {
       if (turn !== this.turn || !this.on) return;
-      if (listenAfter) this.listen(7000); else this.set("idle", undefined, "");
+      if (listenAfter) this.listen(7000); else { Mic.release(); this.set("idle", undefined, ""); }
     });
+    if (this.barge && !this.dictation && Mic.supported()) this.watch(turn);
   },
   dictate(turn) {   // the phone's own dictation, where recording isn't possible
     if (!Recognition) { this.set("error", "Voice isn't available here", "Open Jarvis in Safari on your iPhone."); return; }
@@ -3804,10 +3883,11 @@ const Clock = {
     $("bcTime").textContent = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, ...zone });
     $("bcDate").textContent = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", ...zone });
     $("bcPlace").hidden = !w?.name;
-    $("bcPlaceName").textContent = w?.name ? w.name + (w.country ? ", " + w.country : "") : "";
+    const sky = w?.sky && typeof w.temp === "number" ? `${w.sky} ${w.temp}°` : "";
+    $("bcPlaceName").textContent = w?.name ? w.name + (w.country ? ", " + w.country : "") + (sky ? " · " + sky : "") : "";
     $("cpTime").textContent = $("bcTime").textContent;
     $("cpRest").innerHTML = "· " + esc(d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", ...zone }))
-      + (w?.name ? ` · ${icon("pin")}${esc(w.name)}` : "");
+      + (w?.name ? ` · ${icon("pin")}${esc(w.name)}` : "") + (sky ? ` · ${esc(sky)}` : "");
   },
   // how far the chat has scrolled away from its top: 0 = big clock, 1 = just the pill
   scrolled() {
@@ -3822,6 +3902,31 @@ const Clock = {
 };
 $("log").addEventListener("scroll", () => requestAnimationFrame(() => Clock.scrolled()), { passive: true });
 new MutationObserver(() => requestAnimationFrame(() => Clock.scrolled())).observe($("log"), { childList: true });   // another chat opened
+// ---- Settings › Jarvis's voice (jarvis/speak.py VOICES) and Voice mode ----
+const VOICES = [["en-GB-RyanNeural", "Ryan", "British man, like the films"], ["en-GB-ThomasNeural", "Thomas", "British man"],
+                ["en-US-AndrewNeural", "Andrew", "American man"], ["en-GB-SoniaNeural", "Sonia", "British woman"],
+                ["en-US-AriaNeural", "Aria", "American woman"]];
+let jarvisVoice = load("jarvis.voice") || "en-GB-RyanNeural";
+function renderVoices() {
+  $("voiceList").innerHTML = VOICES.map(([id, name, sub]) =>
+    `<button class="row voice-opt" data-voice="${id}"><span class="grow">${name}<span class="sub">${sub}</span></span>${id === jarvisVoice ? icon("check", "i tick") : ""}</button>`).join("");
+}
+$("voiceList").onclick = e => {
+  const b = e.target.closest("[data-voice]");
+  if (!b) return;
+  const id = b.dataset.voice, name = VOICES.find(v => v[0] === id)[1];
+  jarvisVoice = id; store("jarvis.voice", id); renderVoices();
+  post({ type: "set", key: "edge_voice", value: id, id: newId() }).catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+  setSpeaking(null);
+  Voice.speak(`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}. ${name} here. Jarvis, at your service.`, () => {}, id);
+};
+renderVoices();
+const voiceLinkUrl = location.origin + location.pathname + "?voice=1";
+$("voiceLink").textContent = voiceLinkUrl.replace(/^https?:\/\//, "");
+$("voiceLinkCopy").onclick = () => navigator.clipboard?.writeText(voiceLinkUrl)
+  .then(() => toast("Link copied", "copy"), () => toast(voiceLinkUrl, "copy"));
+$("bargeToggle").checked = VoiceMode.barge;
+$("bargeToggle").onchange = e => { VoiceMode.barge = e.target.checked; store("jarvis.barge", e.target.checked ? "1" : "0"); };
 function setMainMode(mode, listenNow = false) {
   const voice = mode === "voice";
   store("jarvis.mainMode", voice ? "voice" : "chat");
@@ -4369,6 +4474,10 @@ async function start() {
   renderCmds(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
   connect();
   setMainMode(load("jarvis.mainMode") === "voice" ? "voice" : "chat");
+  if (/[?&]voice=1/.test(location.search)) {   // the Voice mode link (Back Tap, Action Button): straight in, listening
+    window.history.replaceState(null, "", location.pathname);
+    Mic.wake(); setMainMode("voice", true);
+  }
   if (/[?&]call=1/.test(location.search)) { window.history.replaceState(null, "", location.pathname); setTimeout(() => Call.open(true, ""), 400); }
 }
 applyAppearance(); renderAppearance();   // set the chosen wallpaper/accent before anything shows

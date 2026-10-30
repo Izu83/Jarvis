@@ -230,15 +230,24 @@ def _check_mail() -> None:
              + "\n".join(f"- {who(m)}: {m['subject']}" for m in important[:5]))
 
 
-def _morning_due(now: dt.datetime) -> bool:
-    if not settings.get("briefing", True) or _state.get("morning") == now.date().isoformat():
+def _due(now: dt.datetime, switch: str, at: str, default: str, done_key: str) -> bool:
+    """Once a day at the time in `at`, while `switch` is on. Up to 3 hours late (the PC was off), never later."""
+    if not settings.get(switch, True) or _state.get(done_key) == now.date().isoformat():
         return False
     try:
-        hh, mm = (int(x) for x in str(settings.get("morning_time", "08:30")).split(":")[:2])
+        hh, mm = (int(x) for x in str(settings.get(at, default)).split(":")[:2])
     except ValueError:
-        hh, mm = 8, 30
+        hh, mm = (int(x) for x in default.split(":"))
     start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
     return start <= now < start + dt.timedelta(hours=3)   # PC switched on late: skip it rather than greet at 3pm
+
+
+def _morning_due(now: dt.datetime) -> bool:
+    return _due(now, "briefing", "morning_time", "08:30", "morning")
+
+
+def _evening_due(now: dt.datetime) -> bool:
+    return _due(now, "recap", "recap_time", "21:30", "evening")
 
 
 def send_briefing() -> str:
@@ -250,6 +259,15 @@ def send_briefing() -> str:
     if settings.get("briefing_speak"):
         from . import speak
         speak.say(briefing.spoken(text))
+    return text
+
+
+def send_recap() -> str:
+    """The evening recap (recap.py): what Jarvis did, your time in apps, tomorrow."""
+    from . import recap
+    text = recap.compose()
+    if _sender:
+        _sender(text, None, not quiet())
     return text
 
 
@@ -269,6 +287,13 @@ def _loop() -> None:
                 send_briefing()
         except Exception:
             log.exception("Morning briefing failed")
+        try:
+            if _evening_due(now):
+                _state["evening"] = now.date().isoformat()
+                _save_state()
+                send_recap()
+        except Exception:
+            log.exception("Evening recap failed")
         if level() == "off":
             continue
         if time.time() >= next_mail and settings.get("email_address"):

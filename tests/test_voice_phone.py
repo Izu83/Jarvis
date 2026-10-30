@@ -33,7 +33,7 @@ def test_no_words_from_noise_or_a_tap(monkeypatch):
 
 def test_phone_recording_round_trip(monkeypatch):
     got, sent = [], []
-    monkeypatch.setattr(voice, "transcribe_phone", lambda pcm: (got.append(pcm), ("lock my pc", "en"))[1])
+    monkeypatch.setattr(voice, "transcribe_phone", lambda pcm, keep=False: (got.append(pcm), ("lock my pc", "en"))[1])
     phone = remote.PhoneChannel.__new__(remote.PhoneChannel)
     phone._publish = sent.append
     pcm = _speech(0.5)
@@ -43,7 +43,7 @@ def test_phone_recording_round_trip(monkeypatch):
 
 
 def test_a_broken_recording_says_so(monkeypatch):
-    def boom(pcm):
+    def boom(pcm, keep=False):
         raise RuntimeError("no model")
     monkeypatch.setattr(voice, "transcribe_phone", boom)
     sent = []

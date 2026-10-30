@@ -40,6 +40,9 @@ DEFAULTS = {
     # reads it out on the PC. weather_city "" = work it out from your internet connection.
     "briefing": True,
     "briefing_speak": False,
+    # The evening recap at recap_time: what Jarvis did, your time in apps, tomorrow's calendar and weather (no tokens)
+    "recap": True,
+    "recap_time": "21:30",
     "weather_city": "",
     "quiet_hours": [23, 8],
     # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
@@ -81,7 +84,7 @@ DEFAULTS = {
     "speak_on_shortcut": True,  # speak the reply aloud when you start a command with the Ctrl+Alt+J shortcut
     # Voice: "edge" = Microsoft's free natural neural voices (online, no key); "windows" = the built-in offline voice.
     "tts_engine": "edge",
-    "edge_voice": "en-US-AriaNeural",  # a natural female voice; e.g. en-US-JennyNeural, en-US-AvaNeural, en-GB-SoniaNeural
+    "edge_voice": "en-GB-RyanNeural",  # Jarvis's voice: a British man, like the films (the phone offers speak.VOICES)
     "edge_voice_bg": "bg-BG-KalinaNeural",  # used for replies written in Bulgarian (bg-BG-BorislavNeural = male)
     "tts_voice": "",  # the built-in Windows voice name (offline fallback), e.g. "Zira"; empty = default
     "input_device": None,       # which microphone to listen on (device index); None = Windows default

@@ -365,7 +365,9 @@ def main() -> None:
         threading.Thread(target=phone.run, daemon=True, name="phone").start()
     proactive.set_handlers(run_scheduled, tell_user,
                            lambda: phone and phone.soon("activity", 0.3, phone.send_activity))
-    proactive.start()   # scheduled tasks, new-email heads-ups, the good-morning message
+    proactive.start()   # scheduled tasks, new-email heads-ups, the morning briefing and evening recap
+    from . import apptime
+    apptime.start()     # minutes in each app, for the evening recap
     health.set_sender(lambda text: tell_user(text))   # "Claude's login expired: here's the fix" and the like
 
     listener = None
