@@ -99,12 +99,14 @@ def test_new_important_email_gets_a_heads_up(clean, monkeypatch):
     assert len(said) == 1                               # never twice for the same email
 
 
-def test_good_morning_only_when_chatty_and_once_a_day():
+def test_briefing_has_its_own_switch_and_comes_once_a_day():
     morning = dt.datetime(2026, 10, 29, 8, 45)
     settings["morning_time"] = "08:30"
-    assert not proactive._morning_due(morning)          # "normal" doesn't send one
-    settings["proactive"] = "chatty"
-    assert proactive._morning_due(morning)
+    settings["briefing"] = False
+    assert not proactive._morning_due(morning)          # switched off
+    settings["briefing"] = True
+    settings["proactive"] = "off"
+    assert proactive._morning_due(morning)              # its own switch, whatever "messages on his own" says
     assert not proactive._morning_due(dt.datetime(2026, 10, 29, 15, 0))   # PC switched on late: skip it
     proactive._state["morning"] = "2026-10-29"
     assert not proactive._morning_due(morning)

@@ -24,3 +24,5 @@ send2trash
 pywebpush
 py-vapid
 mss
+icalendar
+recurring-ical-events

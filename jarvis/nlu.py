@@ -7,7 +7,7 @@ nothing is half-done.
 import logging
 import re
 
-from . import apps, modes, tools
+from . import apps, modes, quips, tools
 from . import windows as win
 from .config import settings
 
@@ -60,8 +60,8 @@ def layout_from(text: str) -> str:
 
 def _volume(key: str, times: int = 3) -> str:
     tools.run("media_key", {"key": key, "times": times})
-    return {"volume_up": "Turned the volume up.", "volume_down": "Turned the volume down.",
-            "mute": "Muted."}.get(key, "Done.")
+    plain = {"volume_up": "Turned the volume up.", "volume_down": "Turned the volume down.", "mute": "Muted."}
+    return quips.flavour(key, plain.get(key, "Done."))
 
 
 SIMPLE = []
@@ -94,19 +94,19 @@ def _play_pause(m, text):
     if playing is not None and playing == want_playing:
         return "It's already playing." if playing else "Nothing is playing."
     tools.run("media_key", {"key": "play_pause"})
-    return "Resumed." if want_playing else "Paused."
+    return quips.flavour("resume", "Resumed.") if want_playing else quips.flavour("pause", "Paused.")
 
 
 @simple(r"^(next|skip)(\s+(song|track|one))?$")
 def _next(m, text):
     tools.run("media_key", {"key": "next"})
-    return "Skipped."
+    return quips.flavour("skip", "Skipped.")
 
 
 @simple(r"^(previous|back|last)(\s+(song|track|one))?$|^go back a song$")
 def _prev(m, text):
     tools.run("media_key", {"key": "previous"})
-    return "Went back."
+    return quips.flavour("previous", "Went back.")
 
 
 @simple(r"\b(volume|turn it|turn the volume)\b.*\b(up|louder|higher)\b|^louder$")
@@ -126,7 +126,8 @@ def _mute(m, text):
 
 @simple(r"^lock( the| my)? (pc|computer|screen)$|^lock it$|^lock$")
 def _lock(m, text):
-    return tools.run("lock_pc", {})
+    done = tools.run("lock_pc", {})
+    return quips.flavour("lock", done) if done.startswith("Locked") else done
 
 
 @simple(r"\b(disk space|disk usage|free space|storage left|space (is )?left|how full is|"
@@ -161,6 +162,13 @@ def _screens(m, text):
 def _camera(m, text):
     from . import approval
     return approval.run_tool("camera_photo", {})
+
+
+@simple(r"^((ok(ay)?|yes|yeah|please)[,.]? )*((send|give|get)( me)? )?(the |number |no\.? ?|#)?(first|1st|second|2nd|"
+        r"third|3rd|fourth|4th|fifth|5th|sixth|6th|last|it|that( one)?|\d)( one)?( please)?[.!]*$")
+def _pick_file(m, text):
+    from . import findfile
+    return findfile.pick(text)   # None unless "find my file" just listed some
 
 
 @simple(r"^((ok(ay)?|yes|yeah|yep|please|so|now|just|can you|could you|pls)[,.]? )*(re-?send|send)( me)?"
@@ -367,11 +375,30 @@ def _away(m, text):
     return away.toggle()
 
 
+@simple(r"^((take|have) a nap|(go (to|for) )?(a )?(power )?nap( mode)?|nap( the| my)? (pc|computer))( please)?[.!]*$")
+def _nap(m, text):
+    from . import nap
+    return nap.turn_on()
+
+
+@simple(r"^(wake( up)?( the| my)?( pc| computer)?( up)?|turn (the |my )?screens? (back )?on|stop napping)( please)?[.!]*$")
+def _wake(m, text):
+    from . import nap
+    return nap.turn_off()
+
+
 @simple(r"^(health check|self[- ]?check|check yourself|run a (health|self[- ]?)check|are you (ok|okay|alright|"
         r"working)|is everything (ok|okay|working)|what'?s (broken|wrong with you))[?.!]*$")
 def _health(m, text):
     from . import health
     return health.check_now()
+
+
+@simple(r"^((the |my |a )?(morning )?briefing|give me (my |the |a )?(morning )?briefing|brief me|"
+        r"what'?s (on )?(my day|today)( look(ing)? like)?|what does (my|the) day look like)( please)?[?.!]*$")
+def _briefing(m, text):
+    from . import briefing
+    return briefing.compose()
 
 
 @simple(r"^(stop watching|cancel (the )?(watch|watches|notifications?|reminders?)|forget (the )?watch(es)?)$")
@@ -411,6 +438,15 @@ def _window_action(m, text):
         return tools.run("window_action", {"window": target, "action": action})
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------- find my file
+
+@simple(r"^((can|could|would) you |please |hey |ok(ay)? )*(send|find|get|give|show|where'?s|where is|look for|"
+        r"search for|what did i)\b")
+def _find_file(m, text):
+    from . import findfile
+    return findfile.handle(text)
 
 
 # ---------------------------------------------------------------- entry point

@@ -106,7 +106,7 @@ def test_memory_span_and_clearing(monkeypatch):
 
 def test_humour_setting_goes_into_the_system_prompt(monkeypatch):
     monkeypatch.setattr(brain.tools, "environment_description", lambda: "Monitors: one", raising=False)
-    assert "dry, understated wit" in brain.system_prompt()
+    assert "deadpan British butler" in brain.system_prompt()
     monkeypatch.setitem(memory.settings, "humour", "off")
     assert "no jokes" in brain.system_prompt() and "{personality}" not in brain.system_prompt()
 

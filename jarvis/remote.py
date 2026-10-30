@@ -10,6 +10,7 @@ import asyncio
 import base64
 import collections
 import json
+import re
 import logging
 import secrets
 import threading
@@ -21,7 +22,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, away, camera, faceid, inbox, media, modes, outbox, pc, proactive, push, screens,
+from . import (activity, approval, away, camera, faceid, inbox, media, modes, nap, outbox, pc, proactive, push, screens,
                siri, stopping, sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
@@ -94,6 +95,7 @@ class PhoneChannel:
         stopping.on_stop(self._drop_asks)
         away.set_handler(self._away_alert)
         away.set_on_change(lambda: self.soon("state", 0.2, self.send_state))   # the phone's away-mode chip
+        nap.set_on_change(lambda: self.soon("state", 0.2, self.send_state))    # …and its napping chip
         self._frame_lock = threading.Lock()   # one live-screen picture at a time (the old, one-at-a-time way)
         from .live import LiveStream
         self.live = LiveStream(self._publish_frame, _short_label)
@@ -241,6 +243,7 @@ class PhoneChannel:
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "voice_language": settings.get("voice_language", "en"),
                        "away": away.is_on(), "away_since": away.since(), "faceid": faceid.enabled(),
+                       "nap": nap.is_on(), "nap_since": nap.since(),
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
                        "activity": activity.summary(), "watches": watchers.items() + proactive.items()})
@@ -251,7 +254,34 @@ class PhoneChannel:
         self._publish({"kind": "memory", "id": "memory", "about": memory.about(),
                        "facts": [f["text"] for f in memory.facts()][::-1],   # newest first
                        "humour": settings.get("humour", "light"), "span": settings.get("memory_span", "normal"),
-                       "proactive": proactive.level()})
+                       "proactive": proactive.level(), "briefing": self._briefing_state()})
+
+    @staticmethod
+    def _briefing_state() -> dict:
+        from . import briefing
+        where = briefing._cache().get("place") or {}
+        return {"on": bool(settings.get("briefing", True)), "time": settings.get("morning_time", "08:30"),
+                "speak": bool(settings.get("briefing_speak")), "city": settings.get("weather_city", ""),
+                "place": where.get("name", ""), "calendar": briefing.calendar_set()}
+
+    def _set_briefing(self, b: dict) -> None:
+        """Settings › Morning briefing on the phone."""
+        from . import briefing
+        if isinstance(b.get("on"), bool):
+            set_setting("briefing", b["on"])
+        if isinstance(b.get("speak"), bool):
+            set_setting("briefing_speak", b["speak"])
+        if isinstance(b.get("time"), str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", b["time"]):
+            set_setting("morning_time", b["time"])
+        if isinstance(b.get("city"), str):
+            set_setting("weather_city", b["city"].strip()[:60])
+            briefing.place()   # look it up now, so the phone can show what it found
+        if isinstance(b.get("calendar"), str):
+            url = b["calendar"].strip()
+            if url and not re.match(r"^(https|webcal)://\S+$", url):
+                return
+            set_secret(briefing.ICS_SECRET, url.replace("webcal://", "https://", 1))
+        log.info("Morning briefing settings changed from the phone.")
 
     def _later(self, seconds: float, fn, *args) -> None:
         threading.Timer(seconds, fn, args).start()
@@ -545,6 +575,13 @@ class PhoneChannel:
             self.live.poke()
         elif kind == "away":   # /away on the phone: instant, even while a command is running
             self.reply(msg_id, away.toggle())
+        elif kind == "briefing":   # /briefing on the phone: weather, calendar, email… takes a few seconds
+            from . import briefing
+            threading.Thread(target=lambda: self.reply(msg_id, briefing.compose()), daemon=True,
+                             name="briefing").start()
+        elif kind == "briefing_set":
+            threading.Thread(target=lambda: (self._set_briefing(data), self.send_memory()), daemon=True,
+                             name="briefing-set").start()
         elif kind == "health":   # /health on the phone
             from . import health
             self.reply(msg_id, health.check_now())
@@ -569,6 +606,10 @@ class PhoneChannel:
                 self.reply(msg_id, "Face ID for permissions is off.")
             else:
                 self.reply(msg_id, "Face ID didn't check out, so it's still on.")
+        elif kind == "nap":   # Sleep tile › Nap, /nap: screens off, still reachable
+            self.reply(msg_id, nap.turn_on())
+        elif kind == "nap_off":   # the napping chip's Wake, /wake
+            self.reply(msg_id, nap.turn_off())
         elif kind == "away_off":   # the away-mode chip
             self.reply(msg_id, away.turn_off())
         elif kind == "clean_disks":   # /cleandisk: which disk?

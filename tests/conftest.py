@@ -20,6 +20,7 @@ config.settings = {
     "monitor_names": {"1": "right vertical monitor", "2": "main / middle monitor", "3": "left monitor"},
     "known_folders": {"projects": "D:\\Projects"},
     "use_claude": True,
+    "humour": "off",   # quick replies get a random quip otherwise
 }
 config.set_setting = config.settings.__setitem__
 config.secret = lambda name: os.environ.get(name, "")   # nothing from the real .env; tests set what they need

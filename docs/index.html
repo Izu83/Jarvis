@@ -510,6 +510,20 @@
   .clean-go { position: sticky; bottom: 0; padding: 14px 16px calc(env(safe-area-inset-bottom) + 8px); }
   .clean-go button { width: 100%; height: 50px; border-radius: 25px; color: #fff; font-size: 17px; font-weight: 600; background: var(--accent-grad); box-shadow: 0 6px 18px -6px var(--accent-glow); }
   .clean-go button:disabled { opacity: .4; }
+  /* Settings › Morning briefing */
+  .row-input { flex: none; width: 128px; border: 0; outline: 0; background: transparent; color: var(--label2); font: inherit; font-size: 17px; text-align: right; padding: 13px 0; }
+  .row-input::placeholder { color: var(--label3); }
+  .cal-input { display: block; width: 100%; border: 0; outline: 0; border-radius: 12px; background: var(--fill); color: var(--label); font: 13px/18px ui-monospace, "SF Mono", Menlo, monospace; padding: 10px 12px; }
+  /* Settings › Appearance › Moving background: the colours drift slowly. Off by default: the glass re-blurs while
+     they move, which costs battery. */
+  html.drift .ambient { inset: -18%; animation: drift 34s ease-in-out infinite alternate; will-change: transform; }
+  @keyframes drift {
+    0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+    35% { transform: translate(6%, -5%) rotate(9deg) scale(1.07); }
+    70% { transform: translate(-5%, 6%) rotate(-7deg) scale(1.03); }
+    100% { transform: translate(4%, 4%) rotate(5deg) scale(1.09); }
+  }
+  @media (prefers-reduced-motion: reduce) { html.drift .ambient { animation: none; } }
   /* Settings › Siri & Share */
   .siri-how { padding: 4px 18px 16px; font-size: 15px; line-height: 21px; border-top: .5px solid var(--sep); }
   .siri-how p { margin: 12px 0 8px; }
@@ -892,6 +906,7 @@
         <div class="swatches" id="wallpapers"></div>
         <div class="opt-label" style="margin-top: 17px;">Accent</div>
         <div class="swatches" id="accents"></div>
+        <label class="row" style="padding: 0; margin-top: 12px;"><span class="grow">Moving background<span class="sub">The colours drift slowly behind the glass. Uses a little more battery.</span></span><span class="switch"><input type="checkbox" id="driftToggle"><span></span></span></label>
       </div>
       <div class="group-title">Memory</div>
       <div class="group mem-about">
@@ -907,6 +922,25 @@
         <div class="opt-label" style="margin-top: 17px;">Messages you on his own</div>
         <div class="segment" id="proactiveSeg"></div>
         <div class="opt-note" id="proactiveNote"></div>
+      </div>
+      <div class="group-title">Morning briefing</div>
+      <div class="group">
+        <label class="row"><span class="grow">Every morning<span class="sub">Weather, your calendar, reminders, email and your PC in one message. No tokens.</span></span><span class="switch"><input type="checkbox" id="briefOn"><span></span></span></label>
+        <label class="row"><span class="grow">Time</span><input type="time" id="briefTime" class="row-input"></label>
+        <label class="row"><span class="grow">Weather for<span class="sub" id="briefPlace"></span></span><input id="briefCity" class="row-input" placeholder="Auto" maxlength="60" enterkeyhint="done" autocomplete="off"></label>
+        <label class="row"><span class="grow">Say it out loud on the PC</span><span class="switch"><input type="checkbox" id="briefSpeak"><span></span></span></label>
+        <button class="row" id="briefCal"><span class="grow">Calendar<span class="sub" id="briefCalState"></span></span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <div class="siri-how" id="briefCalHow" hidden>
+          <p>Jarvis reads your Google Calendar through its private address. It stays on your PC.</p>
+          <ol>
+            <li>On a computer, open <b>Google Calendar</b> › <b>Settings</b> (⚙).</li>
+            <li>Under <b>Settings for my calendars</b>, click your calendar, then <b>Integrate calendar</b>.</li>
+            <li>Copy the <b>Secret address in iCal format</b> and paste it here.</li>
+          </ol>
+          <input id="briefCalUrl" class="cal-input" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="siri-copy"><button class="mini press" id="briefCalSave">Save</button><button class="mini press" id="briefCalOff" hidden style="background: var(--fill); color: var(--red); box-shadow: none;">Remove</button></div>
+        </div>
+        <button class="row btn" id="briefNow">Send It Now</button>
       </div>
       <div class="group-title">Things Jarvis remembers</div>
       <div class="group" id="factList"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
@@ -1121,10 +1155,17 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-30.2";   // bump together with version.json
-const JNI = "JNIv20";   // Jarvis · Niko · Izu83 · version 20 — Jarvis's own release name
+const VERSION = "2026-10-30.3";   // bump together with version.json
+const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv21", when: "Oct 30, 2026", title: "Briefing, Nap & Find my file", notes: [
+    "Morning briefing: every morning, the weather, your calendar, reminders, email and how your PC is doing, in one message, with no tokens. Settings › Morning briefing sets the time, the city and the calendar; /briefing gets it now.",
+    "Nap: the Sleep tile now asks Nap or Sleep. Nap locks your PC and turns the screens off but keeps it reachable, so /wake (or tapping the Napping chip) brings it back from anywhere.",
+    "Find my file: “send me the PDF I downloaded yesterday”, “send me the latest screenshot”, “what did I download today?”. One match comes straight here; several are listed, and “the second one” sends that one. /find starts the sentence for you.",
+    "Better jokes: Jarvis's humour is now the dry, deadpan butler kind, about what's actually going on, and quick replies like skip, mute and lock get a line now and then too.",
+    "Settings › Appearance › Moving background: the colours drift slowly behind the glass.",
+  ] },
   { v: "JNIv20", when: "Oct 30, 2026", title: "Glass", notes: [
     "A new glassmorphism look: frosted, see-through panels with a thin bright edge, floating over soft colour orbs. Your wallpaper and accent colours tint the orbs.",
     "Messages are tinted glass too, in light and dark.",
@@ -2140,6 +2181,12 @@ function renderStatusBar() {
     b.onclick = () => { b.classList.add("busy"); quick("away_off"); };
     bar.append(b);
   }
+  if (napOn) {   // napping: screens off but reachable; tap to wake it
+    const b = pill("Napping", (napSince ? "since " + timeLabel(napSince * 1000) : "now") + " · tap to wake");
+    b.classList.add("press", "away");
+    b.onclick = () => { b.classList.add("busy"); quick("nap_off"); };
+    bar.append(b);
+  }
   const show = !!(bar.children.length && cfg);
   bar.hidden = !show;
   $("actBadge").hidden = !running.length;   // a live dot on the Activity tab while Jarvis works
@@ -2233,11 +2280,14 @@ function renderLang() {
   });
   $("langNote").textContent = LANG_NOTE[voiceLang];
 }
-let awayOn = false, awaySince = 0;
+let awayOn = false, awaySince = 0, napOn = false, napSince = 0;
 function onState(data) {
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
   if (typeof data.away === "boolean" && (data.away !== awayOn || data.away_since !== awaySince)) {
     awayOn = data.away; awaySince = data.away_since || 0; renderStatusBar();
+  }
+  if (typeof data.nap === "boolean" && (data.nap !== napOn || data.nap_since !== napSince)) {
+    napOn = data.nap; napSince = data.nap_since || 0; renderStatusBar();
   }
   if (typeof data.faceid === "boolean") { faceidOn = data.faceid; $("faceidToggle").checked = data.faceid; }
   setModes(data.modes || []);
@@ -2388,7 +2438,12 @@ function slashCommands() {
     { name: "stop", alias: ["cancel"], icon: "stop", tint: "#ff453a", desc: "Stop what Jarvis is doing", run: stopAnything },
     { name: "cleandisk", alias: ["clean", "cleanup", "disk"], icon: "disk", tint: "#30b0c7", desc: "Free up space on a disk", run: () => Clean.open() },
     { name: "away", alias: ["leaving", "back"], icon: "shield", tint: "#ff9f0a", desc: "Away mode: a photo if someone uses your PC", run: () => askQuick("away") },
+    { name: "nap", alias: ["sleep"], icon: "moon", tint: "#5856d6", desc: "Screens off, but you can still wake it from here", run: () => quick("nap") },
+    { name: "wake", alias: ["wakeup"], icon: "sun", tint: "#ffb020", desc: "Wake your PC from a nap", run: () => quick("nap_off") },
     { name: "lock", alias: [], icon: "lock", tint: "#8e8e93", desc: "Lock your PC", run: () => quick("lock") },
+    { name: "briefing", alias: ["morning", "brief", "today"], icon: "sun", tint: "#ffb020", desc: "Weather, calendar, email and your PC", run: () => askQuick("briefing", 45000) },
+    { name: "find", alias: ["file", "search"], icon: "search", tint: "#0a84ff", desc: "Find a file and send it here",
+      run: () => { text.value = "Send me the "; autosize(); text.focus(); } },
     { name: "health", alias: ["check", "status"], icon: "check", tint: "#30d158", desc: "Is everything working?", run: () => askQuick("health") },
     { name: "call", alias: [], icon: "phone", tint: "#34c759", desc: "Talk to Jarvis out loud", run: () => Call.open(false) },
     { name: "newmode", alias: ["mode"], icon: "plus", tint: "#8e8e93", desc: "Make a new mode",
@@ -2443,7 +2498,10 @@ function applyAppearance() {
   const acc = load("jarvis.accent");
   if (acc) document.documentElement.style.setProperty("--blue", acc);
   else document.documentElement.style.removeProperty("--blue");
+  document.documentElement.classList.toggle("drift", load("jarvis.drift") === "1");
 }
+$("driftToggle").checked = load("jarvis.drift") === "1";
+$("driftToggle").onchange = e => { store("jarvis.drift", e.target.checked ? "1" : undefined); applyAppearance(); };
 function renderAppearance() {
   const wallSel = load("jarvis.wall") || DEFAULT_WALL, accSel = (load("jarvis.accent") || DEFAULT_ACCENT).toLowerCase();
   const themeSel = load("jarvis.theme") || DEFAULT_THEME;
@@ -2605,9 +2663,9 @@ async function stopCommand() {
   try { await post({ type: "stop", id: newId(), target: b.id }); }
   catch { b.p.stopping = false; autosize(); toast("Can't reach your PC right now.", "x", "var(--red)"); }
 }
-async function askQuick(type) {   // instant PC answers (even while a command runs) that belong in the chat
+async function askQuick(type, timeout = 15000) {   // instant PC answers (even while a command runs) that belong in the chat
   const id = newId();
-  track(id, { kind: "quick", timeout: 15000, onReply: t => {
+  track(id, { kind: "quick", timeout, onReply: t => {
     const chat = current(); addMessage(chat, { who: "jarvis", text: t }); bubble(t, "jarvis"); scrollDown();
   } });
   try { await post({ type, id }); } catch { fail(id, "Can't reach your PC right now."); }
@@ -3028,7 +3086,7 @@ const PROACTIVE = [["off", "When asked"], ["normal", "Important"], ["chatty", "C
 const PROACTIVE_NOTE = {
   off: "Only reminders and tasks you scheduled, like “every morning at 8 check my email”.",
   normal: "Also tells you when an important email arrives. Quiet from 23:00 to 08:00.",
-  chatty: "Also sends a good-morning message at 08:30 and tells you about important emails.",
+  chatty: "Tells you about every new email, not just the important ones. Quiet from 23:00 to 08:00.",
 };
 let mem = null;
 function segmentOf(box, items, sel, pick) {
@@ -3059,6 +3117,7 @@ function onMemory(d) {
   const pro = d.proactive || "normal";
   $("proactiveNote").textContent = PROACTIVE_NOTE[pro];
   segmentOf($("proactiveSeg"), PROACTIVE, pro, id => { $("proactiveNote").textContent = PROACTIVE_NOTE[id]; memSet({ proactive: id }, "Saved"); });
+  renderBriefing(d.briefing);
   const list = $("factList"); list.innerHTML = "";
   if (!d.facts?.length) list.innerHTML = '<div class="row"><span class="grow sub-only">Nothing yet. Tell Jarvis “remember that…”, or add something below.</span></div>';
   for (const t of d.facts || []) {
@@ -3073,6 +3132,35 @@ function onMemory(d) {
     list.append(r);
   }
 }
+// ---- Settings › Morning briefing (jarvis/briefing.py): the PC answers with the new settings ----
+function renderBriefing(b) {
+  if (!b) return;
+  $("briefOn").checked = b.on; $("briefSpeak").checked = b.speak;
+  if (document.activeElement !== $("briefTime")) $("briefTime").value = b.time || "08:30";
+  if (document.activeElement !== $("briefCity")) $("briefCity").value = b.city || "";
+  $("briefPlace").textContent = b.place ? (b.city ? `Found: ${b.place}` : `Auto: ${b.place}`) : (b.city ? "Couldn't find that place" : "");
+  $("briefCalState").textContent = b.calendar ? "Connected" : "Not connected";
+  $("briefCalOff").hidden = !b.calendar;
+}
+function briefSet(change, msg) {
+  post({ type: "briefing_set", ...change, id: newId() })
+    .then(() => msg && toast(msg, "check", "var(--green)"))
+    .catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+}
+$("briefOn").onchange = e => briefSet({ on: e.target.checked }, e.target.checked ? "Briefing on" : "Briefing off");
+$("briefSpeak").onchange = e => briefSet({ speak: e.target.checked }, "Saved");
+$("briefTime").onchange = e => e.target.value && briefSet({ time: e.target.value }, `Every morning at ${e.target.value}`);
+$("briefCity").onchange = e => briefSet({ city: e.target.value.trim() }, "Saved");
+$("briefCity").onkeydown = e => { if (e.key === "Enter") e.target.blur(); };
+$("briefCal").onclick = () => { $("briefCalHow").hidden = !$("briefCalHow").hidden; };
+$("briefCalSave").onclick = () => {
+  const url = $("briefCalUrl").value.trim();
+  if (!/^(https|webcal):\/\/\S+$/.test(url)) { toast("Paste the address that starts with https://", "x", "var(--red)"); return; }
+  briefSet({ calendar: url }, "Calendar connected");
+  $("briefCalUrl").value = ""; $("briefCalHow").hidden = true;
+};
+$("briefCalOff").onclick = () => { briefSet({ calendar: "" }, "Calendar removed"); $("briefCalHow").hidden = true; };
+$("briefNow").onclick = () => { closeSheets(); askQuick("briefing", 45000); toast("Putting your briefing together…", "check", "var(--green)"); };
 const saveAbout = () => {
   const v = $("aboutText").value.trim();
   if (!mem || v === (mem.about || "")) { aboutDirty(false); return; }
@@ -3701,6 +3789,13 @@ for (const id of ["mic", "gestureBtn"]) new MutationObserver(syncPlusActive).obs
 $("sendFileBtn")?.addEventListener("click", () => { closeSheets(); pickAndUpload(); });
 document.querySelectorAll("[data-power]").forEach(btn => btn.onclick = () => {
   const action = btn.dataset.power, label = { sleep: "sleep", restart: "restart", shutdown: "shut down" }[action];
+  if (action === "sleep") {   // real sleep can't be undone from the phone, so Nap comes first
+    actionSheet("Nap keeps your PC reachable so you can wake it from here. Sleep switches it off until you're at it.", [
+      { label: "Nap", run: () => { closeSheets(); quick("nap"); } },
+      { label: "Sleep", run: () => { closeSheets(); send("Sleep the PC"); } },
+    ]);
+    return;
+  }
   if (!confirm(`Ask your PC to ${label}?`)) return;
   closeSheets();
   send(`${action === "shutdown" ? "Shut down" : action.charAt(0).toUpperCase() + action.slice(1)} the PC`);

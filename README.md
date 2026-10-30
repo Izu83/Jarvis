@@ -196,6 +196,32 @@ and a webcam photo (kept in `.brain/away/`). Jarvis's own clicks and the live sc
 them as generated input. `/away` again, or "I'm back", turns it off; `/lock` locks the PC. While it's on, a chip
 above the phone's message box says so; tap it to turn away mode off.
 
+## Nap: wake your PC from the phone
+
+A phone web page can't send the signal that wakes a sleeping PC, so there's **Nap** instead: the Sleep tile in
+Control Center asks Nap or Sleep, and `/nap` (or "take a nap") locks the PC, turns the screens off and keeps it
+awake, so Jarvis stays reachable. `/wake`, the "Napping" chip above the message box, or "wake up" turns the screens
+back on (the PC stays locked). Using the mouse or keyboard at the PC ends a nap too. While napping the PC draws its
+normal idle power; real Sleep still switches it off, but then it can't be woken from the phone.
+
+## Find my file
+
+"Send me the PDF I downloaded yesterday", "send me the latest screenshot", "find the photo from last week", "what
+did I download today?": Jarvis looks through Downloads, Desktop, Documents, Pictures, Videos and Music (and
+OneDrive's copies) by kind, time and words in the name, in a fraction of a second and with no tokens. One match is
+sent straight to the phone; several are listed, and "the second one" or "number 3" sends that one. `/find` starts
+the sentence for you. Anything it can't place (no kind of file or "download" in it, or a name it can't find in
+those folders) goes to the brain, which can search every drive.
+
+## Morning briefing
+
+Every morning at `morning_time` (Settings › Morning briefing): the weather, today's calendar, reminders and
+scheduled tasks, unread email and how the PC is doing, in one message, with no tokens. `/briefing`, "brief me" or
+"what's my day look like" gets it any time. Weather comes from Open-Meteo for `weather_city`, or the place your
+internet connection is in when that's empty. The calendar is optional: paste your Google Calendar's *Secret address
+in iCal format* in Settings (kept in `.env` as `CALENDAR_ICS_URL`); repeating events count. "Say it out loud on the
+PC" (`briefing_speak`) also reads it out on the PC. With humour on, it ends with a line for the day.
+
 ## Cleaning up a disk
 
 `/cleandisk` asks which disk, scans it (a few seconds) and sorts what it finds:
@@ -290,7 +316,8 @@ Outlook, Yahoo and iCloud are detected from the address; for anything else set `
   land in the chat too.
 - **On his own** (Settings › Memory › Messages you on his own, `proactive` in `config.json`): *When asked* (only
   the above), *Important* (default: plus a heads-up when an important email arrives, checked every 5 minutes, no
-  tokens) or *Chatty* (plus a good-morning message at `morning_time`). Between `quiet_hours` (23:00 to 08:00)
+  tokens) or *Chatty* (a heads-up for every new email). The morning briefing has its own switch (see Morning
+  briefing). Between `quiet_hours` (23:00 to 08:00)
   unasked messages still arrive, but without a notification.
 
 Messages wait in `.brain/inbox.json` until the phone confirms them, so they arrive even if the app was closed (with
@@ -332,7 +359,11 @@ a notification first).
 | `jarvis/nlu.py` | Free local parser for quick commands |
 | `jarvis/activity.py` | The saved log of every command and its steps (the phone's pills and Activity list) |
 | `jarvis/watchers.py` | Reminders and "tell me when…" watches |
-| `jarvis/proactive.py` | Scheduled tasks, new-email heads-ups and the good-morning message |
+| `jarvis/proactive.py` | Scheduled tasks, new-email heads-ups and when the morning briefing goes out |
+| `jarvis/briefing.py` | The morning briefing: weather, calendar (iCal), reminders, email, PC |
+| `jarvis/findfile.py` | Find my file: kind / time / name search in your own folders, pick from a list |
+| `jarvis/nap.py` | Nap: locked, screens off, kept awake so the phone can wake it |
+| `jarvis/quips.py` | Canned wit for quick replies and the briefing, as often as the humour setting says |
 | `jarvis/inbox.py` | Jarvis's messages waiting for the phone to pick them up |
 | `jarvis/mcp_server.py` | Gives Claude Code the Jarvis tools |
 | `jarvis/tools.py` | The actions Claude can take (schemas + implementations) |

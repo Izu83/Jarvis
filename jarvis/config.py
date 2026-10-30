@@ -33,9 +33,14 @@ DEFAULTS = {
     "memory_span": "normal",
     # Messages Jarvis sends on his own (also on the phone: Settings > Memory). proactive: "off" (only what you ask
     # for, like reminders and scheduled tasks), "normal" (+ a heads-up about new important email) or "chatty"
-    # (+ a good-morning message at morning_time). During quiet_hours [from, to] they arrive without a notification.
+    # (+ a heads-up about every new email). During quiet_hours [from, to] they arrive without a notification.
     "proactive": "normal",
     "morning_time": "08:30",
+    # The morning briefing at morning_time: weather, calendar, reminders, email, PC (no tokens). briefing_speak also
+    # reads it out on the PC. weather_city "" = work it out from your internet connection.
+    "briefing": True,
+    "briefing_speak": False,
+    "weather_city": "",
     "quiet_hours": [23, 8],
     # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
     # anything it doesn't understand, it says so instead of asking Claude.

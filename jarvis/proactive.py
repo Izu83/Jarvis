@@ -3,7 +3,7 @@
 - Scheduled tasks: "every morning at 8 check my email and tell me what matters", "at 18:00 tell me the weather".
   When the time comes the task runs through the brain like a command, and the answer arrives as a message.
 - New important emails: a heads-up when one arrives (checked every few minutes over IMAP, no tokens).
-- A good-morning message once a day (only when the setting is "chatty").
+- The morning briefing once a day at morning_time (its own switch, "briefing"; see briefing.py).
 
 How much he does unasked is the "proactive" setting (off / normal / chatty). Scheduled tasks always run: the user
 asked for those. During quiet hours, messages nobody asked for still land in the chat but don't make a notification.
@@ -28,9 +28,6 @@ TICK = 20               # seconds between checks
 MAIL_EVERY = 5 * 60     # how often to look for new email
 MAIL_RETRY = 30 * 60    # after a failure (no email set up, offline), wait longer
 TASK_PREFIX = "(Scheduled task) "
-MORNING_TASK = (TASK_PREFIX + "Send me a short good-morning message: the day and date, the reminders and scheduled "
-                "tasks I have today, and a one-line heads-up about any important unread email if you can check it. "
-                "Keep it to a few friendly lines.")
 
 _lock = threading.Lock()
 _tasks: dict[str, dict] = {}
@@ -202,7 +199,7 @@ def _run_due() -> None:
             _runner(TASK_PREFIX + t["task"], t.get("chat"))
 
 
-# ---------------------------------------------------------------- unprompted: email and good morning
+# ---------------------------------------------------------------- unprompted: email and the morning briefing
 
 def _say(text: str) -> None:
     if _sender:
@@ -218,7 +215,7 @@ def _check_mail() -> None:
     _state["seen_mail"] = (list(seen) + [m["id"] for m in new])[-300:]
     _state["mail_seeded"] = True
     _save_state()
-    important = [m for m in new if m["important"]]
+    important = [m for m in new if m["important"] or level() == "chatty"]
     if first or not important:   # the first look only learns what's already there
         return
 
@@ -234,7 +231,7 @@ def _check_mail() -> None:
 
 
 def _morning_due(now: dt.datetime) -> bool:
-    if level() != "chatty" or _state.get("morning") == now.date().isoformat():
+    if not settings.get("briefing", True) or _state.get("morning") == now.date().isoformat():
         return False
     try:
         hh, mm = (int(x) for x in str(settings.get("morning_time", "08:30")).split(":")[:2])
@@ -242,6 +239,18 @@ def _morning_due(now: dt.datetime) -> bool:
         hh, mm = 8, 30
     start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
     return start <= now < start + dt.timedelta(hours=3)   # PC switched on late: skip it rather than greet at 3pm
+
+
+def send_briefing() -> str:
+    """Put the briefing together and send it (also read out on the PC when briefing_speak is on)."""
+    from . import briefing
+    text = briefing.compose()
+    if _sender:
+        _sender(text, None, True)   # you asked for this one, so it may buzz
+    if settings.get("briefing_speak"):
+        from . import speak
+        speak.say(briefing.spoken(text))
+    return text
 
 
 def _loop() -> None:
@@ -252,17 +261,16 @@ def _loop() -> None:
             _run_due()
         except Exception:
             log.exception("Running scheduled tasks failed")
-        if level() == "off":
-            continue
         now = dt.datetime.now()
         try:
             if _morning_due(now):
                 _state["morning"] = now.date().isoformat()
                 _save_state()
-                if _runner:
-                    _runner(MORNING_TASK, None)
+                send_briefing()
         except Exception:
-            log.exception("Good-morning message failed")
+            log.exception("Morning briefing failed")
+        if level() == "off":
+            continue
         if time.time() >= next_mail and settings.get("email_address"):
             try:
                 _check_mail()
