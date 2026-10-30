@@ -649,10 +649,25 @@
     padding: calc(env(safe-area-inset-top) + 52px) 22px calc(var(--dock-h, 120px) - 4px);
     background: radial-gradient(80% 55% at 50% 40%, #0a1c2c, #04070d 70%), #04070d; }
   #voiceView .v-stage { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  /* the clock in the background of both modes: where your PC is, its local time to the second, and the date.
-     The chat starts below it and scrolls over it. */
+  /* the clock at the top of both modes: where your PC is, its local time to the second, and the date. In the chat it
+     works like an iPhone large title: --cp goes 0 → 1 as you scroll, the big clock slides up and fades out, and a
+     small frosted pill under the Chat / Voice switch takes over, so it never shows through the messages. */
   .bg-clock { position: fixed; z-index: 0; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 52px); text-align: center; pointer-events: none;
-    color: var(--label); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    color: var(--label); font-variant-numeric: tabular-nums; letter-spacing: 0;
+    opacity: calc(1 - var(--cp, 0) * 1.6); transform: translateY(calc(var(--cp, 0) * -36px)) scale(calc(1 - var(--cp, 0) * .12)); }
+  .clock-pill { position: fixed; z-index: 6; top: calc(env(safe-area-inset-top) + 50px); left: 50%; height: 26px; padding: 0 11px; border-radius: 13px;
+    display: flex; align-items: center; gap: 5px; white-space: nowrap; pointer-events: none; font-size: 12.5px; font-weight: 600; letter-spacing: 0;
+    font-variant-numeric: tabular-nums; color: var(--label2); opacity: var(--cp, 0); transform: translateX(-50%) translateY(calc((1 - var(--cp, 0)) * 8px)); }
+  .clock-pill.glass { background: color-mix(in srgb, var(--base) 72%, transparent); }
+  .clock-pill b { color: var(--label); font-weight: 600; }
+  .clock-pill svg.i { width: 12px; height: 12px; color: var(--accent); stroke-width: 2.2; }
+  /* once the chat scrolls under the top, it fades away behind the switch and the pill (like the dock's fade at the bottom) */
+  .top-fade { position: fixed; z-index: 5; left: 0; right: 0; top: 0; height: calc(env(safe-area-inset-top) + 118px); pointer-events: none; opacity: var(--cp, 0);
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--base) 88%, transparent), color-mix(in srgb, var(--base) 55%, transparent) 60%, transparent);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    -webkit-mask: linear-gradient(to bottom, #000 calc(100% - 34px), transparent); mask: linear-gradient(to bottom, #000 calc(100% - 34px), transparent); }
+  html.mode-voice .clock-pill, html.mode-voice .top-fade { display: none; }
+  html.mode-voice .bg-clock { opacity: 1; transform: none; }
   .bc-time { font-size: 42px; font-weight: 250; line-height: 1.05; letter-spacing: -.5px; opacity: .85; }
   .bc-date { margin-top: 3px; font-size: 13px; font-weight: 500; color: var(--label2); }
   .bc-place { margin-top: 2px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--accent); }
@@ -843,6 +858,8 @@
 <main id="log" hidden></main>
 
 <!-- behind everything, in both modes: where your PC is, its local time and the date -->
+<div class="top-fade" aria-hidden="true"></div>
+<div class="clock-pill glass strong" id="clockPill" aria-hidden="true" hidden><b id="cpTime"></b><span id="cpRest"></span></div>
 <div class="bg-clock" id="bgClock" hidden>
   <div class="bc-time" id="bcTime"></div>
   <div class="bc-date" id="bcDate"></div>
@@ -1220,12 +1237,13 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.1";   // bump together with version.json
+const VERSION = "2026-10-31.2";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
   { v: "JNIv23", when: "Oct 31, 2026", title: "Where & when", notes: [
-    "At the top of both Chat and Voice: where your PC is, its local time to the second and today's date. The chat scrolls over it.",
+    "At the top of both Chat and Voice: where your PC is, its local time to the second and today's date.",
+    "In the chat it works like an iPhone title: scroll down and the big clock slides away into a small pill under Chat / Voice, and messages fade out under the top instead of showing through.",
   ] },
   { v: "JNIv22", when: "Oct 30, 2026", title: "Voice mode", notes: [
     "Two modes at the top: Chat, and Voice. Voice hides the chat and shows just Jarvis: a glowing sphere that breathes while it waits, swells with your voice while you talk, swirls while it works and pulses with every word it says. Everything you say is still saved in the chat.",
@@ -3723,6 +3741,14 @@ const Clock = {
     $("bcDate").textContent = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", ...zone });
     $("bcPlace").hidden = !w?.name;
     $("bcPlaceName").textContent = w?.name ? w.name + (w.country ? ", " + w.country : "") : "";
+    $("cpTime").textContent = $("bcTime").textContent;
+    $("cpRest").innerHTML = "· " + esc(d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", ...zone }))
+      + (w?.name ? ` · ${icon("pin")}${esc(w.name)}` : "");
+  },
+  // how far the chat has scrolled away from its top: 0 = big clock, 1 = just the pill
+  scrolled() {
+    const p = Math.max(0, Math.min(1, $("log").scrollTop / 90));
+    if (p !== this.p) { this.p = p; document.documentElement.style.setProperty("--cp", p.toFixed(3)); }
   },
   start() {
     clearTimeout(this.timer);
@@ -3730,6 +3756,8 @@ const Clock = {
     tick();
   },
 };
+$("log").addEventListener("scroll", () => requestAnimationFrame(() => Clock.scrolled()), { passive: true });
+new MutationObserver(() => requestAnimationFrame(() => Clock.scrolled())).observe($("log"), { childList: true });   // another chat opened
 function setMainMode(mode, listenNow = false) {
   const voice = mode === "voice";
   store("jarvis.mainMode", voice ? "voice" : "chat");
@@ -4266,7 +4294,7 @@ async function start() {
     try { key = await crypto.subtle.importKey("raw", b64d(cfg.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
     catch { store("jarvis.pairing"); cfg = null; }
   }
-  for (const id of ["log", "dock", "modeSwitch", "bgClock"]) $(id).hidden = !cfg;
+  for (const id of ["log", "dock", "modeSwitch", "bgClock", "clockPill"]) $(id).hidden = !cfg;
   if (cfg) Clock.start();
   $("setup").hidden = !!cfg;
   if (!cfg) return;
