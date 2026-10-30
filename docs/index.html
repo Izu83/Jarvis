@@ -145,7 +145,7 @@
   .badge-dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--base); }
 
   /* ---------- conversation ---------- */
-  #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 54px) 14px var(--dock-h, 220px); display: flex; flex-direction: column; gap: 3px; }
+  #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 150px) 14px var(--dock-h, 220px); display: flex; flex-direction: column; gap: 3px; }
   .home { margin: 0; padding: 8px 2px 8px; display: flex; flex-direction: column; gap: 16px; }
   .hello { display: flex; align-items: center; gap: 14px; padding: 0 4px; }
   .hello .ring { width: 62px; height: 62px; border-radius: 50%; padding: 3px; background: conic-gradient(from 200deg, #5ac8fa, #0a84ff, #bf5af2, #5ac8fa); flex: none; }
@@ -649,7 +649,21 @@
     padding: calc(env(safe-area-inset-top) + 52px) 22px calc(var(--dock-h, 120px) - 4px);
     background: radial-gradient(80% 55% at 50% 40%, #0a1c2c, #04070d 70%), #04070d; }
   #voiceView .v-stage { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  #orb { width: min(92vw, 50vh, 470px); aspect-ratio: 1; display: block; cursor: pointer; touch-action: manipulation; }
+  /* the clock in the background of both modes: where your PC is, its local time to the second, and the date.
+     The chat starts below it and scrolls over it. */
+  .bg-clock { position: fixed; z-index: 0; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 52px); text-align: center; pointer-events: none;
+    color: var(--label); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .bc-time { font-size: 42px; font-weight: 250; line-height: 1.05; letter-spacing: -.5px; opacity: .85; }
+  .bc-date { margin-top: 3px; font-size: 13px; font-weight: 500; color: var(--label2); }
+  .bc-place { margin-top: 2px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--accent); }
+  .bc-place svg.i { width: 14px; height: 14px; }
+  html.mode-voice .bg-clock { z-index: 3; color: #fff; }
+  html.mode-voice .bc-date { color: rgba(255,255,255,.62); }
+  html.mode-voice .bc-place { color: #7fe3ff; }
+  html.mode-voice #voiceView { padding-top: calc(env(safe-area-inset-top) + 150px); }
+  /* as big as fits between the clock and the buttons */
+  #orb { width: max(150px, min(92vw, 470px, calc(100vh - var(--dock-h, 120px) - env(safe-area-inset-top) - 336px)));
+    aspect-ratio: 1; display: block; cursor: pointer; touch-action: manipulation; }
   .v-status { margin-top: -6px; min-height: 22px; font-size: 17px; font-weight: 600; letter-spacing: -.2px; color: rgba(255,255,255,.9); transition: opacity .3s; }
   .v-status .cdots { display: inline-flex; gap: 6px; } .v-status .cdots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.75); animation: blink 1.3s infinite; }
   .v-status .cdots i:nth-child(2) { animation-delay: .18s; } .v-status .cdots i:nth-child(3) { animation-delay: .36s; }
@@ -795,6 +809,7 @@
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 16v-4M11 16V8M15.5 16v-6M20 16V5"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2a1.5 1.5 0 0 0 1.5 1.3h6.2a1.5 1.5 0 0 0 1.5-1.3L17.5 7"/></symbol>
   <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.5h3l4.5-4v13L7 14.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
   <symbol id="i-wave" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10.5v3"/></symbol>
   <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.6 10.3a2.2 2.2 0 1 0 0 3.4M17 10.3a2.2 2.2 0 1 0 0 3.4"/></symbol>
   <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 3.5l3 3-3 3"/><path d="M4 11.5v-1a4 4 0 0 1 4-4h12M7 20.5l-3-3 3-3"/><path d="M20 12.5v1a4 4 0 0 1-4 4H4"/></symbol>
@@ -826,6 +841,13 @@
 </section>
 
 <main id="log" hidden></main>
+
+<!-- behind everything, in both modes: where your PC is, its local time and the date -->
+<div class="bg-clock" id="bgClock" hidden>
+  <div class="bc-time" id="bcTime"></div>
+  <div class="bc-date" id="bcDate"></div>
+  <div class="bc-place" id="bcPlace" hidden><svg class="i"><use href="#i-pin"/></svg><span id="bcPlaceName"></span></div>
+</div>
 
 <!-- the two main modes -->
 <div class="modes glass" id="modeSwitch" role="tablist" aria-label="Mode" hidden>
@@ -1198,10 +1220,13 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-30.4";   // bump together with version.json
+const VERSION = "2026-10-31.1";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv23", when: "Oct 31, 2026", title: "Where & when", notes: [
+    "At the top of both Chat and Voice: where your PC is, its local time to the second and today's date. The chat scrolls over it.",
+  ] },
   { v: "JNIv22", when: "Oct 30, 2026", title: "Voice mode", notes: [
     "Two modes at the top: Chat, and Voice. Voice hides the chat and shows just Jarvis: a glowing sphere that breathes while it waits, swells with your voice while you talk, swirls while it works and pulses with every word it says. Everything you say is still saved in the chat.",
     "Much better listening: your iPhone records you and your PC's Whisper writes it down (the same as “Hey Jarvis”), so it works hands-free, gets app names right and understands Bulgarian. It notices when you've stopped talking by itself.",
@@ -2408,6 +2433,7 @@ function renderLang() {
 }
 let awayOn = false, awaySince = 0, napOn = false, napSince = 0;
 function onState(data) {
+  if (data.where) Clock.set(data.where);
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
   if (typeof data.away === "boolean" && (data.away !== awayOn || data.away_since !== awaySince)) {
     awayOn = data.away; awaySince = data.away_since || 0; renderStatusBar();
@@ -3675,6 +3701,35 @@ const VoiceMode = {
   },
   stopDictation() { try { if (this.rec) { this.rec.onend = null; this.rec.abort(); } } catch {} this.rec = null; },
 };
+// ================= the background clock: where your PC is, its local time (HH:MM:SS) and the date =================
+const Clock = {
+  where: (() => { try { return JSON.parse(load("jarvis.where")) || null; } catch { return null; } })(),
+  timer: 0,
+  set(w) {   // from the PC's state: { name, country, tz, offset }
+    if (!w || JSON.stringify(w) === JSON.stringify(this.where)) return;
+    this.where = w; store("jarvis.where", JSON.stringify(w)); this.render();
+  },
+  zone() {   // the PC's time zone, if this phone knows it
+    const tz = this.where?.tz;
+    try { if (tz) { new Intl.DateTimeFormat("en-GB", { timeZone: tz }); return tz; } } catch {}
+    return null;
+  },
+  render() {
+    const now = new Date(), w = this.where, tz = this.zone();
+    // without a time zone, the PC's own offset from UTC (the phone's own time until the PC has said)
+    const d = tz || typeof w?.offset !== "number" ? now : new Date(now.getTime() + (w.offset + now.getTimezoneOffset()) * 60000);
+    const zone = tz ? { timeZone: tz } : {};
+    $("bcTime").textContent = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, ...zone });
+    $("bcDate").textContent = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", ...zone });
+    $("bcPlace").hidden = !w?.name;
+    $("bcPlaceName").textContent = w?.name ? w.name + (w.country ? ", " + w.country : "") : "";
+  },
+  start() {
+    clearTimeout(this.timer);
+    const tick = () => { this.render(); this.timer = setTimeout(tick, 1005 - Date.now() % 1000); };   // on the second
+    tick();
+  },
+};
 function setMainMode(mode, listenNow = false) {
   const voice = mode === "voice";
   store("jarvis.mainMode", voice ? "voice" : "chat");
@@ -4211,7 +4266,8 @@ async function start() {
     try { key = await crypto.subtle.importKey("raw", b64d(cfg.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
     catch { store("jarvis.pairing"); cfg = null; }
   }
-  for (const id of ["log", "dock", "modeSwitch"]) $(id).hidden = !cfg;
+  for (const id of ["log", "dock", "modeSwitch", "bgClock"]) $(id).hidden = !cfg;
+  if (cfg) Clock.start();
   $("setup").hidden = !!cfg;
   if (!cfg) return;
   $("relayName").textContent = "Direct, encrypted";

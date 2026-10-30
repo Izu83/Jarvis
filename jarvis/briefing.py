@@ -14,6 +14,8 @@ import json
 import logging
 import re
 import shutil
+import threading
+import time
 
 import requests
 
@@ -53,20 +55,24 @@ def _save_cache(data: dict) -> None:
 # ---------------------------------------------------------------- weather
 
 def place() -> dict | None:
-    """{"name", "lat", "lon"} for the weather: the city in settings, else where the internet connection is."""
+    """{"name", "country", "tz", "lat", "lon"} for the weather and the phone's clock: the city in settings, else
+    where the internet connection is."""
     city = (settings.get("weather_city") or "").strip()
     cache = _cache()
-    if cache.get("place") and cache.get("place_for") == city:
+    if cache.get("place") and cache.get("place_for") == city and "tz" in cache["place"]:
         return cache["place"]
     try:
         if city:
             r = requests.get("https://geocoding-api.open-meteo.com/v1/search",
                              params={"name": city, "count": 1}, timeout=TIMEOUT).json()
             hit = (r.get("results") or [None])[0]
-            found = hit and {"name": hit["name"], "lat": hit["latitude"], "lon": hit["longitude"]}
+            found = hit and {"name": hit["name"], "country": hit.get("country", ""), "tz": hit.get("timezone", ""),
+                             "lat": hit["latitude"], "lon": hit["longitude"]}
         else:
-            r = requests.get("http://ip-api.com/json/", params={"fields": "status,city,lat,lon"}, timeout=TIMEOUT).json()
-            found = r.get("status") == "success" and {"name": r["city"], "lat": r["lat"], "lon": r["lon"]}
+            r = requests.get("http://ip-api.com/json/", params={"fields": "status,city,country,timezone,lat,lon"},
+                             timeout=TIMEOUT).json()
+            found = r.get("status") == "success" and {"name": r["city"], "country": r.get("country", ""),
+                                                      "tz": r.get("timezone", ""), "lat": r["lat"], "lon": r["lon"]}
     except (requests.RequestException, ValueError, KeyError):
         log.info("Couldn't work out where you are for the weather.")
         return None
@@ -75,6 +81,31 @@ def place() -> dict | None:
     cache.update(place=found, place_for=city)
     _save_cache(cache)
     return found
+
+
+_looking = threading.Lock()
+_looked = 0.0
+
+
+def where_now() -> dict:
+    """Where the PC is, for the clock on the phone: {"name", "country", "tz", "offset"} (offset: the PC's own
+    minutes from UTC, used when the phone doesn't know the time zone). Never waits on the internet: the place
+    comes from the cache, and is looked up in the background when it's missing (at most every 10 minutes)."""
+    global _looked
+    cache = _cache()
+    p = cache.get("place") or {}
+    fresh = "tz" in p and cache.get("place_for") == (settings.get("weather_city") or "").strip()
+    if not fresh and time.time() - _looked > 600 and _looking.acquire(blocking=False):
+        _looked = time.time()
+
+        def look():
+            try:
+                place()
+            finally:
+                _looking.release()
+        threading.Thread(target=look, daemon=True, name="where").start()
+    return {"name": p.get("name", ""), "country": p.get("country", ""), "tz": p.get("tz", ""),
+            "offset": time.localtime().tm_gmtoff // 60}
 
 
 def weather() -> str | None:

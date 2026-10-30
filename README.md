@@ -118,7 +118,10 @@ which you can also edit by hand.
 - **Answers as they're written**: the reply bubble fills in word by word (Claude and the local models both
   stream); commentary before an action is taken back off when the action starts.
 - **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
-- **Everything at the bottom**: like most iPhone apps there's no bar at the top. The tab bar at the bottom has
+- **Where and when**: at the top of both Chat and Voice, behind everything else: where your PC is (the town and
+  country, from its internet connection or `weather_city`), its local time to the second (HH:MM:SS) and the date.
+  The chat starts below it and scrolls over it.
+- **Everything at the bottom**: apart from the Chat / Voice switch and the clock, there's no bar at the top. The tab bar at the bottom has
   Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
 - **Step pills**: everything Jarvis does for a command appears as a small pill in the chat ("Files · Searching for
   invoice…"), live while it works and saved afterwards. A **Working** chip above the message box shows the current step even for

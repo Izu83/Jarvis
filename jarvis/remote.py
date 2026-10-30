@@ -237,7 +237,13 @@ class PhoneChannel:
         except Exception:
             log.exception("Couldn't check the local models")
             local = []
-        self._publish({"kind": "state", "id": "state", "modes": modes.overview(), "pc": status, "local": local,
+        from . import briefing
+        try:
+            where = briefing.where_now()   # the clock on the phone: where this PC is and its local time
+        except Exception:
+            log.debug("Couldn't say where the PC is", exc_info=True)
+            where = None
+        self._publish({"kind": "state", "id": "state", "where": where, "modes": modes.overview(), "pc": status, "local": local,
                        "use_claude": settings["use_claude"],
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
