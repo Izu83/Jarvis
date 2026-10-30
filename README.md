@@ -110,7 +110,7 @@ which you can also edit by hand.
   skip and volume; live CPU and memory with the busiest app; send your phone's clipboard to the PC or see the PC's
   clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
 - **Slash commands**: type `/` in the message box for the list: `/work` (and your other modes), `/monitors`,
-  `/camera`, `/system`, `/control`, `/call` and `/newmode`. Tap one, or type the whole name and press send.
+  `/camera`, `/system`, `/control`, `/voice` and `/newmode`. Tap one, or type the whole name and press send.
 - **Stop button**: while Jarvis works on something in the chat you're in, the send button becomes a ■ stop
   button. He stops within a second or so (a command still waiting its turn is just taken off the list). `/stop` does
   the same for whatever he's doing, even from another chat.
@@ -129,6 +129,25 @@ which you can also edit by hand.
 - **Never lost**: if the phone's connection silently dropped, the app reconnects and re-sends (the PC never runs it
   twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again. Files Jarvis sends (pictures, videos) wait on
   the PC until the phone confirms it has them (`.brain/outbox.json`, 3 days), and stay saved in the chat on the phone.
+
+## Voice mode
+
+The phone app has two modes, switched at the top: **Chat** and **Voice**. Voice hides the chat and shows only Jarvis,
+a sphere of glowing points and threads. It breathes while it waits, swells with your voice while you talk, swirls
+while Jarvis works and pulses with every word he says. Everything said in Voice mode is saved in the chat as usual.
+
+- **Talking**: tap the orb (or the big button) and speak. The phone notices when you've stopped by itself. Tap the
+  orb while Jarvis is talking to cut in.
+- **Listening**: the phone records you and sends the recording to the PC, where the same Whisper as "Hey Jarvis"
+  writes it down (about a second, no tokens). That works hands-free on iPhone, gets app names right and follows
+  Settings › Language you speak (English, Bulgarian or both). Where a browser can't record, the phone's own
+  dictation is used instead.
+- **Hands-free** (on by default): after each answer Jarvis listens again, like a conversation. Say "bye" (or
+  "that's all") to stop, or just stay quiet for a few seconds.
+- **Answers out loud** come in Jarvis's own neural voice, split into sentences: the first plays while the rest are
+  still being made, so he starts talking sooner.
+- **Captions** show what Jarvis heard and what he's saying; turn them off for just the orb.
+- `/voice` opens Voice mode, and a call from Jarvis opens it once you answer.
 
 ## Smarter: acting inside apps
 
@@ -381,7 +400,7 @@ a notification first).
 | `jarvis/approval.py` | Asking you before anything destructive (phone alert or Windows dialog) |
 | `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
-| `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription; spoken replies |
+| `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
 | `jarvis/cleandisk.py` | /cleandisk: scan a disk into safe / your call / leave alone, clean what's ticked |

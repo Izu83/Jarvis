@@ -19,7 +19,8 @@ log = logging.getLogger("jarvis.voice")
 # "both" (each command is checked for English vs Bulgarian first). Bulgarian needs a multilingual Whisper model,
 # "small" by default, kept on this drive (.brain/whisper) since C: is nearly full.
 LANGUAGES = ("en", "bg", "both")
-PROMPTS = {"en": "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3.",
+PROMPTS = {"en": "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3. "
+                 "What's the weather in Botevgrad?",
            "bg": "Хей Джарвис, отвори Spotify, Discord и Chrome. Сложи ги на монитор 3."}
 
 RATE = 16000
@@ -301,6 +302,55 @@ class VoiceListener:
         text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
         log.info("Heard: %r", text)
         return WAKE_PREFIX.sub("", text).strip(" ,.")
+
+
+# ---------------------------------------------------------------- Voice mode on the phone
+
+# What Whisper "hears" in a clip with no real words in it
+_PHANTOMS = {"you", "thank you for watching", "thanks for watching", "субтитри", "абонирайте се"}
+_phone_model = None   # (name, model): only when the PC's own listener hasn't loaded one
+_phone_lock = threading.Lock()
+
+
+def _model_for_phone():
+    want = model_for(language())
+    for listener in _listeners:
+        if getattr(listener, "whisper", None) and listener.loaded_for and model_for(listener.loaded_for) == want:
+            return listener.whisper
+    global _phone_model
+    with _phone_lock:
+        if not _phone_model or _phone_model[0] != want:
+            from faster_whisper import WhisperModel
+            root = None if want.endswith(".en") else str(ROOT / ".brain" / "whisper")
+            log.info("Loading Whisper '%s' for the phone's voice mode...", want)
+            _phone_model = (want, WhisperModel(want, device="cpu", compute_type="int8", download_root=root))
+        return _phone_model[1]
+
+
+def transcribe_phone(pcm: bytes) -> tuple[str, str]:
+    """Voice mode on the phone records you (16 kHz, mono, 16-bit) and sends it here: the same Whisper as
+    "Hey Jarvis" turns it into words. Returns (text, language); text is "" when there were no real words."""
+    samples = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768.0
+    if len(samples) < RATE // 4:
+        return "", "en"
+    model = _model_for_phone()
+    lang = language()
+    if lang == "both":   # same rule as on the PC: English when Whisper is sure, Bulgarian otherwise
+        try:
+            _, _, probs = model.detect_language(samples)
+            lang = "en" if dict(probs).get("en", 0) >= 0.5 else "bg"
+        except Exception:
+            lang = "en"
+    segments, _ = model.transcribe(
+        samples, language=lang, beam_size=5, temperature=[0.0, 0.2, 0.4], condition_on_previous_text=False,
+        vad_filter=True, vad_parameters=dict(min_silence_duration_ms=300), no_speech_threshold=0.7,
+        initial_prompt=PROMPTS[lang])
+    text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
+    text = WAKE_PREFIX.sub("", text).strip(" ,")
+    if re.sub(r"[^\w\s]", "", text).strip().lower() in _PHANTOMS:
+        text = ""
+    log.info("Heard on the phone: %r", text)
+    return text, lang
 
 
 def _rms(chunk: np.ndarray) -> float:

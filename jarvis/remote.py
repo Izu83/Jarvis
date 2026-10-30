@@ -369,6 +369,17 @@ class PhoneChannel:
         self._publish({"kind": "tts", "id": "tts", "req": req,
                        **({"data": base64.b64encode(audio).decode()} if audio else {"error": True})})
 
+    def send_words(self, req: str, pcm_b64: str) -> None:
+        """Voice mode: what the phone recorded, as words (Whisper on this PC, no tokens)."""
+        from . import voice
+        try:
+            pcm_b64 = pcm_b64 or ""
+            text, lang = voice.transcribe_phone(base64.urlsafe_b64decode(pcm_b64 + "=" * (-len(pcm_b64) % 4)))
+            self._publish({"kind": "stt", "id": "stt", "req": req, "text": text, "lang": lang})
+        except Exception as e:
+            log.warning("Couldn't transcribe the phone's recording: %s", e)
+            self._publish({"kind": "stt", "id": "stt", "req": req, "error": True})
+
     def send_art(self, art_id: str) -> None:
         jpeg = media.art(art_id)
         if jpeg:
@@ -590,6 +601,9 @@ class PhoneChannel:
         elif kind == "tts":   # the phone wants a reply read aloud in Jarvis's own voice
             threading.Thread(target=self.send_voice, args=(data.get("req", ""), data.get("text", "")),
                              daemon=True, name="phone-tts").start()
+        elif kind == "stt":   # Voice mode on the phone: you talked, it recorded, Whisper here writes it down
+            threading.Thread(target=self.send_words, args=(data.get("req", ""), data.get("pcm", "")),
+                             daemon=True, name="phone-stt").start()
         elif kind == "answer":
             self._answer(data)
         elif kind == "faceid_add":   # Settings: Face ID for permissions, on

@@ -145,7 +145,7 @@
   .badge-dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--base); }
 
   /* ---------- conversation ---------- */
-  #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 14px) 14px var(--dock-h, 220px); display: flex; flex-direction: column; gap: 3px; }
+  #log { position: fixed; inset: 0; z-index: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(env(safe-area-inset-top) + 54px) 14px var(--dock-h, 220px); display: flex; flex-direction: column; gap: 3px; }
   .home { margin: 0; padding: 8px 2px 8px; display: flex; flex-direction: column; gap: 16px; }
   .hello { display: flex; align-items: center; gap: 14px; padding: 0 4px; }
   .hello .ring { width: 62px; height: 62px; border-radius: 50%; padding: 3px; background: conic-gradient(from 200deg, #5ac8fa, #0a84ff, #bf5af2, #5ac8fa); flex: none; }
@@ -631,13 +631,41 @@
   #callScreen .cbtn { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
   #callScreen .cbtn svg.i { width: 30px; height: 30px; }
   #callScreen .cbtn small { display: block; }
-  #callScreen .cbtn.talk { background: rgba(255,255,255,.16); transition: transform .12s, background .12s; -webkit-user-select: none; user-select: none; touch-action: none; }
-  #callScreen .cbtn.talk.on { background: #30d158; transform: scale(1.12); }
   #callScreen .cbtn.end { background: #ff3b30; }
   #callScreen .cbtn.accept { background: #30d158; }
   #callScreen .clabel { font-size: 13px; color: rgba(255,255,255,.65); margin-top: 8px; }
-  #callScreen .live-only { display: contents; } #callScreen.incoming .live-only { display: none; }
-  #callScreen .in-only { display: none; } #callScreen.incoming .in-only { display: grid; grid-auto-flow: column; gap: 44px; align-items: center; }
+
+  /* ---------- the two main modes: Chat, and Voice (just the orb; everything said is still saved in the chat) ---------- */
+  .modes { position: fixed; z-index: 6; top: calc(env(safe-area-inset-top) + 8px); left: 50%; transform: translateX(-50%); display: flex; gap: 2px; padding: 3px; border-radius: 20px; }
+  .modes button { height: 32px; padding: 0 15px 0 12px; border-radius: 17px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--label2); transition: background .25s, color .25s; }
+  .modes button svg.i { width: 17px; height: 17px; stroke-width: 2.1; }
+  .modes button.on { background: var(--label); color: var(--base); }
+  html.mode-voice .modes { background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+  html.mode-voice .modes button { color: rgba(255,255,255,.62); }
+  html.mode-voice .modes button.on { background: rgba(255,255,255,.92); color: #04070d; }
+  html.mode-voice #log { visibility: hidden; }
+  html.mode-voice .dock .bar, html.mode-voice .dock .cmds, html.mode-voice .dock .attach, html.mode-voice .dock::before { display: none; }
+  #voiceView { position: fixed; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; color: #fff; text-align: center;
+    padding: calc(env(safe-area-inset-top) + 52px) 22px calc(var(--dock-h, 120px) - 4px);
+    background: radial-gradient(80% 55% at 50% 40%, #0a1c2c, #04070d 70%), #04070d; }
+  #voiceView .v-stage { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #orb { width: min(92vw, 50vh, 470px); aspect-ratio: 1; display: block; cursor: pointer; touch-action: manipulation; }
+  .v-status { margin-top: -6px; min-height: 22px; font-size: 17px; font-weight: 600; letter-spacing: -.2px; color: rgba(255,255,255,.9); transition: opacity .3s; }
+  .v-status .cdots { display: inline-flex; gap: 6px; } .v-status .cdots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.75); animation: blink 1.3s infinite; }
+  .v-status .cdots i:nth-child(2) { animation-delay: .18s; } .v-status .cdots i:nth-child(3) { animation-delay: .36s; }
+  .v-caption { margin-top: 10px; max-width: 470px; min-height: 72px; font-size: 17px; line-height: 24px; color: rgba(165,232,255,.75); overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; transition: opacity .3s; }
+  .v-caption.you { color: rgba(255,255,255,.95); }
+  .v-caption.fade { opacity: 0; }
+  #voiceView.nocc .v-caption { visibility: hidden; }
+  .v-controls { display: flex; align-items: flex-start; justify-content: center; gap: 30px; padding-bottom: 6px; }
+  .v-controls > div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,.55); width: 72px; }
+  .v-btn { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: rgba(255,255,255,.78); background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); transition: background .25s, color .25s, transform .15s; }
+  .v-btn.on { color: #03141c; background: #7fe3ff; box-shadow: none; }
+  .v-btn.main { width: 68px; height: 68px; margin-top: -9px; color: #fff; background: rgba(255,255,255,.15); }
+  .v-btn.main svg.i { width: 28px; height: 28px; }
+  #voiceView[data-state="listening"] .v-btn.main, #voiceView[data-state="hearing"] .v-btn.main { color: #03141c; background: #5ad8ff; box-shadow: 0 0 28px -4px #5ad8ff; }
+  #voiceView[data-state="speaking"] .v-btn.main { background: rgba(255,255,255,.22); }
 
   /* permission alert (iOS UIAlertController look) */
   .alert-wrap { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.38); display: grid; place-items: center; padding: 24px; animation: fade .2s both; }
@@ -767,6 +795,9 @@
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 16v-4M11 16V8M15.5 16v-6M20 16V5"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2a1.5 1.5 0 0 0 1.5 1.3h6.2a1.5 1.5 0 0 0 1.5-1.3L17.5 7"/></symbol>
   <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.5h3l4.5-4v13L7 14.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10.5v3"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.6 10.3a2.2 2.2 0 1 0 0 3.4M17 10.3a2.2 2.2 0 1 0 0 3.4"/></symbol>
+  <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 3.5l3 3-3 3"/><path d="M4 11.5v-1a4 4 0 0 1 4-4h12M7 20.5l-3-3 3-3"/><path d="M20 12.5v1a4 4 0 0 1-4 4H4"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"/></symbol>
 </svg>
@@ -795,6 +826,24 @@
 </section>
 
 <main id="log" hidden></main>
+
+<!-- the two main modes -->
+<div class="modes glass" id="modeSwitch" role="tablist" aria-label="Mode" hidden>
+  <button role="tab" id="modeChat" class="on" aria-selected="true"><svg class="i"><use href="#i-chat"/></svg>Chat</button>
+  <button role="tab" id="modeVoice" aria-selected="false"><svg class="i"><use href="#i-wave"/></svg>Voice</button>
+</div>
+<section id="voiceView" data-state="idle" aria-label="Voice" hidden>
+  <div class="v-stage">
+    <canvas id="orb" role="button" aria-label="Talk to Jarvis"></canvas>
+    <div class="v-status" id="vStatus" aria-live="polite"></div>
+    <div class="v-caption" id="vCaption"></div>
+  </div>
+  <div class="v-controls">
+    <div><button class="v-btn press" id="vCC" aria-label="Captions"><svg class="i"><use href="#i-cc"/></svg></button>Captions</div>
+    <button class="v-btn main press" id="vMain" aria-label="Talk"><svg class="i"><use href="#i-mic"/></svg></button>
+    <div><button class="v-btn press" id="vAuto" aria-label="Hands-free"><svg class="i"><use href="#i-loop"/></svg></button>Hands-free</div>
+  </div>
+</section>
 
 <!-- holder for the Control Center widget while it isn't on screen -->
 <div id="park" hidden>
@@ -1114,14 +1163,8 @@
   <div class="cstatus" id="callStatus"></div>
   <div class="ctranscript" id="callTranscript"></div>
   <div class="cactions">
-    <div class="live-only">
-      <div><button class="cbtn talk" id="callTalk" aria-label="Hold to talk"><svg class="i"><use href="#i-mic"/></svg></button><div class="clabel" id="talkLabel">Hold to talk</div></div>
-      <div><button class="cbtn end" id="callEnd" aria-label="End call"><svg class="i"><use href="#i-phone-off"/></svg></button><div class="clabel">End</div></div>
-    </div>
-    <div class="in-only">
-      <div><button class="cbtn end" id="callDecline" aria-label="Decline"><svg class="i"><use href="#i-phone-off"/></svg></button><div class="clabel">Decline</div></div>
-      <div><button class="cbtn accept" id="callAccept" aria-label="Accept"><svg class="i"><use href="#i-phone"/></svg></button><div class="clabel">Accept</div></div>
-    </div>
+    <div><button class="cbtn end" id="callDecline" aria-label="Decline"><svg class="i"><use href="#i-phone-off"/></svg></button><div class="clabel">Decline</div></div>
+    <div><button class="cbtn accept" id="callAccept" aria-label="Accept"><svg class="i"><use href="#i-phone"/></svg></button><div class="clabel">Accept</div></div>
   </div>
 </div>
 
@@ -1155,10 +1198,17 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-30.3";   // bump together with version.json
+const VERSION = "2026-10-30.4";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv22", when: "Oct 30, 2026", title: "Voice mode", notes: [
+    "Two modes at the top: Chat, and Voice. Voice hides the chat and shows just Jarvis: a glowing sphere that breathes while it waits, swells with your voice while you talk, swirls while it works and pulses with every word it says. Everything you say is still saved in the chat.",
+    "Much better listening: your iPhone records you and your PC's Whisper writes it down (the same as “Hey Jarvis”), so it works hands-free, gets app names right and understands Bulgarian. It notices when you've stopped talking by itself.",
+    "Hands-free: after each answer Jarvis listens again, like a real conversation. Say “bye” to stop. Tap the orb while Jarvis is talking to cut in.",
+    "Faster answers out loud: the first sentence starts playing while the rest is still being made.",
+    "Captions show what Jarvis heard and what it's saying; turn them off for just the orb. /voice opens Voice mode, and a call from Jarvis now opens it too.",
+  ] },
   { v: "JNIv21", when: "Oct 30, 2026", title: "Briefing, Nap & Find my file", notes: [
     "Morning briefing: every morning, the weather, your calendar, reminders, email and how your PC is doing, in one message, with no tokens. Settings › Morning briefing sets the time, the city and the calendar; /briefing gets it now.",
     "Nap: the Sleep tile now asks Nap or Sleep. Nap locks your PC and turns the screens off but keeps it reachable, so /wake (or tapping the Napping chip) brings it back from anywhere.",
@@ -1332,7 +1382,11 @@ const shotsCache = new Map();    // screenshot message id -> { url, monitors } (
 function store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
 const icon = (name, cls = "i") => `<svg class="${cls}"><use href="#i-${name}"/></svg>`;
-const b64e = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const b64e = b => {   // in slices: spreading a whole voice recording into one call overflows the stack
+  const u = new Uint8Array(b); let s = "";
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
 const b64d = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 const newId = () => crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
@@ -1470,11 +1524,52 @@ function pickVoice() {
   return voices.find(v => v.lang.startsWith(lang) && /premium|enhanced|siri|samantha|daniel|natural/i.test(v.name))
     || voices.find(v => v.lang.startsWith(lang)) || null;
 }
+// What a reply sounds like read out: no markdown symbols, links or emoji.
+function speakable(text) {
+  return String(text || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, "the link")
+    .replace(/\*\*|__|`|^#+\s*|^\s*[-*•]\s+/gm, "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/\s+\n/g, "\n").replace(/[ \t]+/g, " ").trim().slice(0, 4000);
+}
+// A reply in pieces of a sentence or two: the first is short so it can start playing almost at once.
+function speechParts(text) {
+  // a sentence ends at . ! ? … followed by a space (so "3.5 GB" stays whole) or at the end of a line
+  const sentences = (text.match(/[^\n]+?(?:[.!?…]+["')\]]*(?=\s|$)|$)/gm) || []).map(s => s.trim()).filter(Boolean)
+    .map(s => /[.!?…:;,]["')\]]*$/.test(s) ? s : s + ".");   // a list line gets a pause, not run into the next
+  const parts = [];
+  for (const s of sentences) {
+    const last = parts[parts.length - 1];
+    if (last !== undefined && (last.length < 25 || (parts.length > 1 && last.length + s.length < 260))) parts[parts.length - 1] = last + " " + s;
+    else parts.push(s);
+  }
+  return parts.length > 8 ? [...parts.slice(0, 7), parts.slice(7).join(" ")] : parts;
+}
+// How loud each 1/60 s of a spoken MP3 is (0…1), so the orb can move with the voice.
+async function loudness(bytes) {
+  try {
+    const C = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!C) return null;
+    const ctx = new C(1, 22050, 22050);
+    const buf = await new Promise((ok, no) => { const p = ctx.decodeAudioData(bytes.slice().buffer, ok, no); p?.catch?.(no); });
+    const d = buf.getChannelData(0), step = Math.max(1, Math.round(buf.sampleRate / 60)), env = new Float32Array(Math.ceil(d.length / step));
+    for (let i = 0; i < env.length; i++) {
+      let s = 0; const a = i * step, b = Math.min(d.length, a + step);
+      for (let j = a; j < b; j++) s += d[j] * d[j];
+      env[i] = Math.sqrt(s / Math.max(1, b - a));
+    }
+    const top = [...env].sort((a, b) => a - b)[Math.floor(env.length * .95)] || 1;
+    for (let i = 0; i < env.length; i++) env[i] = Math.min(1, env[i] / top * .9);
+    return env;
+  } catch { return null; }
+}
 // Jarvis's own voice: the PC makes the speech with the same neural voice as its desktop pop-up and sends the MP3.
 // One <audio> element is reused for everything: iOS only lets a page play sound from an element that was first
 // started by a tap, so it's unlocked on the first touch and every later reply can play through it.
 const Voice = {
-  el: new Audio(), pending: new Map(), token: 0, unlocked: false,
+  el: new Audio(), pending: new Map(), token: 0, unlocked: false, halts: [], env: null, n: 0, synth: false,
   unlock() {
     if (this.unlocked) return;
     this.unlocked = true;
@@ -1482,33 +1577,61 @@ const Voice = {
     this.el.play().catch(() => { this.unlocked = false; });
   },
   stop() {
-    this.token++;
+    this.token++; this.env = null; this.synth = false;
+    this.halts.splice(0).forEach(f => f());
     try { this.el.pause(); } catch {}
     try { speechSynthesis?.cancel(); } catch {}
   },
-  // Speak text; onend runs once when it finishes, fails or is stopped by a newer speak().
+  // Speak text; onend runs once when it finishes, fails or is stopped by a newer speak(). The PC makes every
+  // piece at once and the first one plays while the rest are still being made.
   async speak(text, onend = () => {}) {
     this.stop();
-    const token = this.token;
-    let ended = false; const end = () => { if (!ended) { ended = true; onend(); } };
-    const fallback = () => {   // the phone's own voice, only if the PC can't make the audio
-      if (token !== this.token || !window.speechSynthesis) { end(); return; }
-      const u = new SpeechSynthesisUtterance(text); u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
-      u.onend = u.onerror = end; speechSynthesis.speak(u);
-    };
+    const token = this.token, halted = new Promise(r => this.halts.push(r));
+    const parts = speechParts(speakable(text)), audio = parts.map(t => this.fetch(t));
+    for (let i = 0; i < parts.length && token === this.token; i++) {
+      const mp3 = await Promise.race([audio[i], halted]);
+      if (token !== this.token) break;
+      await Promise.race([mp3 ? this.play(mp3, parts[i], token) : this.say(parts[i], token), halted]);
+    }
+    if (token === this.token) this.env = null;
+    onend();
+  },
+  fetch(text) {   // the MP3 (base64) from the PC, or null if it can't make one
     const req = newId();
-    const audio = await new Promise(resolve => {
-      const timer = setTimeout(() => { this.pending.delete(req); resolve(null); }, 12000);
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { this.pending.delete(req); resolve(null); }, 15000);
       this.pending.set(req, d => { clearTimeout(timer); resolve(d); });
       post({ type: "tts", id: newId(), req, text }).catch(() => { clearTimeout(timer); this.pending.delete(req); resolve(null); });
     });
-    if (token !== this.token) { end(); return; }   // stopped while the PC was making it
-    if (!audio) { fallback(); return; }
-    const url = URL.createObjectURL(new Blob([b64bytes(audio)], { type: "audio/mpeg" }));
-    this.el.onended = this.el.onerror = () => { URL.revokeObjectURL(url); if (token === this.token) end(); };
-    this.el.onpause = () => { if (token !== this.token) end(); };
-    this.el.src = url;
-    this.el.play().catch(() => { URL.revokeObjectURL(url); fallback(); });
+  },
+  play(b64, text, token) {
+    return new Promise(resolve => {
+      const bytes = b64bytes(b64), url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })), n = ++this.n;
+      this.env = null;
+      loudness(bytes).then(env => { if (n === this.n && token === this.token) this.env = env; });
+      const done = () => { URL.revokeObjectURL(url); resolve(); };
+      this.el.onended = this.el.onerror = done;
+      this.el.onpause = () => { if (token !== this.token) done(); };
+      this.el.src = url;
+      this.el.play().catch(() => { URL.revokeObjectURL(url); this.say(text, token).then(resolve); });
+    });
+  },
+  say(text, token) {   // the phone's own voice, only if the PC can't make the audio
+    return new Promise(resolve => {
+      if (token !== this.token || !window.speechSynthesis) { resolve(); return; }
+      const u = new SpeechSynthesisUtterance(text); u.voice = pickVoice(); u.lang = u.voice?.lang || navigator.language || "en-US";
+      this.synth = true;
+      u.onend = u.onerror = () => { this.synth = false; resolve(); };
+      speechSynthesis.speak(u);
+    });
+  },
+  level() {   // how loud Jarvis is right now (0…1), for the orb
+    if (!this.el.paused && this.el.currentTime > 0) {
+      if (this.env) return this.env[Math.min(this.env.length - 1, Math.floor(this.el.currentTime * 60))] || 0;
+      const t = performance.now(); return .35 + .3 * Math.sin(t / 95) * Math.sin(t / 260);
+    }
+    if (this.synth) { const t = performance.now(); return .35 + .3 * Math.sin(t / 95) * Math.sin(t / 260); }
+    return 0;
   },
   onAudio(data) { const fn = this.pending.get(data.req); if (fn) { this.pending.delete(data.req); fn(data.error ? null : data.data); } },
 };
@@ -1877,6 +2000,7 @@ function fail(id, msg) {
     if (p.steps?.length) drawSteps(p, true); else p.step?.remove();
     if (p.el) { p.el.className = "bubble jarvis error"; p.el.textContent = msg; }
   }
+  p.onFail?.(msg);
 }
 // No word from the PC within a few seconds of sending usually means the socket died quietly (the phone was asleep).
 // Reconnect and send it again; the PC recognises the repeat, so the command never runs twice.
@@ -1892,7 +2016,7 @@ async function resend(id) {
   }
   p.ackTimer = setTimeout(() => resend(id), 7000);
 }
-async function send(text, tile = null, onReply = null, typed = true) {
+async function send(text, tile = null, onReply = null, typed = true, hooks = {}) {   // hooks: onStep, onFail (voice mode)
   text = text.trim();
   const atts = onReply || tile || !typed ? [] : attachments.slice();   // only typed messages carry attachments
   if (atts.some(a => !a.path && !a.error)) { toast("Still sending your file…", "clip-up", "var(--orange)"); return false; }
@@ -1912,7 +2036,7 @@ async function send(text, tile = null, onReply = null, typed = true) {
   const id = newId();
   const payload = { type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) };
   const step = stepRow("Sending…");
-  track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step, steps: [], status: "Sending…", tile, onReply, payload, timeout: 30000 });
+  track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step, steps: [], status: "Sending…", tile, onReply, ...hooks, payload, timeout: 30000 });
   setAwaiting(id, { chat: chat.id, ts: Date.now() });
   if (tile) tileState(tile, "busy");
   scrollDown();
@@ -2047,6 +2171,7 @@ async function onMessage(text) {
     if (data.kind === "file" && data.data) { data.fid ? receiveFile(data) : addFileCard(data); return; }
     if (data.kind === "msg") { receiveMsg(data); return; }
     if (data.kind === "tts") { Voice.onAudio(data); return; }
+    if (data.kind === "stt") { VoiceMode.onWords(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
     if (data.kind === "ask") { showAsk(data); return; }
@@ -2059,6 +2184,7 @@ async function onMessage(text) {
     clearTimeout(p.timer); clearTimeout(p.ackTimer); p.acked = true;
     if (!data.done) {
       setStep(p, data.text === "On it..." ? "Thinking…" : data.text, data.step_kind || "");
+      p.onStep?.(data.text);
       if (p.card) p.card.querySelector("header span").textContent = data.text;
       p.timer = setTimeout(() => setStep(p, "Still working…"), 60000);
       return;
@@ -2084,7 +2210,7 @@ async function onMessage(text) {
     }
     if (p.onReply) p.onReply(data.text);
     if (p.chatId !== db.current || document.visibilityState !== "visible") { chat.unread = true; saveDb(); updateBadges(); }
-    speakText(data.text);
+    if (!p.onReply) speakText(data.text);   // voice mode speaks its own replies
     if (!$("drawer").hidden) renderSidebar();
 }
 // The answer as it's being written: shown in the reply bubble (with a blinking cursor) until the real one lands.
@@ -2445,7 +2571,7 @@ function slashCommands() {
     { name: "find", alias: ["file", "search"], icon: "search", tint: "#0a84ff", desc: "Find a file and send it here",
       run: () => { text.value = "Send me the "; autosize(); text.focus(); } },
     { name: "health", alias: ["check", "status"], icon: "check", tint: "#30d158", desc: "Is everything working?", run: () => askQuick("health") },
-    { name: "call", alias: [], icon: "phone", tint: "#34c759", desc: "Talk to Jarvis out loud", run: () => Call.open(false) },
+    { name: "voice", alias: ["call", "talk"], icon: "mic", tint: "#30b0c7", desc: "Voice mode: just talk, the chat stays saved", run: () => setMainMode("voice", true) },
     { name: "newmode", alias: ["mode"], icon: "plus", tint: "#8e8e93", desc: "Make a new mode",
       run: () => { text.value = "Create a mode called "; autosize(); text.focus(); } },
   ]);
@@ -3231,76 +3357,19 @@ async function checkForUpdate() {
   } catch {}
 }
 
-// ================= Jarvis call (live two-way voice) =================
+// ================= Jarvis calls you: it rings here, and answering opens Voice mode =================
 const Call = {
-  // live: the call is on. Every delayed callback (speech ending, a late reply, the listen loop) checks it, so
-  // nothing can restart the mic or send words to Jarvis after you hang up.
-  state: "idle", rec: null, recognizing: false, manual: false, opening: "", ringTimer: null, ringCtx: null, live: false, turn: 0,
+  ringTimer: null, ringCtx: null, opening: "",
   open(incoming, opening) {
-    if (this.live) return;
-    this.live = true; this.turn++;
+    if (!incoming) { setMainMode("voice", true); return; }
+    if (!$("callScreen").hidden) return;
     this.opening = opening || "";
-    const el = $("callScreen"); el.hidden = false; el.classList.toggle("incoming", !!incoming); el.dataset.state = "idle";
-    $("callTranscript").textContent = "";
-    if (incoming) { $("callStatus").textContent = "Jarvis is calling…"; this.startRing(); }
-    else this.answer();
+    const el = $("callScreen"); el.hidden = false; el.classList.add("incoming");
+    $("callStatus").textContent = "Jarvis is calling…"; $("callTranscript").textContent = "";
+    this.startRing();
   },
-  answer() {
-    if (!this.live) return;
-    this.stopRing(); $("callScreen").classList.remove("incoming");
-    if (this.opening) this.speak(this.opening, () => this.listen()); else this.listen();
-  },
-  setState(st) {
-    this.state = st; $("callScreen").dataset.state = st;
-    const map = { listening: "Listening…", thinking: "", speaking: "Jarvis", idle: "" };
-    if (st === "thinking") $("callStatus").innerHTML = '<span class="cdots"><i></i><i></i><i></i></span>';
-    else $("callStatus").textContent = map[st] || "";
-  },
-  listen() {
-    if (!this.live) return;
-    if (!Recognition) { this.manual = true; this.setState("idle"); $("callStatus").textContent = "Tap the mic to talk"; return; }
-    this.setState("listening"); $("callTranscript").textContent = "";
-    const rec = this.rec = new Recognition();
-    rec.lang = dictationLang(); rec.interimResults = true; rec.continuous = false;
-    let finalText = "";
-    rec.onresult = e => { let interim = ""; finalText = ""; for (const r of e.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
-    rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { this.manual = true; $("callStatus").textContent = "Allow the microphone to talk"; } };
-    rec.onend = () => { this.recognizing = false; const t = finalText.trim(); if (this.state === "listening" && !this.holding) { if (t) this.ask(t); else if (!this.manual) setTimeout(() => { if (this.state === "listening" && !this.holding) this.listen(); }, 150); } };
-    try { this.recognizing = true; rec.start(); } catch {}
-  },
-  ask(text) {
-    if (!this.live) return;
-    if (/^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye)\b/i.test(text.trim())) {
-      $("callTranscript").textContent = text;
-      this.speak("Bye.", () => this.end()); return;
-    }
-    this.setState("thinking"); $("callTranscript").textContent = text;
-    const turn = this.turn;
-    send(text, null, reply => { if (this.live && turn === this.turn) this.onReply(reply); });
-  },
-  onReply(text) { if (!this.live) return; this.speak(text, () => this.listen()); },
-  speak(text, done) {
-    if (!this.live) return;
-    this.setState("speaking"); $("callTranscript").textContent = text;
-    let fired = false; const finish = () => { if (fired) return; fired = true; clearTimeout(guard); if (this.live) done && done(); };
-    const guard = setTimeout(finish, 14000 + text.split(/\s+/).length * 400);   // never get stuck if playback never ends
-    Voice.speak(text, finish);
-  },
-  abort() { this.recognizing = false; try { if (this.rec) { this.rec.onend = null; this.rec.abort(); } } catch {} this.rec = null; },
-  holdStart(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!this.live) return;
-    if (!Recognition) { $("callStatus").textContent = "Speech isn't available here"; return; }
-    this.abort(); this.holding = true; $("callTalk").classList.add("on"); this.setState("listening"); $("callTranscript").textContent = "";
-    const rec = this.rec = new Recognition();
-    rec.lang = dictationLang(); rec.interimResults = true; rec.continuous = true;
-    let finalText = "";
-    rec.onresult = ev => { let interim = ""; finalText = ""; for (const r of ev.results) r.isFinal ? finalText += r[0].transcript : interim += r[0].transcript; $("callTranscript").textContent = finalText || interim; };
-    rec.onerror = ev => { if (ev.error === "not-allowed" || ev.error === "service-not-allowed") $("callStatus").textContent = "Allow the microphone to talk"; };
-    rec.onend = () => { this.recognizing = false; $("callTalk").classList.remove("on"); const t = (finalText || $("callTranscript").textContent || "").trim(); if (t) this.ask(t); else if (this.state === "listening") this.setState("idle"); };
-    try { this.recognizing = true; rec.start(); } catch {}
-  },
-  holdEnd() { if (!this.holding) return; this.holding = false; $("callTalk").classList.remove("on"); try { this.rec?.stop(); } catch {} },
+  answer() { this.close(); Mic.wake(); setMainMode("voice"); VoiceMode.start(this.opening); },
+  close() { $("callScreen").hidden = true; this.stopRing(); },
   startRing() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)(); this.ringCtx = ctx;
@@ -3310,26 +3379,323 @@ const Call = {
     try { navigator.vibrate?.([500, 300, 500, 300]); } catch {}
   },
   stopRing() { clearInterval(this.ringTimer); this.ringTimer = null; try { this.ringCtx?.close(); } catch {} this.ringCtx = null; },
-  end() {
-    this.live = false; this.turn++; this.holding = false;
-    $("callScreen").hidden = true;   // first, so the screen goes away even if something below throws
-    $("callTalk").classList.remove("on");
-    this.abort();
-    Voice.stop();
-    this.stopRing();
-    this.state = "idle"; $("callScreen").dataset.state = "idle";
+};
+// Decline reacts on finger-up as well as click: iOS sometimes swallows the click
+$("callDecline").addEventListener("click", () => Call.close());
+$("callDecline").addEventListener("pointerup", () => Call.close());
+$("callAccept").onclick = () => Call.answer();
+
+// ================= the orb: a sphere of glowing points and threads that breathes, listens and talks =================
+const Orb = {
+  pts: [], links: [], raf: 0, on: false, t: 0, last: 0, state: "idle", lv: 0, spin: 0, think: 0, dpr: 1,
+  col: [70, 215, 255], source: () => 0,
+  calm: matchMedia("(prefers-reduced-motion: reduce)"),
+  COLORS: { idle: [70, 215, 255], listening: [120, 235, 255], hearing: [150, 245, 255], working: [140, 150, 255],
+            speaking: [70, 232, 238], error: [255, 120, 110] },
+  init() {
+    if (this.pts.length) return;
+    this.cv = $("orb"); this.g = this.cv.getContext("2d");
+    const N = 250, turn = Math.PI * (3 - Math.sqrt(5)), gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * .5;
+    const add = (x, y, z, knot) => {
+      const m = Math.hypot(x, y, z), dust = !knot && Math.random() < .16;   // a few float loose around it
+      this.pts.push({ x: x / m, y: y / m, z: z / m, dust, knot, shell: dust ? 1.1 + Math.random() * .35 : 1, seed: Math.random() * 6.283,
+                      size: .7 + Math.random() * .9, px: 0, py: 0, d: 0 });
+    };
+    for (let i = 0; i < N; i++) {   // evenly spread over a sphere, then nudged so it isn't a neat lattice
+      const y0 = 1 - (i + .5) / N * 2, r = Math.sqrt(1 - y0 * y0), a = turn * i;
+      add(Math.cos(a) * r + (Math.random() - .5) * .16, y0 + (Math.random() - .5) * .16, Math.sin(a) * r + (Math.random() - .5) * .16, false);
+    }
+    for (let c = 0; c < 7; c++) {   // and bright knots where the threads bunch up
+      const cx = gauss(), cy = gauss(), cz = gauss(), m = Math.hypot(cx, cy, cz) || 1;
+      for (let i = 0; i < 24; i++) add(cx / m + gauss() * .5, cy / m + gauss() * .5, cz / m + gauss() * .5, true);
+    }
+    const seen = new Set(), link = (i, j) => { const k = Math.min(i, j) * 1000 + Math.max(i, j); if (!seen.has(k)) { seen.add(k); this.links.push([i, j]); } };
+    this.pts.forEach((p, i) => {   // threads to the nearest neighbours on the shell, and a few long ones across the knots
+      if (p.dust) return;
+      const near = [];
+      this.pts.forEach((q, j) => { if (j !== i && !q.dust) { const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2; if (d < .3) near.push([d, j]); } });
+      near.sort((a, b) => a[0] - b[0]);
+      near.filter(n => n[0] < .07).slice(0, p.knot ? 4 : 3).forEach(([, j]) => link(i, j));
+      if (p.knot && near.length > 8 && Math.random() < .45) link(i, near[8 + Math.floor(Math.random() * (near.length - 8))][1]);
+    });
+    addEventListener("resize", () => this.resize());
+    document.addEventListener("visibilitychange", () => this.run(this.on));
+  },
+  resize() {
+    const w = this.cv.getBoundingClientRect().width; this.dpr = Math.min(2, devicePixelRatio || 1);
+    this.cv.width = this.cv.height = Math.max(200, Math.round(w * this.dpr));
+  },
+  run(on) {
+    this.on = on;
+    const go = on && document.visibilityState === "visible";
+    if (go && !this.raf) { this.resize(); this.last = 0; this.raf = requestAnimationFrame(t => this.frame(t)); }
+    if (!go && this.raf) { cancelAnimationFrame(this.raf); this.raf = 0; }
+  },
+  frame(now) {
+    this.raf = requestAnimationFrame(t => this.frame(t));
+    const dt = this.last ? Math.min(.05, (now - this.last) / 1000) : .016; this.last = now; this.t += dt;
+    const calm = this.calm.matches ? .35 : 1, want = Math.max(0, Math.min(1, this.source() || 0));
+    this.lv += (want - this.lv) * (want > this.lv ? .45 : .1);   // quick to swell, slow to settle
+    this.think += ((this.state === "working" ? 1 : 0) - this.think) * Math.min(1, dt * 3);
+    const speed = { idle: .16, listening: .22, hearing: .26, working: .75, speaking: .3, error: .06 }[this.state] ?? .16;
+    this.spin += dt * (speed + this.lv * .5) * (.4 + .6 * calm);
+    const to = this.COLORS[this.state] || this.COLORS.idle, k = Math.min(1, dt * 3);
+    for (let i = 0; i < 3; i++) this.col[i] += (to[i] - this.col[i]) * k;
+    this.draw(this.lv * calm);
+  },
+  draw(lv) {
+    const g = this.g, W = this.cv.width, c = W / 2, R = W * .3, t = this.t, [r, gr, b] = this.col.map(Math.round);
+    g.globalCompositeOperation = "source-over"; g.clearRect(0, 0, W, W);
+    const glow = g.createRadialGradient(c, c, 0, c, c, R * 1.7);
+    glow.addColorStop(0, `rgba(${r},${gr},${b},${.1 + .22 * lv + .06 * this.think})`);
+    glow.addColorStop(.55, `rgba(${r},${gr},${b},${.035 + .06 * lv})`);
+    glow.addColorStop(1, `rgba(${r},${gr},${b},0)`);
+    g.fillStyle = glow; g.fillRect(0, 0, W, W);
+    const ay = this.spin, ax = .38 + .18 * Math.sin(t * .23), sy = Math.sin(ay), cy = Math.cos(ay), sx = Math.sin(ax), cx = Math.cos(ax);
+    const breath = 1 + .025 * Math.sin(t * 1.25), band = Math.sin(t * 1.6);
+    for (const p of this.pts) {
+      // the shell ripples with the voice; while working, a bright band sweeps up and down it
+      const wave = Math.sin(p.x * 3.1 + t * 2.3) * Math.sin(p.y * 2.7 - t * 1.9 + p.seed * .2) * Math.sin(p.z * 3.3 + t * 1.6);
+      const sweep = this.think * .09 * Math.exp(-((p.y - band) ** 2) * 14);
+      const s = R * p.shell * (breath + lv * (.08 + .3 * wave) + sweep + (p.dust ? .03 * Math.sin(t * .8 + p.seed) : 0));
+      const x = p.x * s, y = p.y * s, z = p.z * s;
+      const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;    // spin
+      const y2 = y * cx - z1 * sx, z2 = y * sx + z1 * cx;   // tilt
+      const f = 3.2 / (3.2 - z2 / R);                       // nearer is bigger
+      p.px = c + x1 * f; p.py = c + y2 * f; p.d = Math.max(0, Math.min(.999, (z2 / R + 1.3) / 2.6));
+    }
+    g.globalCompositeOperation = "lighter";
+    const lines = [[], [], [], []];   // four depth layers, one stroke each
+    for (const [i, j] of this.links) { const a = this.pts[i], q = this.pts[j]; lines[((a.d + q.d) * 2) | 0].push(a, q); }
+    lines.forEach((L, k) => {
+      if (!L.length) return;
+      g.beginPath();
+      for (let n = 0; n < L.length; n += 2) { g.moveTo(L[n].px, L[n].py); g.lineTo(L[n + 1].px, L[n + 1].py); }
+      const a = (.06 + k * .08) * (1 + lv * 1.2);
+      if (k > 1) { g.lineWidth = this.dpr * 2.6; g.strokeStyle = `rgba(${r},${gr},${b},${a * .22})`; g.stroke(); }   // soft glow on the near side
+      g.lineWidth = this.dpr * .7; g.strokeStyle = `rgba(${r},${gr},${b},${a})`; g.stroke();
+    });
+    const dots = [[], [], [], []];
+    for (const p of this.pts) dots[(p.d * 4) | 0].push(p);
+    dots.forEach((L, k) => {
+      g.beginPath();
+      for (const p of L) { const s = this.dpr * p.size * (.8 + k * .45) * (1 + lv * .5); g.rect(p.px - s / 2, p.py - s / 2, s, s); }
+      g.fillStyle = `rgba(${Math.min(255, r + 60)},${Math.min(255, gr + 30)},${b},${.25 + k * .22})`; g.fill();
+    });
   },
 };
-// End/Decline react on finger-up as well as click: iOS sometimes swallows the click while the mic is starting
-for (const id of ["callEnd", "callDecline"]) {
-  $(id).addEventListener("click", () => Call.end());
-  $(id).addEventListener("pointerup", () => Call.end());
+
+// ================= the phone's microphone for voice mode: records one thing you say, notices when you stop =================
+// The words are written down by Whisper on your PC (same as "Hey Jarvis"), which works hands-free on iPhone,
+// knows your app names and understands Bulgarian too. Where recording isn't possible, the phone's dictation is used.
+const Mic = {
+  ctx: null, stream: null, nodes: [], level: 0, stop: null, flush: null,
+  supported: () => !!(navigator.mediaDevices?.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
+  wake() {   // call from a tap: iOS only starts audio from one
+    try {
+      this.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ctx.state !== "running") this.ctx.resume().catch(() => {});
+    } catch {}
+  },
+  tone(freq) {   // a soft tick: "I'm listening" / "got it"
+    try {
+      const ctx = this.ctx; if (!ctx || ctx.state !== "running") return;
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+      o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      o.start(t); o.stop(t + 0.13);
+    } catch {}
+  },
+  // Resolves { pcm } (16 kHz, 16-bit, mono) once you've said something and paused,
+  // or { error: "silent" | "stopped" | "denied" | "failed" }.
+  record({ waitMs = 9000, maxMs = 20000, onSpeech } = {}) {
+    this.stop?.();
+    return new Promise(async resolve => {
+      let done = false, chunks = [], pre = [], preLen = 0, speaking = false, loud = 0, quiet = 0, noise = 0, frames = 0, pos = 0, speechAt = 0;
+      const join = () => { const out = new Int16Array(chunks.reduce((n, c) => n + c.length, 0)); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; } return out; };
+      const finish = res => { if (done) return; done = true; clearTimeout(watchdog); this.close(); resolve(res); };
+      this.stop = () => finish({ error: "stopped" });
+      this.flush = () => finish(speaking ? { pcm: join() } : { error: "silent" });
+      const watchdog = setTimeout(() => { if (!frames) finish({ error: "failed" }); }, 4000);
+      try {
+        this.wake();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+        if (done) { stream.getTracks().forEach(t => t.stop()); return; }
+        this.stream = stream;
+        if (this.ctx.state !== "running") await this.ctx.resume();
+      } catch (e) { finish({ error: e?.name === "NotAllowedError" ? "denied" : "failed" }); return; }
+      const ctx = this.ctx, ratio = ctx.sampleRate / 16000, started = performance.now();
+      const src = ctx.createMediaStreamSource(this.stream), node = ctx.createScriptProcessor(2048, 1, 1), sink = ctx.createGain();
+      sink.gain.value = 0; src.connect(node); node.connect(sink); sink.connect(ctx.destination);
+      this.nodes = [src, node, sink];
+      node.onaudioprocess = e => {
+        if (done) return;
+        const x = e.inputBuffer.getChannelData(0), now = performance.now();
+        let sum = 0; for (let i = 0; i < x.length; i++) sum += x[i] * x[i];
+        const rms = Math.sqrt(sum / x.length);
+        frames++;
+        // the room's own noise level, learnt while you're not talking; speech is well above it
+        noise = frames === 1 ? Math.min(rms, .02) : speaking ? noise : noise * .96 + Math.min(rms, noise * 2) * .04;
+        const on = Math.max(.012, noise * 3), off = Math.max(.008, noise * 1.8);
+        this.level = Math.min(1, Math.max(0, (rms - off * .8) / .1));
+        const out = new Int16Array(Math.ceil(x.length / ratio) + 2); let k = 0;   // down to 16 kHz: average each group
+        for (; pos + ratio <= x.length; pos += ratio) {
+          const i0 = Math.max(0, Math.floor(pos)), i1 = Math.floor(pos + ratio); let a = 0;
+          for (let i = i0; i < i1; i++) a += x[i];
+          out[k++] = Math.max(-1, Math.min(1, a / Math.max(1, i1 - i0))) * 32767;
+        }
+        pos -= x.length;
+        const pcm = out.slice(0, k);
+        if (!speaking) {
+          pre.push(pcm); preLen += pcm.length;
+          while (preLen > 8000 && pre.length > 1) preLen -= pre.shift().length;   // the half second before you started
+          loud = rms > on && frames > 2 ? loud + 1 : 0;
+          if (loud >= 2) { speaking = true; speechAt = now; chunks = pre; onSpeech?.(); }
+          else if (now - started > waitMs) finish({ error: "silent" });
+        } else {
+          chunks.push(pcm);
+          quiet = rms < off ? quiet + x.length / ctx.sampleRate : 0;
+          if (quiet > .9 || now - speechAt > maxMs) finish({ pcm: join() });
+        }
+      };
+    });
+  },
+  close() {   // let go of the mic completely, so Jarvis's voice plays at full volume on iPhone
+    for (const n of this.nodes) try { n.disconnect(); } catch {}
+    if (this.nodes[1]) this.nodes[1].onaudioprocess = null;
+    this.nodes = []; this.level = 0; this.stop = this.flush = null;
+    this.stream?.getTracks().forEach(t => t.stop()); this.stream = null;
+  },
+};
+
+// ================= Voice mode: tap the orb and talk. Jarvis answers out loud; the chat is hidden but keeps every word =================
+const VoiceMode = {
+  on: false, state: "idle", turn: 0, waits: new Map(), rec: null, dictation: false,
+  auto: load("jarvis.voiceAuto") !== "0", cc: load("jarvis.voiceCC") !== "0",
+  BYE: /^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye|довиждане|чао)\b/i,
+  enter(listenNow) {
+    this.on = true; Orb.init(); Orb.run(true); this.renderToggles();
+    if (listenNow) this.listen(); else if (this.state === "idle") this.set("idle", undefined, "");
+  },
+  leave() { this.halt(); this.on = false; Orb.run(false); },
+  halt(state = "idle") {   // stop listening and talking; a command already sent still finishes and lands in the chat
+    this.turn++; Mic.stop?.(); this.stopDictation(); Voice.stop(); this.set(state);
+  },
+  start(opening) {   // a call from Jarvis was answered
+    const turn = ++this.turn;
+    if (opening) this.speak(opening, turn, true); else this.listen();
+  },
+  set(state, status, caption, you = false) {
+    this.state = state; $("voiceView").dataset.state = state;
+    Orb.state = state === "transcribing" || state === "thinking" ? "working" : state;
+    Orb.source = state === "listening" || state === "hearing" ? () => Mic.level : state === "speaking" ? () => Voice.level() : () => 0;
+    const st = $("vStatus");
+    if (status === "…") st.innerHTML = '<span class="cdots"><i></i><i></i><i></i></span>';
+    else st.textContent = status ?? { idle: "Tap the orb to talk", listening: "Listening…", hearing: "Listening…", thinking: "Thinking…" }[state] ?? "";
+    if (caption !== undefined) { $("vCaption").textContent = caption; $("vCaption").classList.toggle("you", you); }
+    const [ic, label] = { idle: ["mic", "Talk"], error: ["mic", "Talk"], hearing: ["up", "Done talking"], speaking: ["stop", "Stop"] }[state] || ["x", "Cancel"];
+    $("vMain").innerHTML = icon(ic); $("vMain").setAttribute("aria-label", label);
+  },
+  renderToggles() {
+    $("vCC").classList.toggle("on", this.cc); $("vAuto").classList.toggle("on", this.auto);
+    $("voiceView").classList.toggle("nocc", !this.cc);
+  },
+  tap() {   // the orb: talk, or cut Jarvis off and talk
+    Mic.wake();
+    if (this.state === "speaking") { this.listen(); return; }
+    this.main();
+  },
+  main() {   // the big button: talk / done talking / cancel / stop
+    Mic.wake();
+    const s = this.state;
+    if (s === "idle" || s === "error") this.listen();
+    else if (s === "hearing") { Mic.flush?.(); try { this.rec?.stop(); } catch {} }
+    else if (s === "transcribing" || s === "thinking") { this.halt(); this.set("idle", undefined, "The answer will be in the chat."); }
+    else this.halt();
+  },
+  async listen(waitMs = 9000) {
+    if (!this.on) return;
+    Voice.stop(); this.stopDictation();
+    const turn = ++this.turn;
+    if (this.dictation || !Mic.supported()) { this.dictate(turn); return; }
+    this.set("listening", undefined, "");
+    Mic.tone(880);
+    const res = await Mic.record({ waitMs, onSpeech: () => { if (turn === this.turn) this.set("hearing"); } });
+    if (turn !== this.turn || !this.on) return;
+    if (res.error === "denied") { this.set("error", "Jarvis can't hear you", "Allow the microphone when your iPhone asks, then tap the orb."); return; }
+    if (res.error === "failed") { this.dictation = true; this.dictate(turn); return; }   // no recording here: use dictation
+    if (res.error) { this.set("idle", undefined, ""); return; }   // nothing said, or stopped
+    Mic.tone(660);
+    this.set("transcribing", "…", "");
+    const words = await this.transcribe(res.pcm);
+    if (turn !== this.turn || !this.on) return;
+    if (words === null) { this.set("error", "Can't reach your PC", "Is Jarvis running? Tap the orb to try again."); return; }
+    if (!words) { if (this.auto) this.listen(7000); else this.set("idle", "Didn't catch that", ""); return; }
+    this.ask(words, turn);
+  },
+  async transcribe(pcm) {   // your recording → words, by Whisper on your PC. null = couldn't reach it
+    if (!(await ensureConnected())) return null;
+    const req = newId();
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { this.waits.delete(req); resolve(null); }, 30000);
+      this.waits.set(req, d => { clearTimeout(timer); resolve(d.error ? null : (d.text || "").trim()); });
+      post({ type: "stt", id: newId(), req, pcm: b64e(pcm.buffer) }).catch(() => { clearTimeout(timer); this.waits.delete(req); resolve(null); });
+    });
+  },
+  onWords(d) { const fn = this.waits.get(d.req); if (fn) { this.waits.delete(d.req); fn(d); } },
+  ask(words, turn) {
+    if (this.BYE.test(words)) { this.set("speaking", "", words, true); this.speak("Bye.", turn, false); return; }
+    this.set("thinking", undefined, words, true);
+    send(words, null, reply => { if (turn === this.turn && this.on) this.speak(reply, turn); }, false, {
+      onStep: s => { if (turn === this.turn && this.state === "thinking" && s && s !== "On it...") $("vStatus").textContent = s; },
+      onFail: msg => { if (turn === this.turn && this.on) this.set("error", "That didn't work", msg); },
+    }).then(ok => { if (ok === false && turn === this.turn) this.set("error", "Can't reach your PC", ""); });
+  },
+  speak(text, turn, listenAfter = this.auto) {
+    this.set("speaking", "", text);
+    Voice.speak(text, () => {
+      if (turn !== this.turn || !this.on) return;
+      if (listenAfter) this.listen(7000); else this.set("idle", undefined, "");
+    });
+  },
+  dictate(turn) {   // the phone's own dictation, where recording isn't possible
+    if (!Recognition) { this.set("error", "Voice isn't available here", "Open Jarvis in Safari on your iPhone."); return; }
+    this.set("listening", undefined, "");
+    const rec = this.rec = new Recognition();
+    rec.lang = dictationLang(); rec.interimResults = true; rec.continuous = false;
+    let said = "";
+    rec.onresult = e => { said = [...e.results].map(r => r[0].transcript).join(""); if (turn === this.turn) this.set("hearing", undefined, said, true); };
+    rec.onerror = e => { if ((e.error === "not-allowed" || e.error === "service-not-allowed") && turn === this.turn) { said = ""; this.set("error", "Jarvis can't hear you", "Allow the microphone, then tap the orb."); } };
+    rec.onend = () => {
+      this.rec = null;
+      if (turn !== this.turn || !this.on || this.state === "error") return;
+      if (said.trim()) this.ask(said.trim(), turn); else this.set("idle", undefined, "");
+    };
+    try { rec.start(); } catch { this.set("idle"); }
+  },
+  stopDictation() { try { if (this.rec) { this.rec.onend = null; this.rec.abort(); } } catch {} this.rec = null; },
+};
+function setMainMode(mode, listenNow = false) {
+  const voice = mode === "voice";
+  store("jarvis.mainMode", voice ? "voice" : "chat");
+  document.documentElement.classList.toggle("mode-voice", voice);
+  $("voiceView").hidden = !voice;
+  for (const [id, on] of [["modeChat", !voice], ["modeVoice", voice]]) { $(id).classList.toggle("on", on); $(id).setAttribute("aria-selected", on); }
+  if (voice) { closeSheets(); VoiceMode.enter(listenNow); } else if (VoiceMode.on) { VoiceMode.leave(); scrollDown(false); }
 }
-$("callAccept").onclick = () => Call.answer();
-const _talk = $("callTalk");
-_talk.addEventListener("pointerdown", e => Call.holdStart(e));
-["pointerup", "pointercancel", "pointerleave"].forEach(ev => _talk.addEventListener(ev, () => Call.holdEnd()));
-_talk.addEventListener("contextmenu", e => e.preventDefault());
+$("modeChat").onclick = () => setMainMode("chat");
+$("modeVoice").onclick = () => { Mic.wake(); setMainMode("voice", true); };
+$("orb").addEventListener("click", () => VoiceMode.tap());
+$("vMain").onclick = () => VoiceMode.main();
+$("vCC").onclick = () => { VoiceMode.cc = !VoiceMode.cc; store("jarvis.voiceCC", VoiceMode.cc ? "1" : "0"); VoiceMode.renderToggles(); toast(VoiceMode.cc ? "Captions on" : "Captions off", "cc"); };
+$("vAuto").onclick = () => {
+  VoiceMode.auto = !VoiceMode.auto; store("jarvis.voiceAuto", VoiceMode.auto ? "1" : "0"); VoiceMode.renderToggles();
+  toast(VoiceMode.auto ? "Hands-free: I'll listen after each answer" : "Hands-free off", "loop");
+};
+// leaving the app stops the mic (iOS would cut it off anyway)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && VoiceMode.on && ["listening", "hearing"].includes(VoiceMode.state)) VoiceMode.halt();
+});
 
 // ================= permission prompts =================
 // Deleting, clearing and running commands on the PC wait for an explicit Allow here. No answer = not allowed.
@@ -3845,7 +4211,7 @@ async function start() {
     try { key = await crypto.subtle.importKey("raw", b64d(cfg.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
     catch { store("jarvis.pairing"); cfg = null; }
   }
-  for (const id of ["log", "dock"]) $(id).hidden = !cfg;
+  for (const id of ["log", "dock", "modeSwitch"]) $(id).hidden = !cfg;
   $("setup").hidden = !!cfg;
   if (!cfg) return;
   $("relayName").textContent = "Direct, encrypted";
@@ -3854,6 +4220,7 @@ async function start() {
   restoreAwaiting();
   renderCmds(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
   connect();
+  setMainMode(load("jarvis.mainMode") === "voice" ? "voice" : "chat");
   if (/[?&]call=1/.test(location.search)) { window.history.replaceState(null, "", location.pathname); setTimeout(() => Call.open(true, ""), 400); }
 }
 applyAppearance(); renderAppearance();   // set the chosen wallpaper/accent before anything shows
