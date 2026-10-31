@@ -1319,7 +1319,7 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.12";   // bump together with version.json
+const VERSION = "2026-10-31.13";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1330,6 +1330,7 @@ const RELEASES = [
   ]},
   { v: "JNIv31", when: "Oct 31, 2026", title: "A real face for the humanoid", notes: [
     "Humanoid Jarvis is now a real human head: the glowing wireframe of a 3D head scan, with neck and shoulders, bright eyes and a jaw that moves as he talks. Head scan: “Infinite, 3D Head Scan” by Lee Perry-Smith (CC BY 3.0).",
+    "Fixed: the inside of the mouth and eye sockets showed through his face, so he looked like a cartoon. Now only the outside is drawn: a normal face.",
   ]},
   { v: "JNIv30", when: "Oct 31, 2026", title: "Humanoid, redrawn like a 3D scan", notes: [
     "Humanoid Jarvis is drawn like a 3D scan now: glowing contour lines wrap around his head, with loops around the face, a calm closed mouth, bright eyes, and a neck and shoulders that fade away. His mouth opens softly as he talks.",
@@ -3705,26 +3706,11 @@ const Orb = {
         pts.push({ x: xyz[i * 3] / 1e4, y: xyz[i * 3 + 1] / 1e4, z: xyz[i * 3 + 2] / 1e4, jaw: w[i * 3] / 255, lip: w[i * 3 + 1] / 255,
                    body: w[i * 3 + 2] / 255, size: .5, seed: Math.random() * 6.283, px: 0, py: 0, d: 0 });
       }
-      // The scan is up to 13 times denser round the mouth, eyes and nostrils than on the cheeks; drawn as it is, those
-      // parts blaze. So the head is cut into small cubes and each keeps only a few threads and one dot, in random order.
-      const CELL = .055, cellOf = (x, y, z) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`;
-      const order = [...Array(ne).keys()];
-      for (let i = ne - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-      // where the scan's dense patches meet the rest, a seam of points joins short threads to long ones; the threads
-      // along that seam draw a hard frame round the mouth and eyes, so they're left out
-      const lo = new Float32Array(nv).fill(9), hi = new Float32Array(nv);
-      for (let k = 0; k < ne; k++) {
-        const a = ends[k * 2], b = ends[k * 2 + 1], p = pts[a], q = pts[b], l = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
-        for (const v of [a, b]) { lo[v] = Math.min(lo[v], l); hi[v] = Math.max(hi[v], l); }
-      }
-      const seam = v => hi[v] > lo[v] * 2.2;
-      const threads = new Map(), dots = new Set(), links = [];
-      for (const k of order) {
-        const a = ends[k * 2], b = ends[k * 2 + 1], p = pts[a], q = pts[b];
-        if (seam(a) && seam(b)) continue;
-        const key = cellOf((p.x + q.x) / 2, (p.y + q.y) / 2, (p.z + q.z) / 2), n = threads.get(key) || 0;
-        if (n < 3) { threads.set(key, n + 1); links.push([a, b]); }
-      }
+      // the full wireframe (head.bin only holds what can be seen from the front); dots: at most one per small cube,
+      // so the denser parts of the scan don't glow brighter than the rest
+      const CELL = .045, cellOf = (x, y, z) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`;
+      const dots = new Set(), links = [];
+      for (let k = 0; k < ne; k++) links.push([ends[k * 2], ends[k * 2 + 1]]);
       for (let i = 0; i < nv; i++) {
         const key = cellOf(pts[i].x, pts[i].y, pts[i].z);
         if (dots.has(key)) pts[i].size = 0; else dots.add(key);

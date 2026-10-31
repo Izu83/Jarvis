@@ -204,8 +204,8 @@ shape; `python -m jarvis.orb` redraws the icons in `docs/`. Everything said in V
 **Humanoid**: the button next to Hands-free swaps the orb for a real human head and shoulders, drawn as a glowing
 wireframe: a 3D head scan, "Infinite, 3D Head Scan" by Lee Perry-Smith (Infinite Realities, www.ir-ltd.net),
 licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via the three.js examples. `tools/make_head.py`
-packs its wireframe into `docs/head.bin` (loaded only when the humanoid is shown); `Orb.buildHead` in
-`docs/index.html` evens out its density and moves the jaw. He looks around, blinks, faces you while you talk, looks up while he
+packs the part of its wireframe you can see from the front into `docs/head.bin` (loaded only when the humanoid
+is shown); `Orb.buildHead` in `docs/index.html` draws it and moves the jaw. He looks around, blinks, faces you while you talk, looks up while he
 thinks, and his jaw and lips move with his own voice. The choice is remembered on each device.
 
 ## Smarter: acting inside apps

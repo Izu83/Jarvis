@@ -4,6 +4,10 @@
 
 The scan: "Infinite, 3D Head Scan" by Lee Perry-Smith (Infinite Realities, www.ir-ltd.net), licensed CC BY 3.0, from
 the three.js examples (examples/models/gltf/LeePerrySmith/LeePerrySmith.glb). Only its wireframe goes into head.bin.
+
+Only what can be seen from the front is kept: the scan has inside surfaces (the mouth, the eye sockets) that a solid
+render hides but a wireframe shows through the face, which made it look like a cartoon. Each vertex is tested with rays
+towards the viewer from the angles the humanoid turns through (takes a couple of minutes).
 """
 import json
 import struct
@@ -48,6 +52,32 @@ def load(path):
     return pos, tri, doc
 
 
+def visible_from_front(pos, tri):
+    """True for each vertex that, from at least one viewing direction, has nothing in front of it."""
+    v0 = pos[tri[:, 0]]
+    e1, e2 = pos[tri[:, 1]] - v0, pos[tri[:, 2]] - v0
+    seen = np.zeros(len(pos), bool)
+    for yaw in (-.6, -.3, 0, .3, .6):
+        for pitch in (-.2, .1):
+            d = np.array([np.sin(yaw) * np.cos(pitch), np.sin(pitch), np.cos(yaw) * np.cos(pitch)])
+            h = np.cross(d, e2)
+            a = np.einsum("ij,ij->i", e1, h)
+            ok = np.abs(a) > 1e-12
+            inv = np.where(ok, 1 / np.where(ok, a, 1), 0)
+            todo = np.where(~seen)[0]
+            for s in range(0, len(todo), 150):   # Moller-Trumbore, 150 rays at a time against every triangle
+                idx = todo[s:s + 150]
+                sv = pos[idx][:, None, :] + d * 1e-4 - v0[None]
+                u = np.einsum("ntj,tj->nt", sv, h) * inv
+                q = np.cross(sv, e1[None])
+                w = np.einsum("ntj,j->nt", q, d) * inv
+                t = np.einsum("ntj,tj->nt", q, e2) * inv
+                hit = ok & (u >= 0) & (w >= 0) & (u + w <= 1) & (t > 2e-3)
+                hit &= ~(tri[None, :, :] == idx[:, None, None]).any(-1)   # its own triangles don't count
+                seen[idx[~hit.any(1)]] = True
+    return seen
+
+
 pos, tri, _ = load(sys.argv[1])
 OUT = sys.argv[2]
 Y_CENTER, SCALE = 1.75, 1 / 2.15   # model units -> head units (the eyes near y 0, the crown near -1)
@@ -61,7 +91,7 @@ for t in tri:
         if k != longest:
             edges.add((min(a, b), max(a, b)))
 edges = np.array(sorted(edges))
-vis = (pos[:, 2] > -1.2) & (pos[:, 1] > -2.8)
+vis = visible_from_front(pos, tri) & (pos[:, 1] > -2.8)
 edges = edges[vis[edges[:, 0]] & vis[edges[:, 1]]]
 used = np.unique(edges)
 remap = -np.ones(len(pos), np.int64)
