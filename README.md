@@ -296,8 +296,10 @@ those folders) goes to the brain, which can search every drive.
 Every morning at `morning_time` (Settings › Morning briefing): the weather, today's calendar, reminders and
 scheduled tasks, unread email and how the PC is doing, in one message, with no tokens. `/briefing`, "brief me" or
 "what's my day look like" gets it any time. Weather comes from Open-Meteo for `weather_city`, or the place your
-internet connection is in when that's empty. The calendar is optional: paste your Google Calendar's *Secret address
-in iCal format* in Settings (kept in `.env` as `CALENDAR_ICS_URL`); repeating events count. "Say it out loud on the
+internet connection is in when that's empty. Calendars are optional, as many as you like (Settings › Morning
+briefing › Calendar): an iPhone calendar's link (Calendar app › Calendars › ⓘ › Public Calendar › Share Link; iCloud
+calendars only) or Google Calendar's *Secret address in iCal format*. They're kept in `.env` as `CALENDAR_ICS_URL`
+(space-separated), merged in time order, and repeating events count. "Say it out loud on the
 PC" (`briefing_speak`) also reads it out on the PC. With humour on, it ends with a line for the day.
 
 ## Evening recap

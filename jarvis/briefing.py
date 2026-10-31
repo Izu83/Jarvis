@@ -2,8 +2,9 @@
 
 - Weather from Open-Meteo (free, no key). The place is "weather_city", or worked out from your internet
   connection when that's empty.
-- Your calendar, if you've given Jarvis your Google Calendar's secret iCal address (.env CALENDAR_ICS_URL,
-  set from the phone). Repeating events count too.
+- Your calendars: iPhone (iCloud) calendars through their share links, or Google Calendar through its secret iCal
+  address, as many as you like (.env CALENDAR_ICS_URL, space-separated, added from the phone: Settings › Morning
+  briefing › Calendar). Repeating events count too.
 - Today's reminders and scheduled tasks, unread email, and how the PC is doing.
 
 Each part is optional: one that can't be reached right now is left out, never guessed. Sent every day at
@@ -20,7 +21,7 @@ import time
 import requests
 
 from . import quips
-from .config import ROOT, secret, settings
+from .config import ROOT, secret, set_secret, settings
 
 log = logging.getLogger("jarvis.briefing")
 
@@ -194,35 +195,56 @@ def forecast(days_ahead: int = 1) -> str | None:
 
 # ---------------------------------------------------------------- calendar
 
+def calendars() -> list[str]:
+    """The calendar links Jarvis reads (iPhone/iCloud share links, Google secret addresses), as https."""
+    return [u for u in secret(ICS_SECRET).split() if u.startswith("https://")]
+
+
 def calendar_set() -> bool:
-    return bool(secret(ICS_SECRET))
+    return bool(calendars())
+
+
+def add_calendar(url: str) -> bool:
+    """Add a calendar link (webcal:// from the iPhone becomes https://). False if it isn't a link."""
+    url = url.strip().replace("webcal://", "https://", 1)
+    if not re.fullmatch(r"https://\S+", url):
+        return False
+    have = calendars()
+    if url not in have:
+        set_secret(ICS_SECRET, " ".join(have + [url]))
+    return True
+
+
+def remove_calendars() -> None:
+    set_secret(ICS_SECRET, "")
 
 
 def events(day: dt.date) -> list[str] | None:
-    """Today's events as "09:30 Dentist" / "All day: Ana's birthday", or None when no calendar is set up or it
-    can't be read."""
-    url = secret(ICS_SECRET)
-    if not url:
+    """The day's events from every calendar, as "09:30 Dentist" / "All day: Ana's birthday", in time order. None when
+    no calendar is set up or none of them can be read; one that can't be read is left out."""
+    urls = calendars()
+    if not urls:
         return None
-    try:
-        import icalendar
-        import recurring_ical_events
-        cal = icalendar.Calendar.from_ical(requests.get(url, timeout=15).content)
-        tz = dt.datetime.now().astimezone().tzinfo
-        start = dt.datetime.combine(day, dt.time.min, tz)
-        found = []
-        for e in recurring_ical_events.of(cal).between(start, start + dt.timedelta(days=1)):
-            when = e.get("DTSTART").dt
-            title = str(e.get("SUMMARY") or "(no title)").strip()
-            if isinstance(when, dt.datetime):
-                when = when.astimezone(tz) if when.tzinfo else when.replace(tzinfo=tz)
-                found.append((1, when.strftime("%H:%M"), f"{when:%H:%M} {title}"))
-            else:
-                found.append((0, "", f"All day: {title}"))
-        return [text for _, _, text in sorted(found)]
-    except Exception:
-        log.info("Couldn't read the calendar.", exc_info=True)
-        return None
+    import icalendar
+    import recurring_ical_events
+    tz = dt.datetime.now().astimezone().tzinfo
+    start = dt.datetime.combine(day, dt.time.min, tz)
+    found, read = set(), 0
+    for url in urls:
+        try:
+            cal = icalendar.Calendar.from_ical(requests.get(url, timeout=15).content)
+            for e in recurring_ical_events.of(cal).between(start, start + dt.timedelta(days=1)):
+                when = e.get("DTSTART").dt
+                title = str(e.get("SUMMARY") or "(no title)").strip()
+                if isinstance(when, dt.datetime):
+                    when = when.astimezone(tz) if when.tzinfo else when.replace(tzinfo=tz)
+                    found.add((1, when.strftime("%H:%M"), f"{when:%H:%M} {title}"))
+                else:
+                    found.add((0, "", f"All day: {title}"))
+            read += 1
+        except Exception:
+            log.info("Couldn't read a calendar (%s…).", url[:40], exc_info=True)
+    return [text for _, _, text in sorted(found)] if read else None   # the same event in two calendars shows once
 
 
 # ---------------------------------------------------------------- reminders, email, PC

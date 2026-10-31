@@ -532,6 +532,10 @@
   .siri-how { padding: 4px 18px 16px; font-size: 15px; line-height: 21px; border-top: .5px solid var(--sep); }
   .siri-how p { margin: 12px 0 8px; }
   .siri-how ol { margin: 0 0 12px; padding-left: 20px; }
+  .siri-how .cal-note { margin: 0 0 10px; font-size: 13px; line-height: 18px; color: var(--label2); }
+  .cal-other { margin: 0 0 12px; font-size: 14px; }
+  .cal-other summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  .cal-other ol { margin: 8px 0 0; }
   .siri-how li { margin: 6px 0; }
   .siri-how code { font-size: 13px; background: var(--fill); border-radius: 6px; padding: 1px 5px; overflow-wrap: anywhere; }
   .siri-copy { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
@@ -1082,14 +1086,23 @@
         <label class="row"><span class="grow">Say it out loud on the PC</span><span class="switch"><input type="checkbox" id="briefSpeak"><span></span></span></label>
         <button class="row" id="briefCal"><span class="grow">Calendar<span class="sub" id="briefCalState"></span></span><svg class="i disclose"><use href="#i-right"/></svg></button>
         <div class="siri-how" id="briefCalHow" hidden>
-          <p>Jarvis reads your Google Calendar through its private address. It stays on your PC.</p>
+          <p>Jarvis reads your iPhone's calendars through a link for each one. The links stay on your PC.</p>
           <ol>
-            <li>On a computer, open <b>Google Calendar</b> › <b>Settings</b> (⚙).</li>
-            <li>Under <b>Settings for my calendars</b>, click your calendar, then <b>Integrate calendar</b>.</li>
-            <li>Copy the <b>Secret address in iCal format</b> and paste it here.</li>
+            <li>On your iPhone, open the <b>Calendar</b> app and tap <b>Calendars</b> at the bottom.</li>
+            <li>Tap <b>ⓘ</b> next to a calendar (like Home or Work).</li>
+            <li>Turn on <b>Public Calendar</b>, tap <b>Share Link…</b> › <b>Copy</b>.</li>
+            <li>Paste it here and tap <b>Add</b>. Do the same for each calendar you want.</li>
           </ol>
-          <input id="briefCalUrl" class="cal-input" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off" autocapitalize="off" spellcheck="false">
-          <div class="siri-copy"><button class="mini press" id="briefCalSave">Save</button><button class="mini press" id="briefCalOff" hidden style="background: var(--fill); color: var(--red); box-shadow: none;">Remove</button></div>
+          <p class="cal-note">Anyone with a calendar's link could see it, so don't share the link. Only iCloud calendars have one; if you don't see Public Calendar, turn on iCloud for Calendars in iPhone Settings › your name › iCloud.</p>
+          <details class="cal-other"><summary>Google Calendar instead?</summary>
+            <ol>
+              <li>On a computer, open <b>Google Calendar</b> › <b>Settings</b> (⚙).</li>
+              <li>Under <b>Settings for my calendars</b>, click your calendar, then <b>Integrate calendar</b>.</li>
+              <li>Copy the <b>Secret address in iCal format</b> and paste it here.</li>
+            </ol>
+          </details>
+          <input id="briefCalUrl" class="cal-input" placeholder="webcal://p…-caldav.icloud.com/published/…" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="siri-copy"><button class="mini press" id="briefCalSave">Add</button><button class="mini press" id="briefCalOff" hidden style="background: var(--fill); color: var(--red); box-shadow: none;">Remove All</button></div>
         </div>
         <button class="row btn" id="briefNow">Send It Now</button>
       </div>
@@ -1319,10 +1332,13 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.13";   // bump together with version.json
+const VERSION = "2026-10-31.14";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv32", when: "Oct 31, 2026", title: "Your iPhone's calendar", notes: [
+    "Connect your iPhone's calendars: Settings › Morning briefing › Calendar shows how to copy each calendar's link from the Calendar app. Add as many as you like; Google Calendar still works too.",
+  ]},
   { v: "JNIv28", when: "Oct 31, 2026", title: "Fewer permission prompts", notes: [
     "Messages and emails go straight out: Jarvis doesn't ask first any more.",
     "Settings › Security › Ask before risky actions: turn it off and Jarvis just does things (commands, deleting, shutting down) without asking.",
@@ -3539,7 +3555,8 @@ function renderBriefing(b) {
   if (document.activeElement !== $("briefTime")) $("briefTime").value = b.time || "08:30";
   if (document.activeElement !== $("briefCity")) $("briefCity").value = b.city || "";
   $("briefPlace").textContent = b.place ? (b.city ? `Found: ${b.place}` : `Auto: ${b.place}`) : (b.city ? "Couldn't find that place" : "");
-  $("briefCalState").textContent = b.calendar ? "Connected" : "Not connected";
+  const n = Number(b.calendar) || 0;
+  $("briefCalState").textContent = n > 1 ? `${n} calendars connected` : n ? "Connected" : "Not connected";
   $("briefCalOff").hidden = !b.calendar;
   if (typeof b.recap === "boolean") $("recapOn").checked = b.recap;
   if (b.recap_time && document.activeElement !== $("recapTime")) $("recapTime").value = b.recap_time;
@@ -3557,11 +3574,11 @@ $("briefCity").onkeydown = e => { if (e.key === "Enter") e.target.blur(); };
 $("briefCal").onclick = () => { $("briefCalHow").hidden = !$("briefCalHow").hidden; };
 $("briefCalSave").onclick = () => {
   const url = $("briefCalUrl").value.trim();
-  if (!/^(https|webcal):\/\/\S+$/.test(url)) { toast("Paste the address that starts with https://", "x", "var(--red)"); return; }
-  briefSet({ calendar: url }, "Calendar connected");
+  if (!/^(https|webcal):\/\/\S+$/.test(url)) { toast("Paste the calendar's link (it starts with webcal:// or https://)", "x", "var(--red)"); return; }
+  briefSet({ calendar: url }, "Calendar added");
   $("briefCalUrl").value = ""; $("briefCalHow").hidden = true;
 };
-$("briefCalOff").onclick = () => { briefSet({ calendar: "" }, "Calendar removed"); $("briefCalHow").hidden = true; };
+$("briefCalOff").onclick = () => { briefSet({ calendar: "" }, "Calendars removed"); $("briefCalHow").hidden = true; };
 $("recapOn").onchange = e => briefSet({ recap: e.target.checked }, e.target.checked ? "Recap on" : "Recap off");
 $("recapTime").onchange = e => e.target.value && briefSet({ recap_time: e.target.value }, `Every evening at ${e.target.value}`);
 $("recapNow").onclick = () => { closeSheets(); askQuick("recap", 45000); toast("Putting your recap together…", "check", "var(--green)"); };

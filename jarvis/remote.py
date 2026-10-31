@@ -286,7 +286,7 @@ class PhoneChannel:
         where = briefing._cache().get("place") or {}
         return {"on": bool(settings.get("briefing", True)), "time": settings.get("morning_time", "08:30"),
                 "speak": bool(settings.get("briefing_speak")), "city": settings.get("weather_city", ""),
-                "place": where.get("name", ""), "calendar": briefing.calendar_set(),
+                "place": where.get("name", ""), "calendar": len(briefing.calendars()),
                 "recap": bool(settings.get("recap", True)), "recap_time": settings.get("recap_time", "21:30")}
 
     def _set_briefing(self, b: dict) -> None:
@@ -304,11 +304,12 @@ class PhoneChannel:
         if isinstance(b.get("city"), str):
             set_setting("weather_city", b["city"].strip()[:60])
             briefing.place()   # look it up now, so the phone can show what it found
-        if isinstance(b.get("calendar"), str):
-            url = b["calendar"].strip()
-            if url and not re.match(r"^(https|webcal)://\S+$", url):
-                return
-            set_secret(briefing.ICS_SECRET, url.replace("webcal://", "https://", 1))
+        if isinstance(b.get("calendar"), str):   # a link adds that calendar; "" removes them all
+            if b["calendar"].strip():
+                if not briefing.add_calendar(b["calendar"]):
+                    return
+            else:
+                briefing.remove_calendars()
         log.info("Morning briefing settings changed from the phone.")
 
     def _later(self, seconds: float, fn, *args) -> None:
