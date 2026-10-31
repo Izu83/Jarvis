@@ -201,8 +201,8 @@ shape; `python -m jarvis.orb` redraws the icons in `docs/`. Everything said in V
 - **Captions** show what Jarvis heard and what he's saying; turn them off for just the orb.
 - `/voice` opens Voice mode, and a call from Jarvis opens it once you answer.
 
-**Humanoid**: the button next to Hands-free swaps the orb for a head and shoulders made of the same glowing
-threads (`Orb.buildHead` in `docs/index.html`). He looks around, blinks, faces you while you talk, looks up while he
+**Humanoid**: the button next to Hands-free swaps the orb for a head and shoulders drawn like a 3D scan: dashed
+contour lines around the head, loops around the face (`Orb.buildHead` in `docs/index.html`). He looks around, blinks, faces you while you talk, looks up while he
 thinks, and his jaw and lips move with his own voice. The choice is remembered on each device.
 
 ## Smarter: acting inside apps
