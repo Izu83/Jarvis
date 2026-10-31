@@ -11,22 +11,52 @@ import os
 import queue
 import tempfile
 import threading
+import time
 
 from .config import settings
 
 log = logging.getLogger("jarvis.speak")
 _queue: "queue.Queue[str]" = queue.Queue()
 _mci = ctypes.windll.winmm.mciSendStringW
+_speaking = threading.Event()   # a reply is being read out right now
+_cut = threading.Event()        # "stop" / "wait": end the one being read out (the worker sees it)
+_gen = [0]                      # bumped by stop(), so a reply still being turned into speech is dropped too
+current = ""                    # what's being read out (so the mic can tell his own voice from yours)
+on_state = lambda speaking: None   # set by __main__: the apps' orb follows the PC's voice
+
+
+def speaking() -> bool:
+    return _speaking.is_set()
+
+
+def stop() -> bool:
+    """Stop talking now: the reply being read out and any queued after it. True if he was talking."""
+    was = _speaking.is_set() or not _queue.empty()
+    while True:
+        try:
+            _queue.get_nowait()
+        except queue.Empty:
+            break
+    _gen[0] += 1
+    if _speaking.is_set():
+        _cut.set()
+    return was
 
 
 def _play_mp3(path: str) -> None:
-    """Play an MP3 synchronously via Windows' built-in MCI (no extra dependency)."""
+    """Play an MP3 via Windows' built-in MCI (no extra dependency), until it ends or stop() cuts it off."""
     _mci("close jarvisvoice", None, 0, None)
-    if _mci(f'open "{path}" type mpegvideo alias jarvisvoice', None, 0, None) == 0:
-        _mci("play jarvisvoice wait", None, 0, None)
-        _mci("close jarvisvoice", None, 0, None)
-    else:
+    if _mci(f'open "{path}" type mpegvideo alias jarvisvoice', None, 0, None) != 0:
         raise OSError("MCI couldn't open the audio")
+    _mci("play jarvisvoice", None, 0, None)
+    status = ctypes.create_unicode_buffer(32)
+    while not _cut.is_set():
+        _mci("status jarvisvoice mode", status, 32, None)
+        if status.value != "playing":
+            break
+        time.sleep(.05)
+    _mci("stop jarvisvoice", None, 0, None)
+    _mci("close jarvisvoice", None, 0, None)
 
 
 # The voices you can pick on the phone (Settings › Jarvis's voice): name, accent, male?
@@ -106,24 +136,48 @@ class _Sapi:
 
 
 def _worker() -> None:
+    global current
     sapi = _Sapi()   # the edge-tts path needs no COM; the SAPI fallback initialises it lazily
     tmp = os.path.join(tempfile.gettempdir(), "jarvis_voice.mp3")
     while True:
         text = _queue.get()
         if not text:
             continue
+        gen = _gen[0]
         spoke = False
         if settings["tts_engine"] == "edge" and _edge_say(text, tmp):
+            if gen != _gen[0]:   # "stop" came while the voice was being made: don't say it at all
+                continue
+            current = text
+            _cut.clear()
+            _speaking.set()
+            _state(True)
             try:
                 _play_mp3(tmp)
                 spoke = True
             except Exception:
                 log.debug("mp3 playback failed; falling back", exc_info=True)
-        if not spoke:
+            finally:
+                _speaking.clear()
+                if _cut.is_set():
+                    log.info("Stopped talking.")
+                    spoke = True   # cut off on purpose: don't fall back to the other voice
+                _cut.clear()
+                current = ""
+                if _queue.empty():
+                    _state(False)
+        if not spoke and gen == _gen[0]:
             try:
                 sapi.say(text)
             except Exception:
                 log.exception("TTS failed")
+
+
+def _state(talking: bool) -> None:
+    try:
+        on_state(talking)
+    except Exception:
+        log.debug("on_state failed", exc_info=True)
 
 
 def start() -> None:

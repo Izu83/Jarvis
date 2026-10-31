@@ -204,9 +204,11 @@ shape; `python -m jarvis.orb` redraws the icons in `docs/`. Everything said in V
   still being made, so he starts talking sooner.
 - **Words as you talk**: while you speak, the phone sends what it has so far every 0.8 s and the PC writes back a
   quick rough version, so the caption fills in live; the careful version follows when you stop.
-- **Interrupt by voice** (Settings › Voice mode, on by default): while Jarvis talks, say "stop", "wait" or "hold on"
-  and he stops and listens; "Jarvis, open Chrome" stops him and does that straight away. Only a phrase that starts
-  that way counts, so his own voice coming back through the mic doesn't stop him. The mic stays on while he talks,
+- **Interrupt by voice** (Settings › Voice mode, on by default): while Jarvis talks, say "стоп" / "stop" and he
+  goes quiet, or "чакай" / "wait" / "hold on" and he goes quiet and listens; "Jarvis, open Chrome" stops him and does
+  that straight away. Only a phrase that starts that way counts, so his own voice coming back through the mic doesn't
+  stop him. The same works on the PC without "Hey Jarvis" (`voice.py`: what you say over his voice is checked, and
+  words that are just what he's saying are ignored), and "Hey Jarvis" while he talks cuts him off too. The mic stays on while he talks,
   so on some iPhones he sounds a little quieter; switch it off if that bothers you.
 - **Jarvis's voice** (Settings › Jarvis's voice): Ryan (a British man, like the films, the default), Thomas,
   Andrew, Sonia or Aria; tap one to hear it. It's used on the PC too. Bulgarian replies get a Bulgarian voice of
@@ -363,9 +365,23 @@ shutting down just happen. The hard limits stay: system and Windows folders stil
 ## Bulgarian
 
 Settings › **Language you speak**: English, Български or Both (`voice_language` in `config.json`). Bulgarian uses the
-multilingual Whisper model (`whisper_model_multi`, "small", downloaded once to `.brain/whisper`); in Both, each
+multilingual Whisper model (`whisper_model_multi`, "large-v3-turbo", downloaded once to `.brain/whisper`), on the
+graphics card through NVIDIA's pip libraries (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`). "small" heard sounds rather
+than words ("Кой сити" for "Кой си ти"). Without a usable graphics card (or `whisper_device: "cpu"`) it falls back to
+"small" on the CPU. In Both, each
 command counts as English only when Whisper is sure it's English, otherwise Bulgarian. Replies written in Cyrillic
 are spoken with `edge_voice_bg` (bg-BG-KalinaNeural). Phone dictation follows the same setting.
+
+## Where you are
+
+Settings › Security › **Share where I am** (on by default): the phone, or the desktop app, sends its GPS position with
+each command, and `jarvis/location.py` adds a line for the model with the street address (from OpenStreetMap's
+Nominatim, looked up once per spot) and the coordinates, so "near me", "how far is…" and "the weather here" mean where
+you really are. Spoken to the PC's own mic, it's the desktop app's position, or the town your internet connection is
+in. Positions stay in memory, never on disk.
+
+When you say "Hey Jarvis" to the PC, the orb (or the humanoid) in the apps' Voice mode follows it: listening, your
+words, thinking, speaking.
 
 ## Self-check
 
@@ -496,6 +512,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/location.py` | Where you are: the device's GPS position as an address, for the model |
 | `jarvis/router.py`, `cloud.py` | Picking the model for each message; Gemini, ChatGPT and Grok through their APIs |
 | `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |
 | `jarvis/orb.py` | The Jarvis orb: the icons, the tray icon and the pop-up's live orb |

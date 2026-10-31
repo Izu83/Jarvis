@@ -99,7 +99,8 @@ DEFAULTS = {
     # Which language you talk to Jarvis in: "en", "bg" (Bulgarian) or "both". Bulgarian uses the multilingual
     # whisper_model_multi (a ~480 MB download the first time, kept in .brain/whisper).
     "voice_language": "en",
-    "whisper_model_multi": "small",
+    "whisper_model_multi": "large-v3-turbo",
+    "whisper_device": "auto",   # "auto" = the graphics card when it can be used, "cpu" = never
     "speak_replies": True,
     "speak_on_shortcut": True,  # speak the reply aloud when you start a command with the Ctrl+Alt+J shortcut
     # Voice: "edge" = Microsoft's free natural neural voices (online, no key); "windows" = the built-in offline voice.

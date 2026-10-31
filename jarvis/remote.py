@@ -406,6 +406,11 @@ class PhoneChannel:
         except Exception as e:
             log.warning("Live screen %s failed: %s", act, e)
 
+    def pc_voice(self, state: str, text: str = "") -> None:
+        """What the PC's own voice is doing ("Hey Jarvis" on the PC): the apps' orb in Voice mode follows it."""
+        if self.clients:
+            self._publish({"kind": "pcvoice", "id": "pcvoice", "state": state, "text": text[:200]})
+
     def send_voice(self, req: str, text: str, voice: str | None = None) -> None:
         """Speak text with the PC pop-up's neural voice and send the MP3 to the phone (no tokens). voice: try
         another of speak.VOICES (Settings › Jarvis's voice plays a sample)."""
@@ -835,7 +840,9 @@ class PhoneChannel:
             action = data.get("action", "toggle")
             self.reply(msg_id, {"start": gesture.start, "stop": gesture.stop, "toggle": gesture.toggle}[action]())
         elif data.get("text"):
-            log.info("Phone: %r", data["text"])
+            log.info("%s: %r", "Desktop app" if data.get("_desktop") else "Phone", data["text"])
+            from . import location
+            location.update(data.get("where"), "desktop" if data.get("_desktop") else "phone", msg_id)
             self.last_chat = data.get("chat") or self.last_chat
             self.reply(msg_id, "On it...", done=False)
             text = data["text"]

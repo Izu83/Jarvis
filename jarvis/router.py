@@ -36,7 +36,9 @@ X = re.compile(r"(\btwitter\b|\btweets?\b|\bx\.com\b|on x\b|\belon\b|\bgrok\b)",
 
 
 def kind(command: str) -> str:
-    c = command
+    if "[the user attached these files" in command.lower():   # photos and documents: a model that can see them
+        return "sight"
+    c = command.split("\n\n[")[0]   # what the user said, not the notes added to it (files, where they are)
     if X.search(c):
         return "x"
     if SIGHT.search(c):

@@ -307,6 +307,8 @@ def main() -> None:
                msg_id: str | None = None, partial=None) -> None:
         """Queue a command. `partial` (optional) gets the answer's text as it's written, for the phone."""
         busy_with = working["text"]
+        if stopping.is_stop_phrase(text) and speak.stop() and not busy_with:   # "Jarvis, stop" while he talks
+            return
         if busy_with and stopping.is_stop_phrase(text):   # "Jarvis, stop" mid-task: don't queue it, stop
             stop_command()
             if reply:
@@ -348,7 +350,9 @@ def main() -> None:
                 if answer is not None:
                     log.info("(handled locally, no tokens used)")
                 elif settings["use_claude"] or settings["brain"] == "hermes":   # -> the picked models (router.py)
-                    answer = brain.handle(text, chat=chat, recent=recent, progress=step)
+                    from . import location   # where you are, from the device you're talking on
+                    answer = brain.handle(text + location.note(via, msg_id or ""), chat=chat, recent=recent,
+                                          progress=step)
                     thinking = getattr(brain, "last_thinking", "") or ""
                 else:                                          # Claude is switched off: stay free
                     answer = ("I didn't catch that one, and every model is switched off. "
@@ -427,9 +431,31 @@ def main() -> None:
         if settings["overlay_enabled"]:
             overlay.start()
 
+        # the apps' orb (Voice mode) follows the PC's voice: listening when you say "Hey Jarvis", hearing your words,
+        # working, then speaking
+        def pc_voice(state: str, text: str = "") -> None:
+            ph = _bridge["phone"]
+            if ph:
+                ph.pc_voice(state, text)
+
+        def heard(text: str) -> None:
+            overlay.partial(text)
+            pc_voice("hearing", text)
+
+        def woke() -> None:
+            overlay.show()
+            pc_voice("listening")
+
+        def idle() -> None:
+            overlay.hide()
+            pc_voice("idle")
+
+        speak.on_state = lambda talking: pc_voice("speaking" if talking else "idle")
+
         def voice_command(text: str, source: str = "wake") -> None:
             overlay.partial(text)   # show the finished command in the pop-up
             overlay.thinking()
+            pc_voice("working", text)
             # Speak the reply unless the user turned off speaking for the Ctrl+Alt+J shortcut.
             speak_this = settings["speak_replies"] and (source != "hotkey" or settings["speak_on_shortcut"])
 
@@ -437,12 +463,14 @@ def main() -> None:
                 overlay.reply(answer)
                 if speak_this:
                     speak.say(answer)
+                else:
+                    pc_voice("idle")
 
             # show each step in the pop-up while it works, so it never just sits there
             submit(text, reply=reply, via="pc", progress=lambda msg, kind="": overlay.step(msg))
 
-        listener = VoiceListener(voice_command, on_wake=overlay.show,
-                                 on_partial=overlay.partial, on_idle=overlay.hide)
+        listener = VoiceListener(voice_command, on_wake=woke, on_partial=heard, on_idle=idle)
+        listener.on_barge = lambda kind, rest: idle() if kind == "stop" else None
         threading.Thread(target=listener.run, daemon=True, name="voice").start()
 
         from . import hotkey   # a keyboard shortcut (Ctrl+Alt+J) that starts/stops listening without the wake word

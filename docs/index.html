@@ -1183,6 +1183,7 @@
       <div class="group-foot">For “Hey Jarvis” on your PC and dictation here. Replies in Bulgarian are read in a Bulgarian voice either way.</div>
       <div class="group-title">Security</div>
       <div class="group">
+        <label class="row"><span class="grow">Share where I am<span class="sub">Jarvis knows your exact location when you talk to him from this device (GPS), for “near me”, distances and the weather here</span></span><span class="switch"><input type="checkbox" id="geoToggle"><span></span></span></label>
         <label class="row"><span class="grow">Ask before risky actions<span class="sub">Running commands, deleting, overwriting and shutting down wait for your Allow. Off: Jarvis just does them</span></span><span class="switch"><input type="checkbox" id="askToggle"><span></span></span></label>
         <label class="row"><span class="grow">Face ID for permissions<span class="sub" id="faceidSub">Deleting, running commands and shutting down need your face before they're allowed</span></span><span class="switch"><input type="checkbox" id="faceidToggle"><span></span></span></label>
       </div>
@@ -1332,10 +1333,15 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.16";   // bump together with version.json
+const VERSION = "2026-10-31.17";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv35", when: "Oct 31, 2026", title: "Stop, wait, and the orb wakes up", notes: [
+    "While Jarvis is talking, say “Стоп” / “Stop” and he goes quiet, or “Чакай” / “Wait” and he goes quiet and listens. On your PC too, no “Hey Jarvis” needed.",
+    "Saying “Hey Jarvis” to your PC lights up the orb (or the humanoid) in Voice mode: listening, your words, thinking, speaking.",
+    "Jarvis knows where you are: your exact location from the device you're talking on (Settings › Security › Share where I am).",
+  ]},
   { v: "JNIv34", when: "Oct 31, 2026", title: "Gemini, free", notes: [
     "Gemini now runs on a free Google AI Studio key (Google no longer lets personal accounts use the Gemini CLI). On the PC: run.bat --keys and paste the key from aistudio.google.com/apikey. It answers anything current with Google Search.",
   ]},
@@ -1966,6 +1972,49 @@ function renderChat() {
   else scrollDown(false);
 }
 
+// ================= where you are (Settings › Security › Share where I am) =================
+// This device's position goes with each command, so Jarvis knows where you are when you talk to him from here
+// (jarvis/location.py turns it into an address). Watched only while the app is open.
+const Geo = {
+  on: load("jarvis.geo") !== "0", last: null, watch: null,
+  start() {
+    if (!this.on || this.watch !== null || !navigator.geolocation) return;
+    this.watch = navigator.geolocation.watchPosition(
+      p => { this.last = { lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy), ts: Date.now() }; },
+      e => { if (e.code === 1) { this.stop(); } },   // not allowed: ask again only if switched back on
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 30000 });
+  },
+  stop() { if (this.watch !== null) navigator.geolocation.clearWatch(this.watch); this.watch = null; },
+  get() { return this.on && this.last && Date.now() - this.last.ts < 15 * 60000 ? { lat: this.last.lat, lon: this.last.lon, acc: this.last.acc } : null; },
+};
+$("geoToggle").checked = Geo.on;
+$("geoToggle").onchange = e => {
+  Geo.on = e.target.checked; store("jarvis.geo", Geo.on ? "1" : "0");
+  if (Geo.on) { Geo.start(); toast("Jarvis will know where you are", "pin"); } else { Geo.stop(); Geo.last = null; toast("Location off", "pin"); }
+};
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Geo.watch === null && Geo.last) Geo.start(); });
+
+// ================= the PC's own voice drives the orb =================
+// "Hey Jarvis" said to the PC lights up the orb (or the humanoid) in Voice mode here: listening, your words as you say
+// them, working, then speaking. Only while this device isn't in a conversation of its own.
+const PcVoice = {
+  state: "idle", t: 0,
+  free() { return VoiceMode.on && ["idle", "error"].includes(VoiceMode.state); },
+  on(d) {
+    this.state = d.state;
+    if (!this.free()) return;
+    if (d.state === "idle") { VoiceMode.set("idle"); return; }
+    const look = d.state === "working" ? "working" : d.state;
+    Orb.setState(look);
+    // no audio of the PC's voice here, so the orb moves to a gentle made-up level while the PC talks
+    Orb.source = d.state === "speaking" ? () => .35 + .25 * Math.sin(performance.now() / 140) * Math.sin(performance.now() / 370)
+      : d.state === "hearing" ? () => .3 + .2 * Math.sin(performance.now() / 120) : () => 0;
+    $("voiceView").dataset.state = d.state === "working" ? "thinking" : d.state;
+    $("vStatus").textContent = { listening: "Listening on your PC…", hearing: "Listening on your PC…", working: "Thinking…", speaking: "Speaking on your PC" }[d.state] || "";
+    if (d.text && VoiceMode.cc) { $("vCaption").textContent = d.text; $("vCaption").classList.toggle("you", d.state !== "speaking"); }
+  },
+};
+
 // ================= the model picker =================
 // Ticks, any mix (at least one). For each command the PC picks the best ticked model for the job that costs the least
 // (jarvis/router.py): your Claude plan and free Gemini first (Gemini for anything current and everyday questions,
@@ -2351,7 +2400,8 @@ async function send(text, tile = null, onReply = null, typed = true, hooks = {})
                                      : "(No message, just this attachment: look at it and respond.)";
   setChatTitle(chat);
   const id = newId();
-  const payload = { type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path) };
+  Geo.start();   // first time: asks to use the location (from this tap)
+  const payload = { type: "cmd", text, id, chat: chat.id, recent, files: ready.map(a => a.path), where: Geo.get() };
   const step = stepRow("Sending…");
   track(id, { chatId: chat.id, kind: "cmd", el: bubble(null, "jarvis"), step, steps: [], status: "Sending…", tile, onReply, ...hooks, payload, timeout: 30000 });
   setAwaiting(id, { chat: chat.id, ts: Date.now() });
@@ -2491,6 +2541,7 @@ async function onMessage(text) {
     if (data.kind === "tts") { Voice.onAudio(data); return; }
     if (data.kind === "stt") { VoiceMode.onWords(data); return; }
     if (data.kind === "stt_partial") { VoiceMode.onPartial(data); return; }
+    if (data.kind === "pcvoice") { PcVoice.on(data); return; }
     if (data.kind === "warn") { showWarning(data); return; }
     if (data.kind === "call") { Call.open(true, data.text); return; }
     if (data.kind === "ask") { showAsk(data); return; }
@@ -4080,8 +4131,10 @@ const Mic = {
 const VoiceMode = {
   on: false, state: "idle", turn: 0, waits: new Map(), rec: null, dictation: false, liveReq: "",
   auto: load("jarvis.voiceAuto") !== "0", cc: load("jarvis.voiceCC") !== "0", barge: load("jarvis.barge") !== "0",
-  // cutting Jarvis off by voice: "stop", "wait", "Jarvis, …" (what follows "Jarvis" is a new command)
-  CUT: /^[\s,.!?-]*(hey\s+)?(jarvis|stop|wait|hold on|hang on|enough|shut up|pause|quiet|cancel|never ?mind|спри|чакай|стоп|джарвис)(?=$|[\s,.!?-])[\s,.!?-]*/i,
+  // cutting Jarvis off by voice: "stop" / "стоп" and he goes quiet; "wait" / "чакай" or "Jarvis, …" and he goes quiet
+  // and listens (what follows "Jarvis" is a new command)
+  CUT: /^[\s,.!?-]*(hey\s+)?(jarvis|stop|wait|hold on|hang on|enough|shut up|pause|quiet|cancel|never ?mind|спри|чакай|изчакай|момент|стоп|стига|млъкни|тихо|джарвис)(?=$|[\s,.!?-])[\s,.!?-]*/i,
+  QUIET: /^(stop|enough|shut up|quiet|cancel|never ?mind|спри|стоп|стига|млъкни|тихо)$/i,
   BYE: /^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye|довиждане|чао)(?=$|[\s,.!?-])/i,
   enter(listenNow) {
     this.on = true; Orb.init(); Orb.run(true); this.renderToggles();
@@ -4187,7 +4240,8 @@ const VoiceMode = {
       const rest = said.slice(cut[0].length).trim();
       Voice.stop();
       if (rest.split(/\s+/).length >= 2) this.ask(rest, ++this.turn);   // "Jarvis, open Chrome": straight on to that
-      else this.listen();
+      else if (this.QUIET.test(cut[2])) { this.turn++; Mic.release(); this.set("idle", "Stopped"); }   // "stop": just quiet
+      else this.listen();   // "wait": quiet, and listening for what you say next
       return;
     }
   },

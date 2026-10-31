@@ -6,6 +6,7 @@ import re
 import threading
 import time
 import winsound
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
@@ -16,12 +17,13 @@ from .config import ROOT, set_setting, settings
 log = logging.getLogger("jarvis.voice")
 
 # Which languages you speak to Jarvis in (config "voice_language", also in the phone's Settings): "en", "bg", or
-# "both" (each command is checked for English vs Bulgarian first). Bulgarian needs a multilingual Whisper model,
-# "small" by default, kept on this drive (.brain/whisper) since C: is nearly full.
+# "both" (each command is checked for English vs Bulgarian first). Bulgarian needs a multilingual Whisper model:
+# "large-v3-turbo" on the graphics card (it hears Bulgarian as words: "Кой си ти", not "Кой сити"), kept on this
+# drive (.brain/whisper) since C: is nearly full. Without a usable graphics card it falls back to "small" on the CPU.
 LANGUAGES = ("en", "bg", "both")
 PROMPTS = {"en": "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Discord, Chrome. Put them on monitor 3. "
                  "What's the weather in Botevgrad?",
-           "bg": "Хей Джарвис, отвори Spotify, Discord и Chrome. Сложи ги на монитор 3."}
+           "bg": "Хей Джарвис, кой си ти? Колко е часът? Отвори Spotify, Discord и Chrome. Сложи ги на левия монитор."}
 
 RATE = 16000
 CHUNK = 1280  # 80 ms, the frame size openWakeWord expects
@@ -30,6 +32,13 @@ PRE_ROLL_CHUNKS = 22  # keep ~1.8 s before the wake word so words right after it
 # Vocabulary hint so Whisper spells app names right
 WHISPER_PROMPT = PROMPTS["en"]
 WAKE_PREFIX = re.compile(r"^\W*(hey|hi|ok|okay|хей|ей)?\W*(jarvis|jervis|javis|джарвис|джарвиз)\W*", re.IGNORECASE)
+# While he's talking, you can cut in without the wake word: "стоп" / "stop" makes him go quiet, "чакай" / "wait" makes
+# him go quiet and listen ("Jarvis, ..." too, and what follows it is a new command). Whisper may write the Bulgarian
+# words in Latin letters when it's set to English, so those spellings count as well.
+STOP_WORDS = re.compile(r"^\W*(hey\W+)?(jarvis\W+)?(stop|enough|shut up|quiet|cancel|never ?mind|стоп|спри|"
+                        r"стига|млъкни|тихо|достатъчно|spri|stiga)(?=$|\W)", re.IGNORECASE)
+WAIT_WORDS = re.compile(r"^\W*(hey\W+)?(wait|hold on|hang on|pause|one moment|jarvis|джарвис|чакай|изчакай|момент|"
+                        r"chakai|chakay|chakaj)(?=$|\W)\W*", re.IGNORECASE)
 
 
 _listeners: list = []
@@ -53,6 +62,45 @@ def model_for(lang: str) -> str:
         return settings["whisper_model"]
     name = settings.get("whisper_model_multi", "small")
     return name[:-3] if name.endswith(".en") else name
+
+
+def _cuda_ready() -> bool:
+    """Can Whisper run on the graphics card? NVIDIA's libraries come from pip (nvidia-cublas-cu12, nvidia-cudnn-cu12)
+    and have to be on the DLL search path before CTranslate2 loads them."""
+    if settings.get("whisper_device", "auto") == "cpu":
+        return False
+    import os
+    import sys
+    base = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+    for sub in ("cublas", "cudnn", "cuda_runtime", "cuda_nvrtc"):
+        d = base / sub / "bin"
+        if d.is_dir() and str(d) not in os.environ.get("PATH", ""):
+            os.add_dll_directory(str(d))
+            os.environ["PATH"] = str(d) + os.pathsep + os.environ.get("PATH", "")
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+def load_model(name: str):
+    """A Whisper model: on the graphics card when it can be, otherwise on the CPU (and "small" for a big multilingual
+    one, which would be far too slow there)."""
+    from faster_whisper import WhisperModel
+    root = None if name.endswith(".en") else str(ROOT / ".brain" / "whisper")
+    if _cuda_ready():
+        try:
+            model = WhisperModel(name, device="cuda", compute_type="int8_float16", download_root=root)
+            import numpy as _np
+            list(model.transcribe(_np.zeros(RATE, _np.float32))[0])   # the CUDA libraries load here, not above
+            log.info("Whisper '%s' is on the graphics card.", name)
+            return model
+        except Exception as e:
+            log.warning("Whisper can't use the graphics card (%s); using the CPU.", str(e)[:200])
+    if not name.endswith(".en") and name.startswith(("large", "medium")):
+        name = "small"
+    return WhisperModel(name, device="cpu", compute_type="int8", download_root=root)
 
 
 def _beep(freq: int) -> None:
@@ -95,6 +143,10 @@ class VoiceListener:
         self._reopen = threading.Event()   # re-open the audio stream (the mic was changed)
         self.loaded_for, self.last_lang = None, "en"
         self.skip = 0   # samples of pre-roll (with the wake word) at the start of the recording
+        self.on_barge = None   # (kind, rest): "stop" / "wait" said while he was talking (set by __main__)
+        self._burst: list[np.ndarray] = []   # what you're saying over his voice, being collected
+        self._burst_quiet = 0.0
+        self._barge_busy = False
         _listeners.append(self)
 
     def trigger(self) -> None:
@@ -125,14 +177,11 @@ class VoiceListener:
 
     def _load_whisper(self) -> None:
         """(Re)load Whisper for the current voice language. Called again when the language changes."""
-        from faster_whisper import WhisperModel
         lang = language()
         name = model_for(lang)
         log.info("Loading Whisper '%s' for %s (first run downloads it)...", name,
                  {"en": "English", "bg": "Bulgarian", "both": "English and Bulgarian"}[lang])
-        # the English models are already in the usual cache; new multilingual ones go to D:, C: is nearly full
-        root = None if name.endswith(".en") else str(ROOT / ".brain" / "whisper")
-        self.whisper = WhisperModel(name, device="cpu", compute_type="int8", download_root=root)
+        self.whisper = load_model(name)
         self.loaded_for = lang
         self.last_lang = "bg" if lang == "bg" else "en"
 
@@ -179,12 +228,19 @@ class VoiceListener:
             except queue.Empty:
                 continue
             recent.append(chunk)
+            from . import speak
+            if speak.speaking():
+                self._barge(chunk, recent)
+            elif self._burst:
+                self._burst, self._burst_quiet = [], 0.0
             scores = self.wake.predict(chunk)
             manual = self._manual.is_set()
             if not manual and max(scores.values()) < threshold:
                 continue
             self._manual.clear()
             source = "hotkey" if manual else "wake"
+            if speak.stop():   # "Hey Jarvis" while he's talking: he stops and listens
+                log.info("Cut in with the wake word.")
             _beep(880)
             if self.on_wake:
                 try: self.on_wake()
@@ -214,6 +270,56 @@ class VoiceListener:
                 if self.on_idle:
                     try: self.on_idle()
                     except Exception: pass
+
+    def _barge(self, chunk: np.ndarray, recent) -> None:
+        """He's talking: collect what's louder than the room as one burst, and when it ends (or gets long) check it
+        for "stop" / "wait" off-thread. His own voice comes back through the mic too, so a burst whose words are just
+        what he's saying doesn't count."""
+        step = CHUNK / RATE
+        level = max(float(np.percentile([_rms(c) for c in recent], 20)) * 2.2, 280.0)
+        if _rms(chunk) > level:
+            self._burst.append(chunk)
+            self._burst_quiet = 0.0
+        elif self._burst:
+            self._burst.append(chunk)
+            self._burst_quiet += step
+        if self._burst and (self._burst_quiet >= .45 or len(self._burst) * step >= 2.5):
+            audio, self._burst, self._burst_quiet = np.concatenate(self._burst), [], 0.0
+            if not self._barge_busy and len(audio) > RATE // 4:
+                self._barge_busy = True
+                threading.Thread(target=self._check_barge, args=(audio,), daemon=True, name="barge").start()
+
+    def _check_barge(self, audio: np.ndarray) -> None:
+        from . import speak
+        try:
+            samples = audio.astype(np.float32) / 32768.0
+            segments, _ = self.whisper.transcribe(samples, language=self.last_lang, beam_size=1,
+                                                  condition_on_previous_text=False)
+            said = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.7).strip()
+            if not said or not speak.speaking():
+                return
+            words = re.findall(r"\w+", said.lower())
+            if words and all(w in speak.current.lower() for w in words):
+                return   # just his own voice, heard through the mic
+            if STOP_WORDS.match(said):
+                kind, rest = "stop", ""
+            else:
+                m = WAIT_WORDS.match(said)
+                if not m:
+                    return
+                kind, rest = "wait", said[m.end():].strip(" ,.!?")
+            log.info("Cut in while talking (%s): %r", kind, said)
+            speak.stop()
+            if kind == "wait" and len(rest.split()) >= 2:   # "Jarvis, open Chrome": straight on to that
+                self.on_command(rest, "wake")
+            elif kind == "wait":
+                self._manual.set()   # listen now, like the shortcut
+            if self.on_barge:
+                self.on_barge(kind, rest)
+        except Exception:
+            log.debug("couldn't check what was said over his voice", exc_info=True)
+        finally:
+            self._barge_busy = False
 
     def _record(self, pre_roll: list[np.ndarray], noise: float) -> np.ndarray:
         """Collect audio until the speaker has been quiet for silence_seconds, emitting live partial
@@ -267,6 +373,8 @@ class VoiceListener:
         segments, _ = self.whisper.transcribe(samples, language=lang, beam_size=1,
                                               condition_on_previous_text=False, initial_prompt=PROMPTS[lang])
         text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
+        if text.lower().strip(" .!?,") in _PHANTOMS:   # "Thank you!" heard in a quiet room
+            return ""
         return WAKE_PREFIX.sub("", text).strip(" ,.")
 
     def _language_of(self, samples: np.ndarray) -> str:
@@ -301,13 +409,16 @@ class VoiceListener:
         # Whisper hallucinates words like "You" on silence; drop only segments it's quite sure aren't speech
         text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
         log.info("Heard: %r", text)
+        if re.sub(r"[^\w\s]", "", text).strip().lower() in _PHANTOMS:   # nothing was really said
+            return ""
         return WAKE_PREFIX.sub("", text).strip(" ,.")
 
 
 # ---------------------------------------------------------------- Voice mode on the phone
 
 # What Whisper "hears" in a clip with no real words in it
-_PHANTOMS = {"you", "thank you for watching", "thanks for watching", "субтитри", "абонирайте се"}
+_PHANTOMS = {"you", "thank you", "thank you for watching", "thanks for watching", "субтитри", "абонирайте се",
+             "благодаря за гледането"}
 _phone_model = None   # (name, model): only when the PC's own listener hasn't loaded one
 _phone_lock = threading.Lock()
 _phone_lang = "en"    # the language you last spoke on the phone (the live words' best guess in "both")
@@ -321,10 +432,8 @@ def _model_for_phone():
     global _phone_model
     with _phone_lock:
         if not _phone_model or _phone_model[0] != want:
-            from faster_whisper import WhisperModel
-            root = None if want.endswith(".en") else str(ROOT / ".brain" / "whisper")
             log.info("Loading Whisper '%s' for the phone's voice mode...", want)
-            _phone_model = (want, WhisperModel(want, device="cpu", compute_type="int8", download_root=root))
+            _phone_model = (want, load_model(want))
         return _phone_model[1]
 
 

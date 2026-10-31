@@ -28,3 +28,5 @@ icalendar
 recurring-ical-events
 pywebview
 winrt-Windows.Security.Credentials.UI
+nvidia-cublas-cu12
+nvidia-cudnn-cu12>=9,<10
