@@ -681,6 +681,7 @@
   html.mode-voice .bc-place { color: #7fe3ff; }
   html.mode-voice #voiceView { padding-top: calc(env(safe-area-inset-top) + 150px); }
   /* as big as fits between the clock and the buttons */
+  #orb { transition: opacity .22s ease; }
   #orb { width: max(150px, min(92vw, 470px, calc(100vh - var(--dock-h, 120px) - env(safe-area-inset-top) - 336px)));
     aspect-ratio: 1; display: block; cursor: pointer; touch-action: manipulation; }
   .v-status { margin-top: -6px; min-height: 22px; font-size: 17px; font-weight: 600; letter-spacing: -.2px; color: rgba(255,255,255,.9); transition: opacity .3s; }
@@ -882,6 +883,7 @@
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
   <symbol id="i-wave" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10.5v3"/></symbol>
   <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.6 10.3a2.2 2.2 0 1 0 0 3.4M17 10.3a2.2 2.2 0 1 0 0 3.4"/></symbol>
+  <symbol id="i-face" viewBox="0 0 24 24"><path d="M12 3.2c-3.5 0-6 2.6-6 6.3 0 2.6.9 4.4 2.4 5.7V18a2 2 0 0 0 2 2h3.2a2 2 0 0 0 2-2v-2.8c1.5-1.3 2.4-3.1 2.4-5.7 0-3.7-2.5-6.3-6-6.3z"/><path d="M9.4 10h.02M14.6 10h.02M10.2 14.1c1.1.6 2.5.6 3.6 0"/></symbol>
   <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 3.5l3 3-3 3"/><path d="M4 11.5v-1a4 4 0 0 1 4-4h12M7 20.5l-3-3 3-3"/><path d="M20 12.5v1a4 4 0 0 1-4 4H4"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"/></symbol>
@@ -936,6 +938,7 @@
     <div><button class="v-btn press" id="vCC" aria-label="Captions"><svg class="i"><use href="#i-cc"/></svg></button>Captions</div>
     <button class="v-btn main press" id="vMain" aria-label="Talk"><svg class="i"><use href="#i-mic"/></svg></button>
     <div><button class="v-btn press" id="vAuto" aria-label="Hands-free"><svg class="i"><use href="#i-loop"/></svg></button>Hands-free</div>
+    <div><button class="v-btn press" id="vHuman" aria-label="Humanoid"><svg class="i"><use href="#i-face"/></svg></button>Humanoid</div>
   </div>
 </section>
 
@@ -1314,10 +1317,13 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.6";   // bump together with version.json
+const VERSION = "2026-10-31.7";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv27", when: "Oct 31, 2026", title: "Humanoid Jarvis", notes: [
+    "Voice mode has a Humanoid button: the orb becomes a head made of the same glowing threads. He looks around, blinks, faces you while you talk, looks up while he thinks, and his mouth moves with his voice. Tap it again for the orb.",
+  ]},
   { v: "JNIv26", when: "Oct 31, 2026", title: "Jarvis on your desktop & the model picker", notes: [
     "Jarvis has a desktop app on your PC: chat with him there, with your chats down the side like in Claude. It's connected straight away, no pairing.",
     "Pick the models, in the message box: tick Claude, Hermes and Qwen3 in any mix. Only the local two means free, no tokens.",
@@ -3653,9 +3659,132 @@ const Orb = {
     error:     { col: [255, 110, 100], spin: .05, breathe: .02,  amp: .4, think: 0, heart: 0 },
   },
   look: null,
+  // ---- the humanoid: the same threads and points, shaped into a head that talks (the Humanoid button) ----
+  form: "orb", head: null, mo: 0, blink: 0, blinkAt: 3, blinkT: -1,
+  setForm(form) {
+    if (form === this.form) return;
+    store("jarvis.orbForm", form);
+    this.cv.style.opacity = "0";   // a quick fade between the two
+    setTimeout(() => { this.form = form; this.cv.style.opacity = ""; }, 230);
+  },
+  buildHead() {
+    const pts = [], links = [], seen = new Set(), MOUTH = .47;
+    const link = (i, j) => { const k = Math.min(i, j) * 10000 + Math.max(i, j); if (i !== j && !seen.has(k)) { seen.add(k); links.push([i, j]); } };
+    // a direction on the unit sphere -> a point on the head (y points down, z towards you)
+    const shape = (x, y, z) => {
+      let X = x * .78, Y = y, Z = z * .9;
+      if (y > .1) { const t = (y - .1) / .9; X *= 1 - .24 * t * t - .1 * t; Z *= 1 - .12 * t; if (z > 0) Z += .08 * t * z; }   // jaw and chin
+      X += Math.sign(x) * .07 * Math.exp(-((y - .08) ** 2) / .025 - (z + .05) ** 2 / .03);                       // the ears
+      if (z < 0 && y < .45) Z *= 1.12;                                                                            // the back of the skull
+      if (z > .25) {
+        const front = Math.min(1, (z - .25) / .3);
+        for (const ex of [-.33, .33]) Z -= .1 * front * Math.exp(-((x - ex) ** 2 + (y + .08) ** 2) / .018);      // eye sockets
+        Z += .05 * front * Math.exp(-((y + .24) ** 2) / .004) * (Math.abs(x) < .55 ? 1 : 0);                       // the brow
+        Z += .2 * front * Math.exp(-(x * x) / .006) * Math.max(0, Math.min(1, (y + .08) / .3)) * (y < .3 ? 1 : Math.exp(-((y - .3) ** 2) / .002));   // the nose
+        Z += .03 * front * Math.exp(-(x * x) / .03 - ((y - MOUTH) ** 2) / .006);                                  // the lips stand out a little
+      }
+      return [X, Y, Z];
+    };
+    const onFace = (dx, dy) => { const dz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy)); return [dx, dy, dz]; };
+    // how much a point moves with the jaw: below the mouth, at the front
+    const jawOf = (x, y, z) => Math.max(0, Math.min(1, (y - MOUTH - .015) / .07)) * Math.max(0, Math.min(1, (z + .25) / .55));
+    const add = (dir, extra = {}) => {
+      const [x, y, z] = shape(...dir);
+      pts.push({ x, y, z, jaw: jawOf(...dir), dust: false, knot: Math.random() < .12, seed: Math.random() * 6.283,
+                 size: .7 + Math.random() * .9, px: 0, py: 0, d: 0, ...extra });
+      return pts.length - 1;
+    };
+    const N = 380, turn = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < N; i++) {   // the skin: evenly spread, nudged off the lattice
+      const y0 = 1 - (i + .5) / N * 2, r = Math.sqrt(1 - y0 * y0), a = turn * i;
+      let x = Math.cos(a) * r + (Math.random() - .5) * .1, y = y0 + (Math.random() - .5) * .1, z = Math.sin(a) * r + (Math.random() - .5) * .1;
+      const m = Math.hypot(x, y, z); x /= m; y /= m; z /= m;
+      if (z > .5 && Math.abs(y - MOUTH) < .035 && Math.abs(x) < .28) continue;   // leave the mouth to the lips
+      add([x, y, z]);
+    }
+    const eyes = [];
+    for (const ex of [-.33, .33]) {   // the eyes: a ring each, and a bright centre that glows and blinks
+      const ring = [];
+      for (let k = 0; k < 10; k++) {
+        const a = k / 10 * Math.PI * 2, dir = onFace(ex + .085 * Math.cos(a), -.08 + .05 * Math.sin(a));
+        ring.push(add(dir, { lid: 1, ey: shape(...onFace(ex, -.08))[1], size: 1.1 }));
+      }
+      ring.forEach((p, k) => link(p, ring[(k + 1) % ring.length]));
+      eyes.push(add(onFace(ex, -.08), { eye: true, size: 2 }));
+    }
+    // the lips: corners shared, the upper lip stays, the lower one goes down with the jaw
+    const upper = [], lower = [];
+    for (let k = 0; k <= 10; k++) {
+      const u = k / 5 - 1, dir = onFace(u * .26, MOUTH - .022 * (1 - u * u) + .012 * Math.abs(Math.sin(u * Math.PI)));
+      upper.push(add(dir, { jaw: 0, lip: 1, size: 1.25 }));
+    }
+    lower.push(upper[0]);
+    for (let k = 1; k < 10; k++) {
+      const u = k / 5 - 1, dir = onFace(u * .26, MOUTH + .03 * (1 - u * u));
+      lower.push(add(dir, { jaw: 1 - u * u * (2 - u * u) * .55, lip: 2, size: 1.25 }));
+    }
+    lower.push(upper[10]);
+    for (const lip of [upper, lower]) lip.forEach((p, k) => k && link(lip[k - 1], p));
+    for (let row = 0; row < 9; row++) {   // the neck, widening into the shoulders: a bust
+      const y = .82 + row * .08, spread = Math.max(0, (y - 1.02) / .44), w = .33 + .78 * spread ** 1.2, dz = .27 + .1 * spread;
+      const n = Math.round(14 + 22 * spread);
+      for (let k = 0; k < n; k++) {
+        const a = (k + Math.random() * .4) / n * Math.PI * 2 + row * .3, side = Math.abs(Math.cos(a));
+        // the shoulders slope down and away from the neck
+        pts.push({ x: Math.cos(a) * w, y: y + spread * .32 * side ** 1.5, z: Math.sin(a) * dz * (1 - .25 * spread * side) - .06, jaw: 0, dust: false, knot: false,
+                   seed: Math.random() * 6.283, size: (.6 + Math.random() * .7) * (1 - .45 * spread), px: 0, py: 0, d: 0, neck: true, fade: spread });
+      }
+    }
+    const solid = pts.length;
+    for (let k = 0; k < 34; k++) {   // a little dust floating around it, like the orb's
+      const a = Math.random() * 6.283, b = Math.acos(Math.random() * 2 - 1), s = 1.15 + Math.random() * .35;
+      pts.push({ x: Math.sin(b) * Math.cos(a) * s * .9, y: Math.cos(b) * s, z: Math.sin(b) * Math.sin(a) * s * .9, jaw: 0, dust: true,
+                 seed: Math.random() * 6.283, size: .6 + Math.random() * .8, px: 0, py: 0, d: 0 });
+    }
+    for (let i = 0; i < solid; i++) {   // threads to the nearest points, but never across the mouth, so it can open
+      const p = pts[i];
+      if (p.eye) continue;
+      const near = [];
+      for (let j = 0; j < solid; j++) {
+        const q = pts[j];
+        if (j === i || q.eye) continue;
+        if (p.z > 0 && q.z > 0 && Math.abs(p.jaw - q.jaw) > .45 && Math.abs((p.y + q.y) / 2 - MOUTH) < .12) continue;
+        const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2;
+        if (d < .05) near.push([d, j]);
+      }
+      near.sort((a, b) => a[0] - b[0]);
+      near.slice(0, p.knot ? 4 : 3).forEach(([, j]) => link(i, j));
+    }
+    this.head = { pts, links, eyes, upper, lower };
+  },
+  placeHead(R, c, lv, breath) {
+    const H = this.head, t = this.t, L = this.look, mo = this.mo, band = Math.sin(t * 1.6);
+    // it looks around a little, holds still and faces you while it listens, and looks up while it thinks
+    const yaw = (.3 * Math.sin(t * .27) + .1 * Math.sin(t * .71 + 1)) * (1 - .65 * L.heart) * (1 - .4 * L.think) + .25 * L.think * Math.sin(t * .5);
+    const pitch = -.02 + .035 * Math.sin(t * .21) - .12 * L.think + .05 * mo, roll = .04 * Math.sin(t * .17) + .05 * L.heart;
+    const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pitch), cp = Math.cos(pitch), sr = Math.sin(roll), cr = Math.cos(roll);
+    const S = R * .86, lift = R * .26;
+    for (const p of H.pts) {
+      let x = p.x, y = p.y, z = p.z;
+      if (p.jaw) { y += mo * .13 * p.jaw; z -= mo * .04 * p.jaw; }   // the jaw drops as he talks
+      if (p.lip === 1) y -= mo * .02;
+      if (p.lid && this.blink > 0) y = p.ey + (y - p.ey) * (1 - this.blink);
+      const wave = Math.sin(p.x * 3.1 + t * 2.3) * Math.sin(p.y * 2.7 - t * 1.9 + p.seed * .2);
+      const sweep = L.think * .06 * Math.exp(-((p.y - band) ** 2) * 14);
+      const s = S * (breath + lv * .035 * wave + sweep + (p.dust ? .04 * Math.sin(t * .8 + p.seed) : 0));
+      x *= s; y *= s; z *= s;
+      if (p.neck) { const k = .35; const x0 = x * Math.cos(yaw * k) + z * Math.sin(yaw * k); z = -x * Math.sin(yaw * k) + z * Math.cos(yaw * k); x = x0; }   // the neck turns less
+      else { const x0 = x * cy + z * sy; z = -x * sy + z * cy; x = x0; }   // turn
+      const y1 = y * cp - z * sp, z1 = y * sp + z * cp;                   // nod
+      const x2 = x * cr - y1 * sr, y2 = x * sr + y1 * cr;                 // tilt
+      const f = 3.2 / (3.2 - z1 / R);
+      p.px = c + x2 * f; p.py = c - lift + y2 * f; p.d = Math.max(0, Math.min(.999, (z1 / R + 1.3) / 2.6));
+    }
+  },
   init() {
     if (this.pts.length) return;
     this.cv = $("orb"); this.g = this.cv.getContext("2d");
+    this.form = load("jarvis.orbForm") === "head" ? "head" : "orb";
     this.look = { ...this.LOOKS.idle, col: [...this.LOOKS.idle.col] };
     const N = 250, turn = Math.PI * (3 - Math.sqrt(5)), gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * .5;
     const add = (x, y, z, knot) => {
@@ -3702,7 +3831,7 @@ const Orb = {
   ring(strength) { if (this.rings.length < 8) this.rings.push({ t: this.t, s: strength, col: [...this.look.col] }); },
   frame(now) {
     this.raf = requestAnimationFrame(t => this.frame(t));
-    const dt = this.last ? Math.min(.05, (now - this.last) / 1000) : .016; this.last = now; this.t += dt;
+    const dt = this.last ? Math.max(0, Math.min(.05, (now - this.last) / 1000)) : .016; this.last = now; this.t += dt;
     const calm = this.calm.matches ? .35 : 1, L = this.look, to = this.LOOKS[this.state] || this.LOOKS.idle, k = Math.min(1, dt * 3);
     for (const key of ["spin", "breathe", "amp", "think", "heart"]) L[key] += (to[key] - L[key]) * k;
     for (let i = 0; i < 3; i++) L.col[i] += (to.col[i] - L.col[i]) * k;
@@ -3715,6 +3844,16 @@ const Orb = {
       this.lastRing = this.t; this.ring(this.state === "hearing" ? .45 + this.lv * .5 : .3 + this.lv * .35);
     }
     this.pop *= Math.exp(-dt * 5);
+    if (this.form === "head") {
+      // the mouth follows his voice (only his: not yours while you talk), and now and then he blinks
+      const open = this.state === "speaking" ? Math.min(.9, this.lv * 1.3) : 0;
+      this.mo += (open - this.mo) * (open > this.mo ? .55 : .3);
+      if (this.blinkT < 0 && (this.blinkAt -= dt) <= 0) this.blinkT = 0;
+      if (this.blinkT >= 0) {
+        this.blinkT += dt; this.blink = Math.sin(Math.min(1, this.blinkT / .18) * Math.PI);
+        if (this.blinkT >= .18) { this.blinkT = -1; this.blink = 0; this.blinkAt = 2.5 + Math.random() * 4.5; }
+      }
+    }
     this.spin += dt * (L.spin + this.lv * .5) * (.4 + .6 * calm);
     this.draw(this.lv * L.amp * calm, calm);
   },
@@ -3741,7 +3880,11 @@ const Orb = {
     }
     const ay = this.spin, ax = .38 + .18 * Math.sin(t * .23), sy = Math.sin(ay), cy = Math.cos(ay), sx = Math.sin(ax), cx = Math.cos(ax);
     const breath = swell + L.breathe * Math.sin(t * 1.25), band = Math.sin(t * 1.6);
-    for (const p of this.pts) {
+    const head = this.form === "head";
+    if (head && !this.head) this.buildHead();
+    const P = head ? this.head.pts : this.pts, LK = head ? this.head.links : this.links;
+    if (head) this.placeHead(R, c, lv, breath);
+    else for (const p of this.pts) {
       // the shell ripples with the voice; while working, a bright band sweeps up and down it
       const wave = Math.sin(p.x * 3.1 + t * 2.3) * Math.sin(p.y * 2.7 - t * 1.9 + p.seed * .2) * Math.sin(p.z * 3.3 + t * 1.6);
       const sweep = L.think * .09 * Math.exp(-((p.y - band) ** 2) * 14);
@@ -3753,7 +3896,7 @@ const Orb = {
       p.px = c + x1 * f; p.py = c + y2 * f; p.d = Math.max(0, Math.min(.999, (z2 / R + 1.3) / 2.6));
     }
     const lines = [[], [], [], []];   // four depth layers, one stroke each
-    for (const [i, j] of this.links) { const a = this.pts[i], q = this.pts[j]; lines[((a.d + q.d) * 2) | 0].push(a, q); }
+    for (const [i, j] of LK) { const a = P[i], q = P[j]; lines[((a.d + q.d) * 2) | 0].push(a, q); }
     const lift = 1 + lv * 1.2 + this.pop * .8;
     lines.forEach((Ln, k) => {
       if (!Ln.length) return;
@@ -3763,8 +3906,15 @@ const Orb = {
       if (k > 1) { g.lineWidth = this.dpr * 2.6; g.strokeStyle = rgba(a * .22); g.stroke(); }   // soft glow on the near side
       g.lineWidth = this.dpr * .7; g.strokeStyle = rgba(a); g.stroke();
     });
+    if (head && this.mo > .03) {   // light inside the open mouth
+      const H = this.head, lips = [...H.upper, ...H.lower.slice(1, -1).reverse()].map(i => P[i]);
+      g.beginPath(); g.moveTo(lips[0].px, lips[0].py);
+      for (const q of lips.slice(1)) g.lineTo(q.px, q.py);
+      g.closePath(); g.fillStyle = rgba(.28 * this.mo); g.fill();
+      g.lineWidth = this.dpr * 1.4; g.strokeStyle = rgba(.35 + .4 * this.mo); g.stroke();
+    }
     const dots = [[], [], [], []], sparks = [];
-    for (const p of this.pts) {
+    for (const p of P) {
       dots[(p.d * 4) | 0].push(p);
       if (p.d > .4 && Math.sin(t * .9 + p.seed * 13) > .996) sparks.push(p);   // now and then a point flares
     }
@@ -3778,6 +3928,14 @@ const Orb = {
       const sp = g.createRadialGradient(p.px, p.py, 0, p.px, p.py, s * 2);
       sp.addColorStop(0, `rgba(255,255,255,${(.9 * f).toFixed(3)})`); sp.addColorStop(1, rgba(0));
       g.fillStyle = sp; g.fillRect(p.px - s * 2, p.py - s * 2, s * 4, s * 4);
+    }
+    if (head) {   // the eyes: two soft lights, brighter as he speaks, out for a moment when he blinks
+      for (const i of this.head.eyes) {
+        const p = P[i], s = R * (.075 + .03 * lv) * (.6 + .4 * p.d), a = (.55 + .35 * lv + .2 * this.pop) * (1 - this.blink * .9);
+        const e = g.createRadialGradient(p.px, p.py, 0, p.px, p.py, s);
+        e.addColorStop(0, `rgba(255,255,255,${a.toFixed(3)})`); e.addColorStop(.35, rgba(a * .7)); e.addColorStop(1, rgba(0));
+        g.fillStyle = e; g.fillRect(p.px - s, p.py - s, s * 2, s * 2);
+      }
     }
     if (L.think > .02) {   // working: two arcs circling it in opposite directions
       const a1 = t * 2.4, a2 = -t * 1.7 + 1.3;
@@ -3911,6 +4069,7 @@ const VoiceMode = {
   },
   renderToggles() {
     $("vCC").classList.toggle("on", this.cc); $("vAuto").classList.toggle("on", this.auto);
+    $("vHuman").classList.toggle("on", (Orb.cv ? Orb.form : load("jarvis.orbForm")) === "head");
     $("voiceView").classList.toggle("nocc", !this.cc);
   },
   tap() {   // the orb: talk, or cut Jarvis off and talk
@@ -4103,6 +4262,12 @@ $("modeVoice").onclick = () => { Mic.wake(); setMainMode("voice", true); };
 $("orb").addEventListener("click", () => VoiceMode.tap());
 $("vMain").onclick = () => VoiceMode.main();
 $("vCC").onclick = () => { VoiceMode.cc = !VoiceMode.cc; store("jarvis.voiceCC", VoiceMode.cc ? "1" : "0"); VoiceMode.renderToggles(); toast(VoiceMode.cc ? "Captions on" : "Captions off", "cc"); };
+$("vHuman").onclick = () => {
+  Orb.init();
+  const head = Orb.form !== "head";
+  Orb.setForm(head ? "head" : "orb"); store("jarvis.orbForm", head ? "head" : "orb"); VoiceMode.renderToggles();
+  toast(head ? "Humanoid Jarvis" : "The orb is back", "sparkles");
+};
 $("vAuto").onclick = () => {
   VoiceMode.auto = !VoiceMode.auto; store("jarvis.voiceAuto", VoiceMode.auto ? "1" : "0"); VoiceMode.renderToggles();
   toast(VoiceMode.auto ? "Hands-free: I'll listen after each answer" : "Hands-free off", "loop");
