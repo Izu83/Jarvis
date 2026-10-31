@@ -257,6 +257,7 @@ class PhoneChannel:
                        "use_claude": settings["use_claude"],
                        # the model picker
                        "claude_model": settings["claude_code_model"], "effort": settings["claude_code_effort"],
+                       "use_hermes": bool(settings.get("use_hermes", True)), "use_qwen": bool(settings.get("use_qwen", True)),
                        "model_id": RUNNING["model"],
                        # the desktop app's "is the phone connected?" card
                        "devices": {"phones": len(self.clients) - len(self.desktops), "desktops": len(self.desktops),
@@ -735,9 +736,10 @@ class PhoneChannel:
                 if data.get("value") in speak.VOICES:
                     set_setting("edge_voice", data["value"])
                     log.info("Jarvis's voice set to %s from the phone.", speak.VOICES[data["value"]][0])
-            elif key == "use_claude":
-                set_setting("use_claude", value)
-                log.info("Claude turned %s from the phone.", "on" if value else "off")
+            elif key in ("use_claude", "use_hermes", "use_qwen"):   # the model picker's ticks
+                set_setting(key, value)
+                log.info("%s turned %s.", {"use_claude": "Claude", "use_hermes": "Hermes", "use_qwen": "Qwen3"}[key],
+                         "on" if value else "off")
             elif key == "claude_code_model":
                 from .brain import MODELS
                 if data.get("value") in MODELS:

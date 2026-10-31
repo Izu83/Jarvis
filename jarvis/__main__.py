@@ -298,12 +298,13 @@ def main() -> None:
                 answer = nlu.try_handle(text, progress=step)  # common commands, no Claude, no tokens
                 if answer is not None:
                     log.info("(handled locally, no tokens used)")
-                elif settings["use_claude"]:                   # not understood locally -> Claude
+                elif settings["use_claude"] or (settings["brain"] == "hermes" and (   # -> the picked brains
+                        settings.get("use_hermes", True) or settings.get("use_qwen", True))):
                     answer = brain.handle(text, chat=chat, recent=recent, progress=step)
                     thinking = getattr(brain, "last_thinking", "") or ""
                 else:                                          # Claude is switched off: stay free
-                    answer = ("I didn't catch that one, and Claude is switched off to save tokens. "
-                              "Try a simpler command, or turn Claude back on in Settings.")
+                    answer = ("I didn't catch that one, and every model is switched off. "
+                              "Try a simpler command, or tick one in the model menu.")
         except stopping.Stopped:
             log.info("Stopped by the user.")
             step("Stopped", "Command")

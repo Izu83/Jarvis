@@ -786,15 +786,12 @@
   .model-menu .mm-opt b { display: block; font-size: 15.5px; font-weight: 600; line-height: 20px; }
   .model-menu .mm-opt small { display: block; font-size: 13px; line-height: 17px; color: var(--label2); }
   .model-menu .mm-opt .t { flex: 1; min-width: 0; }
-  .model-menu .mm-opt .ck { width: 18px; height: 18px; margin-top: 1px; color: var(--accent); stroke-width: 2.8; visibility: hidden; flex: none; }
-  .model-menu .mm-opt.on .ck { visibility: visible; }
-  .model-menu .mm-think { display: flex; align-items: center; gap: 10px; padding: 8px 12px 10px; border-top: .5px solid var(--sep); margin-top: 4px; }
-  .model-menu .mm-think span { flex: 1; font-size: 14px; font-weight: 600; }
-  .model-menu .mm-think .segment { flex: none; }
-  .model-menu .mm-now { padding: 0 12px 8px; font-size: 12px; color: var(--label2); }
-  .mm-seg { display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: var(--fill); }
-  .mm-seg button { height: 28px; padding: 0 10px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--label2); }
-  .mm-seg button.on { background: var(--card-solid, var(--label)); color: var(--base); }
+  .model-menu .mm-opt .box { width: 22px; height: 22px; margin-top: 0; border-radius: 7px; flex: none; display: grid; place-items: center;
+    box-shadow: inset 0 0 0 1.5px var(--label3, rgba(140,150,170,.6)); transition: background .2s, box-shadow .2s; }
+  .model-menu .mm-opt .box svg.i { width: 15px; height: 15px; stroke-width: 3; color: #fff; opacity: 0; transform: scale(.5); transition: opacity .15s, transform .25s var(--spring); }
+  .model-menu .mm-opt.on .box { background: var(--accent); box-shadow: none; }
+  .model-menu .mm-opt.on .box svg.i { opacity: 1; transform: none; }
+  .model-menu .mm-now { margin-top: 4px; padding: 9px 12px 8px; border-top: .5px solid var(--sep); font-size: 12.5px; line-height: 17px; color: var(--label2); }
 
   /* ---------- the desktop app (jarvis/desktop.py): chats down the side like Claude, the chat in a centred column ---------- */
   .link-card { display: none; }
@@ -1317,13 +1314,13 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.5";   // bump together with version.json
+const VERSION = "2026-10-31.6";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
   { v: "JNIv26", when: "Oct 31, 2026", title: "Jarvis on your desktop & the model picker", notes: [
     "Jarvis has a desktop app on your PC: chat with him there, with your chats down the side like in Claude. It's connected straight away, no pairing.",
-    "Pick the model, like in Claude: tap the model name in the message box. Opus, Sonnet or Haiku, or Local (free, on your PC's graphics card), and how hard it thinks.",
+    "Pick the models, in the message box: tick Claude, Hermes and Qwen3 in any mix. Only the local two means free, no tokens.",
     "The desktop app shows whether your phone is connected, and can show the pairing code for a new phone.",
   ]},
   { v: "JNIv25", when: "Oct 31, 2026", title: "Jarvis's voice & the evening recap", notes: [
@@ -1923,66 +1920,67 @@ function renderChat() {
 }
 
 // ================= the model picker =================
-// Which Claude model does the work (Claude Code's opus / sonnet / haiku), or the free local models first, and how hard
-// it thinks (effort). The PC switches over for the next command (jarvis/brain.py starts a fresh session with it).
+// Three ticks, any mix (at least one): Claude (Sonnet, through your Claude plan), Hermes and Qwen3 (free, on the PC's
+// graphics card). The PC leaves out whoever is unticked (jarvis/hermes.py); with only the local ones, no tokens.
 const Models = {
   LIST: [
-    { id: "opus", name: "Opus", sub: "Smartest. For hard, many-step jobs. Uses your Claude limit fastest." },
-    { id: "sonnet", name: "Sonnet", sub: "Smart and quick. Best for most things." },
-    { id: "haiku", name: "Haiku", sub: "Fastest. Good for simple commands." },
+    { key: "use_claude", name: "Claude", local: false },
+    { key: "use_hermes", name: "Hermes", local: true, model: "Hermes", sub: "Free, on your PC. Quick one-step commands." },
+    { key: "use_qwen", name: "Qwen3", local: true, model: "Qwen3", sub: "Free, on your PC. Thinks through bigger jobs." },
   ],
-  EFFORT: [["low", "Low"], ["medium", "Medium"], ["high", "High"]],
+  STATE: { missing: "not downloaded yet", offline: "Ollama isn't running", resting: "resting after errors" },
   s: null,
+  usable(m) { return !m.local || this.s.brain === "hermes"; },
+  on() { return this.LIST.filter(m => this.s[m.key] && this.usable(m)); },
   label() {
-    const s = this.s;
-    if (!s) return "";
-    if (s.local_first && s.brain === "hermes") return "Local";
-    const m = this.LIST.find(x => x.id === s.claude_model) || { name: "Claude" };
-    const v = /claude-(opus|sonnet|haiku)-(\d+)-(\d+)/.exec(s.model_id || "");
-    return desktop && v && v[1] === s.claude_model ? `${m.name} ${v[2]}.${v[3]}` : m.name;   // the phone has no room for the version
+    const on = this.on().map(m => m.name);
+    if (!on.length) return "No model";
+    if (on.length === 3) return "All 3";
+    return desktop || on.length === 1 ? on.join(" + ") : `${on[0]} +${on.length - 1}`;   // the phone has less room
+  },
+  claudeSub() {
+    const v = /claude-sonnet-(\d+)-(\d+)/.exec(this.s.model_id || "");
+    return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}. The smartest; uses your Claude plan.`;
+  },
+  how() {
+    const s = this.s, on = this.on(), claude = on.some(m => !m.local), local = on.filter(m => m.local);
+    if (claude && local.length) return s.local_first ? "The local models try first; Claude steps in when they can't."
+      : `Claude answers. ${local.map(m => m.name).join(" and ")} step${local.length > 1 ? "" : "s"} in when Claude can't (no internet, limit reached).`;
+    if (claude) return "Claude answers everything.";
+    if (local.length === 2) return "Hermes takes the quick commands, Qwen3 the bigger ones. Free: no Claude, no tokens.";
+    return `${local[0].name} answers everything. Free: no Claude, no tokens.`;
   },
   state(d) {
-    if (!("claude_model" in d)) return;   // an older Jarvis on the PC: nothing to pick from
-    this.s = { claude_model: d.claude_model, effort: d.effort, local_first: !!d.local_first, brain: d.brain, model_id: d.model_id || "", local: d.local || [] };
+    if (!("use_hermes" in d)) return;   // an older Jarvis on the PC: nothing to pick from
+    this.s = { use_claude: !!d.use_claude, use_hermes: !!d.use_hermes, use_qwen: !!d.use_qwen, brain: d.brain,
+               local_first: !!d.local_first, model_id: d.model_id || "", local: d.local || [] };
     this.paint();
   },
   paint() {
     $("modelChip").hidden = !this.s;
+    if (!this.s) return;
     $("modelName").textContent = this.label();
-    $("modelChip").classList.toggle("local", this.label() === "Local");
+    $("modelChip").classList.toggle("local", !this.s.use_claude);
     if (!$("modelMenu").hidden) this.renderMenu();
   },
-  set(key, value) {
-    post({ type: "set", key, value, id: newId() }).catch(() => toast("Not connected to your PC", "x", "var(--red)"));
-  },
-  pick(id) {
+  toggle(key) {
     const s = this.s;
-    if (id === "local") { s.local_first = true; this.set("local_first", true); }
-    else {
-      if (s.local_first) { s.local_first = false; this.set("local_first", false); }
-      if (s.claude_model !== id) { s.claude_model = id; this.set("claude_code_model", id); }
-    }
-    this.paint(); this.close();
-    toast(id === "local" ? "Local models first" : `${this.LIST.find(x => x.id === id).name} from your next message`, "sparkles", "var(--blue)");
+    if (s[key] && this.on().length === 1) { toast("Keep at least one model on", "x", "var(--orange)"); return; }
+    s[key] = !s[key];
+    post({ type: "set", key, value: s[key], id: newId() }).catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+    this.paint();
   },
   renderMenu() {
     const s = this.s, menu = $("modelMenu");
-    const local = s.local_first && s.brain === "hermes";
-    const names = (s.local || []).map(m => m.name).filter(Boolean).join(" + ") || "Hermes + Qwen3";
-    const opt = (id, name, sub, on, off) => `<button class="mm-opt" role="menuitemradio" aria-checked="${on}" data-id="${id}"${off ? " disabled" : ""}${on ? ' data-on="1"' : ""}><span class="t"><b>${name}</b><small>${sub}</small></span><svg class="i ck"><use href="#i-check"/></svg></button>`;
-    menu.innerHTML = '<div class="mm-sec">Claude</div>'
-      + this.LIST.map(m => opt(m.id, m.name, m.sub, !local && s.claude_model === m.id, false)).join("")
-      + '<div class="mm-sec">On your PC</div>'
-      + opt("local", "Local", s.brain === "hermes" ? `${names}. Free, on your graphics card. Slower; Claude steps in when they can't.` : "Not set up on this PC (brain isn't \"hermes\" in config.json).", local, s.brain !== "hermes")
-      + `<div class="mm-think"><span>Thinking</span><div class="mm-seg">${this.EFFORT.map(([v, l]) => `<button data-effort="${v}" class="${s.effort === v ? "on" : ""}">${l}</button>`).join("")}</div></div>`
-      + (s.model_id && !local ? `<div class="mm-now">Running now: ${s.model_id}</div>` : "");
-    for (const b of menu.querySelectorAll(".mm-opt")) {
-      b.classList.toggle("on", !!b.dataset.on);
-      b.onclick = () => this.pick(b.dataset.id);
-    }
-    for (const b of menu.querySelectorAll("[data-effort]")) b.onclick = () => {
-      s.effort = b.dataset.effort; this.set("claude_code_effort", s.effort); this.renderMenu();
+    const row = m => {
+      const st = m.local && (s.local.find(x => x.name === m.model) || {}).state;
+      const sub = !this.usable(m) ? "Not set up on this PC" : m.local ? m.sub + (this.STATE[st] ? ` (${this.STATE[st]})` : "") : this.claudeSub();
+      const on = !!s[m.key] && this.usable(m);
+      return `<button class="mm-opt${on ? " on" : ""}" role="menuitemcheckbox" aria-checked="${on}" data-key="${m.key}"${this.usable(m) ? "" : " disabled"}>`
+        + `<span class="box"><svg class="i"><use href="#i-check"/></svg></span><span class="t"><b>${m.name}</b><small>${sub}</small></span></button>`;
     };
+    menu.innerHTML = '<div class="mm-sec">Models Jarvis can use</div>' + this.LIST.map(row).join("") + `<div class="mm-now">${this.how()}</div>`;
+    for (const b of menu.querySelectorAll(".mm-opt")) b.onclick = () => this.toggle(b.dataset.key);
   },
   open() {
     if (!this.s) return;

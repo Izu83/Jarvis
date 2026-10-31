@@ -11,6 +11,7 @@ they keep Jarvis working when Claude is out. With "local_first": true the order 
 - Claude only gets what neither can do: screen vision, the web, exact file searches, or a local failure.
 
 So a command goes:  simple -> Hermes -> (stuck) Qwen3 -> (stuck) Claude;  complex -> Qwen3 -> (stuck) Claude.
+The model picker's ticks (use_claude / use_hermes / use_qwen) leave out whoever is switched off.
 Both models are downloaded automatically the first time if they're missing (`local_auto_pull`). Set "qwen_model"
 to "" to run Hermes alone, as before.
 """
@@ -283,10 +284,13 @@ class HermesBrain:
 
     def _plan(self, command: str, followup: bool = False) -> list[str]:
         """Which local models try this command, in order."""
+        on = {k for k in self.team if settings.get("use_" + k, True)}   # the model picker's ticks
         order = ["qwen"] if followup or is_complex(command) else ["hermes", "qwen"]
-        ready = [k for k in order if self._ready(k)]
-        if not ready and self._ready("hermes"):   # complex but Qwen3 isn't there (yet): Hermes has a go
+        ready = [k for k in order if k in on and self._ready(k)]
+        if not ready and "hermes" in on and self._ready("hermes"):   # complex, but no Qwen3: Hermes has a go
             ready = ["hermes"]
+        if not ready and "qwen" in on and self._ready("qwen"):       # simple, but no Hermes: Qwen3 does it
+            ready = ["qwen"]
         return ready
 
     def _server_up(self) -> bool:
@@ -352,6 +356,15 @@ class HermesBrain:
         with self.lock:
             self.progress = progress
             self.last_used = time.time()
+
+            claude = settings.get("use_claude", True)
+            local = any(settings.get("use_" + k, True) for k in self.team)
+            if not claude:   # Claude is unticked: the local models only, and never a token
+                answer = self._local(original, command, chat, recent)
+                return answer if answer is not None else (
+                    "The local models couldn't do that one. Tick Claude in the model menu for the harder jobs.")
+            if not local:    # only Claude is ticked
+                return self._to_claude(command, chat, recent, progress)
 
             if not settings.get("local_first", False):
                 answer = self._to_claude(command, chat, recent, progress)

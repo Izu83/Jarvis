@@ -153,18 +153,17 @@ like in Claude. Open it from the **Jarvis** shortcut, Windows search, or by clic
 - The page comes from `docs/` through a small web server on `127.0.0.1:8788` (only this PC can reach it), in an Edge
   WebView2 window (pywebview). Its chats and settings are kept in `.brain/desktop-app`.
 
-### Picking the model
+### Picking the models
 
-Tap the model's name in the message box (on the phone too), like in Claude:
+Tap the model name in the message box (on the phone too) and tick the ones Jarvis may use, in any mix (at least one):
 
-- **Opus**: the smartest, for hard many-step jobs. Uses your Claude limit fastest.
-- **Sonnet**: smart and quick, for most things (the default).
-- **Haiku**: the fastest, for simple commands.
-- **Local**: Hermes and Qwen3 on your graphics card first (free, slower); Claude steps in when they can't.
-- **Thinking**: Low, Medium or High (Claude Code's effort).
+- **Claude**: Sonnet, through your Claude plan. The smartest.
+- **Hermes**: free, on your graphics card. Quick one-step commands.
+- **Qwen3**: free, on your graphics card. Thinks through bigger jobs.
 
-The choice is saved in `config.json` (`claude_code_model`, `claude_code_effort`, `local_first`). Jarvis starts a fresh
-Claude session with it within 15 seconds, so the next command uses it. The menu also shows the exact model running.
+With Claude and a local model ticked, Claude answers and the local ones step in when Claude can't (no internet, limit
+reached); Settings › Local brain › "Try local models first" flips that. With only the local ones ticked, Jarvis
+never calls Claude (no tokens). The ticks are `use_claude`, `use_hermes` and `use_qwen` in `config.json`.
 
 ## Voice mode
 

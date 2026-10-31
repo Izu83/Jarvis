@@ -242,3 +242,19 @@ def test_local_team_steps_in_when_claude_cant_answer(team, monkeypatch):
     monkeypatch.setattr(brain, "_claude", lambda: types.SimpleNamespace(failed=True))
     assert handle("mute") == "Muted."
     assert ("Brain", "Claude can't answer right now, so the local brain is trying…") in steps
+
+
+def test_ticks_only_qwen(team, monkeypatch):
+    """The model picker: only Qwen3 ticked. A simple command goes to Qwen3, and Claude is never asked."""
+    for k, v in (("use_claude", False), ("use_hermes", False), ("use_qwen", True)):
+        monkeypatch.setitem(hermes.settings, k, v)
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"qwen3:8b": [say("Muted.")]})
+    assert handle("mute") == "Muted." and [m for m, _ in fake.chats] == ["qwen3:8b"]
+    assert handle("what's on my screen") != "claude did it" and not brain.claude_got   # stuck: no Claude, no tokens
+
+
+def test_ticks_only_claude(team, monkeypatch):
+    for k, v in (("use_claude", True), ("use_hermes", False), ("use_qwen", False)):
+        monkeypatch.setitem(hermes.settings, k, v)
+    brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {})
+    assert handle("mute") == "claude did it" and fake.chats == []

@@ -45,9 +45,12 @@ DEFAULTS = {
     "recap_time": "21:30",
     "weather_city": "",
     "quiet_hours": [23, 8],
-    # When false, Jarvis only uses the free local command parser and never calls Claude (zero tokens);
-    # anything it doesn't understand, it says so instead of asking Claude.
+    # Which brains Jarvis may use: the model picker's three ticks (phone and desktop app). Any mix, at least one.
+    # use_claude off = no Claude at all (zero tokens). use_hermes / use_qwen only count with "brain": "hermes".
+    # With nothing on, only the free built-in command parser answers.
     "use_claude": True,
+    "use_hermes": True,
+    "use_qwen": True,
     "claude_code_model": "sonnet",  # "sonnet", "haiku" (fastest) or "opus"; empty = your Claude Code default
     "claude_code_effort": "medium",  # medium = smarter multi-step; "low" = fastest, "high" = smartest (more tokens)
     # Only for "brain": "api"

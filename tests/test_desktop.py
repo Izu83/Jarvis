@@ -16,10 +16,10 @@ def test_model_picker(monkeypatch):
     monkeypatch.setattr(remote, "set_setting", lambda k, v: saved.__setitem__(k, v))
     phone = remote.PhoneChannel.__new__(remote.PhoneChannel)
     phone.send_state = lambda: None
-    for key, value in (("claude_code_model", "opus"), ("claude_code_effort", "high"),
+    for key, value in (("claude_code_model", "opus"), ("claude_code_effort", "high"), ("use_qwen", False),
                        ("claude_code_model", "gpt-9"), ("claude_code_effort", "max")):   # the last two aren't choices
         phone._handle({"type": "set", "key": key, "value": value, "id": "x"})
-    assert saved == {"claude_code_model": "opus", "claude_code_effort": "high"}
+    assert saved == {"claude_code_model": "opus", "claude_code_effort": "high", "use_qwen": False}
 
 
 def test_a_new_model_means_a_new_session(monkeypatch):
