@@ -112,7 +112,7 @@ def test_qwen_takes_over_when_hermes_is_stuck(team):
 def test_claude_when_both_are_stuck(team):
     brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"hermes3:8b": [say("")], "qwen3:8b": [say("")]})
     assert handle("mute the pc") == "claude did it"
-    assert ("Brain", "Handing this one to Claude…") in steps
+    assert ("Brain", "The local brain couldn't do it, so Claude is trying…") in steps
 
 
 def test_vision_goes_straight_to_claude(team):
@@ -239,9 +239,9 @@ def test_local_team_steps_in_when_claude_cant_answer(team, monkeypatch):
     import types
     brain, fake, handle, steps = team(["hermes3:8b", "qwen3:8b"], {"hermes3:8b": [say("Muted.")]})
     monkeypatch.setitem(hermes.settings, "local_first", False)
-    monkeypatch.setattr(brain, "_claude", lambda: types.SimpleNamespace(failed=True))
+    brain._fallback = types.SimpleNamespace(failed=True)   # Claude answered, but only with "I can't right now"
     assert handle("mute") == "Muted."
-    assert ("Brain", "Claude can't answer right now, so the local brain is trying…") in steps
+    assert ("Brain", "Claude couldn't do it, so the local brain is trying…") in steps
 
 
 def test_ticks_only_qwen(team, monkeypatch):

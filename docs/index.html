@@ -784,7 +784,7 @@
   /* on the phone it makes room for what you type */
   html:not(.desktop) .model-chip { height: 28px; font-size: 12.5px; padding: 0 6px 0 9px; }
   html:not(.desktop) .field:has(#text:not(:placeholder-shown)) .model-chip { display: none; }
-  .model-menu { position: fixed; z-index: 40; width: min(340px, calc(100vw - 24px)); border-radius: 22px; padding: 6px; animation: island .35s var(--spring) both; }
+  .model-menu { position: fixed; z-index: 40; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 140px); overflow-y: auto; border-radius: 22px; padding: 6px; animation: island .35s var(--spring) both; }
   .model-menu .mm-sec { padding: 9px 12px 4px; font-size: 12px; font-weight: 600; color: var(--label2); letter-spacing: .2px; text-transform: uppercase; }
   .model-menu .mm-opt { width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border-radius: 15px; text-align: left; color: var(--label); }
   .model-menu .mm-opt:hover, .model-menu .mm-opt:focus-visible { background: var(--fill); outline: 0; }
@@ -1332,10 +1332,15 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.14";   // bump together with version.json
+const VERSION = "2026-10-31.15";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv33", when: "Oct 31, 2026", title: "Claude, Gemini, ChatGPT and Grok", notes: [
+    "Jarvis now picks the best and cheapest model for each message: Gemini (on your Google plan, with Google Search) for anything current and everyday questions, Claude for doing things on your PC and code, and the next one in line if one can't.",
+    "ChatGPT and Grok can join too, paid per use with an API key (run.bat --keys on the PC), only when they're the best pick, and never past your monthly budget.",
+    "The model menu shows them all: tick the ones Jarvis may use.",
+  ]},
   { v: "JNIv32", when: "Oct 31, 2026", title: "Your iPhone's calendar", notes: [
     "Connect your iPhone's calendars: Settings › Morning briefing › Calendar shows how to copy each calendar's link from the Calendar app. Add as many as you like; Google Calendar still works too.",
   ]},
@@ -1959,39 +1964,69 @@ function renderChat() {
 }
 
 // ================= the model picker =================
-// Three ticks, any mix (at least one): Claude (Sonnet, through your Claude plan), Hermes and Qwen3 (free, on the PC's
-// graphics card). The PC leaves out whoever is unticked (jarvis/hermes.py); with only the local ones, no tokens.
+// Ticks, any mix (at least one). For each command the PC picks the best ticked model for the job that costs the least
+// (jarvis/router.py): your plans first (Gemini for anything current and everyday questions, Claude for doing things
+// on the PC and code), the local models when told to go first, and pay-per-use ChatGPT / Grok only within the budget.
 const Models = {
   LIST: [
-    { key: "use_claude", name: "Claude", local: false },
-    { key: "use_hermes", name: "Hermes", local: true, model: "Hermes", sub: "Free, on your PC. Quick one-step commands." },
-    { key: "use_qwen", name: "Qwen3", local: true, model: "Qwen3", sub: "Free, on your PC. Thinks through bigger jobs." },
+    { key: "use_claude", name: "Claude", group: "Your plans" },
+    { key: "use_gemini", name: "Gemini", group: "Your plans" },
+    { key: "use_chatgpt", name: "ChatGPT", group: "Pay per use" },
+    { key: "use_grok", name: "Grok", group: "Pay per use" },
+    { key: "use_hermes", name: "Hermes", group: "On your PC", model: "Hermes", sub: "Free and private. Quick one-step commands; slower." },
+    { key: "use_qwen", name: "Qwen3", group: "On your PC", model: "Qwen3", sub: "Free and private. Thinks through bigger jobs; slower." },
   ],
   STATE: { missing: "not downloaded yet", offline: "Ollama isn't running", resting: "resting after errors" },
   s: null,
-  usable(m) { return !m.local || this.s.brain === "hermes"; },
+  usable(m) {
+    const s = this.s, x = s.models || {};
+    if (m.key === "use_gemini") return x.gemini_installed && x.gemini_signed_in;
+    if (m.key === "use_chatgpt") return !!x.chatgpt_key;
+    if (m.key === "use_grok") return !!x.grok_key;
+    if (m.model) return s.brain === "hermes";
+    return true;
+  },
   on() { return this.LIST.filter(m => this.s[m.key] && this.usable(m)); },
   label() {
     const on = this.on().map(m => m.name);
     if (!on.length) return "No model";
-    if (on.length === 3) return "All 3";
-    return desktop || on.length === 1 ? on.join(" + ") : `${on[0]} +${on.length - 1}`;   // the phone has less room
+    if (on.length === 1) return on[0];
+    return desktop && on.length === 2 ? on.join(" + ") : `${on[0]} +${on.length - 1}`;   // the phone has less room
   },
-  claudeSub() {
-    const v = /claude-sonnet-(\d+)-(\d+)/.exec(this.s.model_id || "");
-    return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}. The smartest; uses your Claude plan.`;
+  sub(m) {
+    const s = this.s, x = s.models || {};
+    if (m.key === "use_claude") {
+      const v = /claude-sonnet-(\d+)-(\d+)/.exec(s.model_id || "");
+      return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}, on your Claude plan. Best at doing things on your PC, and code.`;
+    }
+    if (m.key === "use_gemini") {
+      if (!x.gemini_installed) return "Not installed on the PC.";
+      if (!x.gemini_signed_in) return "Sign in once on the PC: run gemini.cmd and choose Sign in with Google.";
+      return "On your Google plan, with Google Search. Best for anything current, YouTube, long documents and everyday questions.";
+    }
+    if (m.key === "use_chatgpt" || m.key === "use_grok") {
+      if (!this.usable(m)) return "Needs an API key (paid per use): run.bat --keys on the PC.";
+      return m.key === "use_grok" ? "Pay per use. Only for X / Twitter, or when your plans can't answer."
+        : "Pay per use. Only when your plans can't answer, within the budget.";
+    }
+    const st = (s.local.find(x => x.name === m.model) || {}).state;
+    return !this.usable(m) ? "Not set up on this PC" : m.sub + (this.STATE[st] ? ` (${this.STATE[st]})` : "");
   },
   how() {
-    const s = this.s, on = this.on(), claude = on.some(m => !m.local), local = on.filter(m => m.local);
-    if (claude && local.length) return s.local_first ? "The local models try first; Claude steps in when they can't."
-      : `Claude answers. ${local.map(m => m.name).join(" and ")} step${local.length > 1 ? "" : "s"} in when Claude can't (no internet, limit reached).`;
-    if (claude) return "Claude answers everything.";
-    if (local.length === 2) return "Hermes takes the quick commands, Qwen3 the bigger ones. Free: no Claude, no tokens.";
-    return `${local[0].name} answers everything. Free: no Claude, no tokens.`;
+    const on = this.on().map(m => m.key);
+    const has = k => on.includes(k);
+    if (!on.length) return "";
+    const plans = ["use_claude", "use_gemini"].filter(has);
+    if (plans.length === 2) return "For each message Jarvis picks the best and cheapest: Gemini for anything current and everyday questions, Claude for doing things on your PC and code. If one can't, the next one tries.";
+    if (plans.length === 1) return `${plans[0] === "use_claude" ? "Claude" : "Gemini"} answers; the others step in if it can't.`;
+    if (has("use_chatgpt") || has("use_grok")) return "Only pay-per-use models: every message costs a little, up to your budget.";
+    return "Only the local models: free and private, but slower. No Claude, no tokens.";
   },
   state(d) {
     if (!("use_hermes" in d)) return;   // an older Jarvis on the PC: nothing to pick from
-    this.s = { use_claude: !!d.use_claude, use_hermes: !!d.use_hermes, use_qwen: !!d.use_qwen, brain: d.brain,
+    const m = d.models || {};
+    this.s = { use_claude: !!d.use_claude, use_hermes: !!d.use_hermes, use_qwen: !!d.use_qwen, use_gemini: !!m.use_gemini,
+               use_chatgpt: !!m.use_chatgpt, use_grok: !!m.use_grok, models: m, brain: d.brain,
                local_first: !!d.local_first, model_id: d.model_id || "", local: d.local || [] };
     this.paint();
   },
@@ -1999,7 +2034,7 @@ const Models = {
     $("modelChip").hidden = !this.s;
     if (!this.s) return;
     $("modelName").textContent = this.label();
-    $("modelChip").classList.toggle("local", !this.s.use_claude);
+    $("modelChip").classList.toggle("local", !this.on().some(m => !m.model));
     if (!$("modelMenu").hidden) this.renderMenu();
   },
   toggle(key) {
@@ -2010,15 +2045,19 @@ const Models = {
     this.paint();
   },
   renderMenu() {
-    const s = this.s, menu = $("modelMenu");
-    const row = m => {
-      const st = m.local && (s.local.find(x => x.name === m.model) || {}).state;
-      const sub = !this.usable(m) ? "Not set up on this PC" : m.local ? m.sub + (this.STATE[st] ? ` (${this.STATE[st]})` : "") : this.claudeSub();
-      const on = !!s[m.key] && this.usable(m);
-      return `<button class="mm-opt${on ? " on" : ""}" role="menuitemcheckbox" aria-checked="${on}" data-key="${m.key}"${this.usable(m) ? "" : " disabled"}>`
-        + `<span class="box"><svg class="i"><use href="#i-check"/></svg></span><span class="t"><b>${m.name}</b><small>${sub}</small></span></button>`;
-    };
-    menu.innerHTML = '<div class="mm-sec">Models Jarvis can use</div>' + this.LIST.map(row).join("") + `<div class="mm-now">${this.how()}</div>`;
+    const s = this.s, x = s.models || {}, menu = $("modelMenu");
+    let html = "", group = "";
+    for (const m of this.LIST) {
+      if (m.group !== group) {
+        group = m.group;
+        const extra = group === "Pay per use" && (x.chatgpt_key || x.grok_key) ? ` · $${(x.spend || 0).toFixed(2)} of $${x.budget || 0} this month` : "";
+        html += `<div class="mm-sec">${group}${extra}</div>`;
+      }
+      const ok = this.usable(m), on = !!s[m.key] && ok;
+      html += `<button class="mm-opt${on ? " on" : ""}" role="menuitemcheckbox" aria-checked="${on}" data-key="${m.key}"${ok ? "" : " disabled"}>`
+        + `<span class="box"><svg class="i"><use href="#i-check"/></svg></span><span class="t"><b>${m.name}</b><small>${this.sub(m)}</small></span></button>`;
+    }
+    menu.innerHTML = html + `<div class="mm-now">${this.how()}</div>`;
     for (const b of menu.querySelectorAll(".mm-opt")) b.onclick = () => this.toggle(b.dataset.key);
   },
   open() {
@@ -2032,13 +2071,6 @@ const Models = {
   },
   close() { $("modelMenu").hidden = true; },
 };
-$("askToggle").onchange = e => {
-  const on = e.target.checked;
-  post({ type: "set", key: "ask_permission", value: on, id: newId() })
-    .then(() => toast(on ? "Jarvis asks before risky actions" : "Jarvis won't ask any more", on ? "shield" : "check"),
-          () => { e.target.checked = !on; toast("Not connected to your PC", "x", "var(--red)"); });
-};
-if (desktop) $("faceidSub").textContent = "On this PC, your Windows PIN or password is asked instead";
 $("modelChip").onclick = e => { e.stopPropagation(); $("modelMenu").hidden ? Models.open() : Models.close(); };
 document.addEventListener("pointerdown", e => { if (!$("modelMenu").hidden && !e.target.closest("#modelMenu, #modelChip")) Models.close(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") Models.close(); });

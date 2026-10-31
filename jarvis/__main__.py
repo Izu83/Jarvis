@@ -43,6 +43,44 @@ def pair() -> None:
         print("\nNOTE: set \"phone_page_url\" in config.json to your GitHub Pages URL first, then run --pair again.")
 
 
+def keys_setup() -> None:
+    """API keys for the pay-per-use models (ChatGPT, Grok): typed hidden, checked, saved in .env."""
+    import getpass
+
+    import requests
+
+    from . import cloud
+    from .config import set_secret, set_setting
+
+    print("Jarvis can also use ChatGPT and Grok, paid per use through their APIs (not the ChatGPT or Grok apps).")
+    print("It only sends them what they're best at, or what Claude and Gemini can't answer, and keeps both together")
+    print(f"under your monthly budget (now ${settings.get('paid_budget', 5.0):g}). Press Enter to skip one.\n")
+    where = {"chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai"}
+    for provider, (env, base, *_rest) in cloud.PROVIDERS.items():
+        name = cloud.NAMES[provider]
+        have = " (you have one; Enter keeps it)" if cloud.has_key(provider) else ""
+        key = getpass.getpass(f"{name} API key from {where[provider]}{have} (hidden): ").strip()
+        if not key:
+            continue
+        try:
+            ok = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
+        except requests.RequestException:
+            ok = False
+        if not ok:
+            print(f"  {name} didn't accept that key; nothing changed.")
+            continue
+        set_secret(env, key)
+        set_setting("use_" + provider, True)
+        print(f"  {name} is connected and ticked in the model menu.")
+    budget = input(f"Monthly budget for both, in USD [{settings.get('paid_budget', 5.0):g}]: ").strip()
+    if budget:
+        try:
+            set_setting("paid_budget", max(0.0, float(budget)))
+        except ValueError:
+            print("  That isn't a number; the budget stays as it was.")
+    print("Done. Restart Jarvis to use them.")
+
+
 def email_setup() -> None:
     """Connect Jarvis to an email account: asks for the address and an app password (typed hidden, saved in .env)."""
     import getpass
@@ -97,6 +135,7 @@ def main() -> None:
     parser.add_argument("--no-tray", action="store_true", help="don't show the taskbar tray icon")
     parser.add_argument("--pair", action="store_true", help="show the link/QR code that connects your phone")
     parser.add_argument("--email", action="store_true", help="connect your email account (app password)")
+    parser.add_argument("--keys", action="store_true", help="API keys for ChatGPT and Grok (pay per use)")
     parser.add_argument("--startup", action="store_true", help="start Jarvis hidden at login from now on")
     parser.add_argument("--startup-off", action="store_true", help="stop starting Jarvis at login")
     args = parser.parse_args()
@@ -119,6 +158,9 @@ def main() -> None:
         return
     if args.email:
         email_setup()
+        return
+    if args.keys:
+        keys_setup()
         return
 
     # Only one Jarvis at a time. A named mutex is held for the life of the process; a second copy (however it
@@ -298,8 +340,7 @@ def main() -> None:
                 answer = nlu.try_handle(text, progress=step)  # common commands, no Claude, no tokens
                 if answer is not None:
                     log.info("(handled locally, no tokens used)")
-                elif settings["use_claude"] or (settings["brain"] == "hermes" and (   # -> the picked brains
-                        settings.get("use_hermes", True) or settings.get("use_qwen", True))):
+                elif settings["use_claude"] or settings["brain"] == "hermes":   # -> the picked models (router.py)
                     answer = brain.handle(text, chat=chat, recent=recent, progress=step)
                     thinking = getattr(brain, "last_thinking", "") or ""
                 else:                                          # Claude is switched off: stay free

@@ -153,17 +153,30 @@ like in Claude. Open it from the **Jarvis** shortcut, Windows search, or by clic
 - The page comes from `docs/` through a small web server on `127.0.0.1:8788` (only this PC can reach it), in an Edge
   WebView2 window (pywebview). Its chats and settings are kept in `.brain/desktop-app`.
 
-### Picking the models
+### Picking the models: Claude, Gemini, ChatGPT, Grok and the local ones
 
-Tap the model name in the message box (on the phone too) and tick the ones Jarvis may use, in any mix (at least one):
+Tap the model name in the message box (on the phone too) and tick the models Jarvis may use. For each message
+`jarvis/router.py` picks the best ticked one for the job that costs the least, with plain rules on the PC (picking
+costs nothing), and the next one in line answers if one fails or hits its limit:
 
-- **Claude**: Sonnet, through your Claude plan. The smartest.
-- **Hermes**: free, on your graphics card. Quick one-step commands.
-- **Qwen3**: free, on your graphics card. Thinks through bigger jobs.
+| The job | Order |
+|---|---|
+| Doing things on the PC, many steps | Claude, Gemini, local, ChatGPT |
+| Code | Claude, ChatGPT, Gemini |
+| The screen, photos you send | Claude, Gemini, ChatGPT |
+| Anything current (news, prices, search) | Gemini, Claude, Grok, ChatGPT |
+| YouTube, long documents | Gemini, Claude |
+| X / Twitter | Grok, Gemini, Claude |
+| Everyday questions and chat | Gemini, Claude, local, ChatGPT, Grok |
 
-With Claude and a local model ticked, Claude answers and the local ones step in when Claude can't (no internet, limit
-reached); Settings › Local brain › "Try local models first" flips that. With only the local ones ticked, Jarvis
-never calls Claude (no tokens). The ticks are `use_claude`, `use_hermes` and `use_qwen` in `config.json`.
+- **Claude**: your Claude plan, through Claude Code (`claude_code_model`, Sonnet).
+- **Gemini**: your Google plan, through Google's Gemini CLI (`jarvis/gemini.py`), with Jarvis's tools and Google
+  Search. Install once with `npm install -g @google/gemini-cli`, then run `gemini.cmd` and sign in with Google. It
+  takes what it's best at and the everyday questions, so your Claude limit lasts.
+- **ChatGPT, Grok**: paid per use through their APIs (`jarvis/cloud.py`). `run.bat --keys` adds the API keys
+  (kept in `.env`) and the monthly budget (`paid_budget`, USD, both together). The spend is estimated from
+  `chatgpt_price` / `grok_price` (USD per million tokens); past the budget they're skipped until next month.
+- **Hermes, Qwen3**: free on your graphics card. Settings › Local brain › "Try local models first" puts them first.
 
 ## Voice mode
 
@@ -480,6 +493,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/router.py`, `gemini.py`, `cloud.py` | Picking the model for each message; Gemini through the Gemini CLI; ChatGPT and Grok through their APIs |
 | `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |
 | `jarvis/orb.py` | The Jarvis orb: the icons, the tray icon and the pop-up's live orb |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |

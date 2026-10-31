@@ -26,7 +26,7 @@ import time
 
 import requests
 
-from . import health, memory, outbox, partial, stopping, tools, usage
+from . import health, memory, outbox, partial, router, stopping, tools, usage
 from .brain import MAX_TOOL_ROUNDS, describe_step, make_brain_named, step_kind, system_prompt
 from .config import ROOT, settings
 
@@ -183,6 +183,9 @@ def _needs_claude(command: str) -> bool:
     return bool(_FILE_SEARCH.search(c))
 
 
+MODEL_NAMES = {"claude": "Claude", "gemini": "Gemini", "local": "the local brain", "chatgpt": "ChatGPT", "grok": "Grok"}
+
+
 class HermesBrain:
     def __init__(self):
         self.host = settings["ollama_host"].rstrip("/")
@@ -204,6 +207,7 @@ class HermesBrain:
         self.last_thinking = ""
         self.lock = threading.Lock()
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
+        self._gemini_brain = None   # likewise for Gemini (gemini.py)
         self._strikes: dict[str, int] = {}   # errors in a row, per team member (see REST_SECONDS)
         log.info("Local brain ready: %s via %s. Claude is the fallback.",
                  " + ".join(f"{name} ({m})" for m, name, _ in self.team.values()), self.host)
@@ -338,6 +342,8 @@ class HermesBrain:
     def close(self) -> None:
         if self._fallback is not None:
             self._fallback.close()
+        if self._gemini_brain is not None:
+            self._gemini_brain.close()
 
     def _claude(self):
         if self._fallback is None:
@@ -357,32 +363,56 @@ class HermesBrain:
             self.progress = progress
             self.last_used = time.time()
 
-            claude = settings.get("use_claude", True)
-            local = any(settings.get("use_" + k, True) for k in self.team)
-            if not claude:   # Claude is unticked: the local models only, and never a token
-                answer = self._local(original, command, chat, recent)
-                return answer if answer is not None else (
-                    "The local models couldn't do that one. Tick Claude in the model menu for the harder jobs.")
-            if not local:    # only Claude is ticked
-                return self._to_claude(command, chat, recent, progress)
-
-            if not settings.get("local_first", False):
-                answer = self._to_claude(command, chat, recent, progress)
-                if not getattr(self._claude(), "failed", False):
+            # the model menu's ticks and what's set up, then router.py: the best model for the job that costs least
+            available = self._available()
+            if not available:
+                return "Every model is switched off. Tick one in the model menu."
+            order = router.plan(original, available, settings.get("local_first", False)) or sorted(available)
+            log.info("Router: %s -> %s", router.kind(original), " -> ".join(order))
+            last = None
+            for i, model in enumerate(order):
+                cap = lambda text: text[0].upper() + text[1:]
+                if i:
+                    self._say(cap(f"{MODEL_NAMES[order[i - 1]]} couldn't do it, so {MODEL_NAMES[model]} is trying…"))
+                elif model != "claude":
+                    self._say(cap(f"{MODEL_NAMES[model]} is on it…"))
+                answer, ok = self._ask_model(model, original, command, chat, recent, progress)
+                if ok:
                     return answer
-                log.info("Claude couldn't answer (%r); the local team tries.", answer[:80])
-                self._say("Claude can't answer right now, so the local brain is trying…")
-                return self._local(original, command, chat, recent) or answer
+                last = answer or last
+            return last or "None of the models could answer that right now."
 
-            if _needs_claude(original):
-                log.info("Routing straight to Claude (needs vision/web/exact search): %r", command[:70])
-                return self._to_claude(command, chat, recent, progress)
+    def _available(self) -> set[str]:
+        from . import cloud, gemini
+        have = set()
+        if settings.get("use_claude", True):
+            have.add("claude")
+        if settings.get("use_gemini", True) and gemini.ready():
+            have.add("gemini")
+        if any(settings.get("use_" + k, True) for k in self.team):
+            have.add("local")
+        have.update(p for p in cloud.PROVIDERS if cloud.usable(p))
+        return have
 
+    def _ask_model(self, model, original, command, chat, recent, progress) -> tuple[str | None, bool]:
+        """One model's go at the command: (its answer, whether it really answered)."""
+        if model == "local":
             answer = self._local(original, command, chat, recent)
-            if answer is not None:
-                return answer
-            self._say("Handing this one to Claude…")
-            return self._to_claude(command, chat, recent, progress)
+            return answer, answer is not None
+        if model == "claude":
+            answer = self._to_claude(command, chat, recent, progress)
+            return answer, not getattr(self._fallback, "failed", False)
+        if model == "gemini":
+            if self._gemini_brain is None:
+                from .gemini import GeminiBrain
+                self._gemini_brain = GeminiBrain()
+            brain = self._gemini_brain
+        else:
+            from .cloud import CloudBrain
+            brain = CloudBrain(model)
+        answer = brain.handle(command, chat=chat, recent=recent, progress=progress)
+        self.last_thinking = getattr(brain, "last_thinking", "") or ""
+        return answer, not brain.failed
 
     def _local(self, original: str, command: str, chat, recent) -> str | None:
         """Let the local team try, in order. None if none of them could do it."""

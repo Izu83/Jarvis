@@ -77,6 +77,11 @@ def pairing_link() -> str:
     return link + (f"&u={url}" if url else "")
 
 
+# the model picker's ticks (Settings and the model menu) and what the log calls them
+MODEL_TICKS = {"use_claude": "Claude", "use_gemini": "Gemini", "use_chatgpt": "ChatGPT", "use_grok": "Grok",
+               "use_hermes": "Hermes", "use_qwen": "Qwen3"}
+
+
 class PhoneChannel:
     def __init__(self, on_command):
         self.on_command = on_command
@@ -258,6 +263,7 @@ class PhoneChannel:
                        # the model picker
                        "claude_model": settings["claude_code_model"], "effort": settings["claude_code_effort"],
                        "use_hermes": bool(settings.get("use_hermes", True)), "use_qwen": bool(settings.get("use_qwen", True)),
+                       "models": self._models_state(),
                        "model_id": RUNNING["model"],
                        # the desktop app's "is the phone connected?" card
                        "devices": {"phones": len(self.clients) - len(self.desktops), "desktops": len(self.desktops),
@@ -271,6 +277,16 @@ class PhoneChannel:
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
                        "activity": activity.summary(), "watches": watchers.items() + proactive.items()})
+
+    @staticmethod
+    def _models_state() -> dict:
+        """The model picker: what's ticked, what's set up, and this month's spend on the pay-per-use ones."""
+        from . import cloud, gemini, usage
+        return {"use_gemini": bool(settings.get("use_gemini", True)), "gemini_installed": bool(gemini.exe()),
+                "gemini_signed_in": gemini.signed_in(),
+                "use_chatgpt": bool(settings.get("use_chatgpt")), "chatgpt_key": cloud.has_key("chatgpt"),
+                "use_grok": bool(settings.get("use_grok")), "grok_key": cloud.has_key("grok"),
+                "spend": round(usage.month_spend(), 2), "budget": float(settings.get("paid_budget", 5.0))}
 
     def send_memory(self) -> None:
         """What Jarvis remembers, for Settings > Memory on the phone."""
@@ -748,10 +764,9 @@ class PhoneChannel:
                 if data.get("value") in speak.VOICES:
                     set_setting("edge_voice", data["value"])
                     log.info("Jarvis's voice set to %s from the phone.", speak.VOICES[data["value"]][0])
-            elif key in ("use_claude", "use_hermes", "use_qwen"):   # the model picker's ticks
+            elif key in MODEL_TICKS:   # the model picker's ticks
                 set_setting(key, value)
-                log.info("%s turned %s.", {"use_claude": "Claude", "use_hermes": "Hermes", "use_qwen": "Qwen3"}[key],
-                         "on" if value else "off")
+                log.info("%s turned %s.", MODEL_TICKS[key], "on" if value else "off")
             elif key == "claude_code_model":
                 from .brain import MODELS
                 if data.get("value") in MODELS:

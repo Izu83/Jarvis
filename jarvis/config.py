@@ -51,6 +51,18 @@ DEFAULTS = {
     "use_claude": True,
     "use_hermes": True,
     "use_qwen": True,
+    # Gemini through the Gemini CLI on your Google plan (gemini.py; "" model = the CLI's default). ChatGPT and Grok are
+    # pay-per-use through their APIs (cloud.py): off until you add a key (run.bat --keys) and tick them; together they
+    # stay under paid_budget (USD a month). Prices are USD per million tokens [input, output], for the estimate.
+    "use_gemini": True,
+    "gemini_model": "",
+    "use_chatgpt": False,
+    "use_grok": False,
+    "chatgpt_model": "gpt-5-mini",
+    "grok_model": "grok-4-fast",
+    "chatgpt_price": [0.25, 2.0],
+    "grok_price": [0.2, 0.5],
+    "paid_budget": 5.0,
     "claude_code_model": "sonnet",  # "sonnet", "haiku" (fastest) or "opus"; empty = your Claude Code default
     "claude_code_effort": "medium",  # medium = smarter multi-step; "low" = fastest, "high" = smartest (more tokens)
     # Only for "brain": "api"

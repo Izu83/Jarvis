@@ -3,6 +3,7 @@ rem Start Jarvis. With no arguments it starts hidden: no window, just the tray i
 rem (right-click it to restart, open the log or quit). With arguments it runs in this window, e.g.
 rem   run.bat --text      type commands here      run.bat --console   see the log live in this window
 rem   run.bat --pair      connect your phone      run.bat --email     connect your email
+rem   run.bat --keys      API keys for ChatGPT and Grok (pay per use)
 cd /d "%~dp0"
 if not "%~1"=="" goto here
 start "" wscript.exe "%~dp0Jarvis.vbs"
