@@ -331,6 +331,14 @@ The PC checks the signature (`jarvis/faceid.py`), so someone holding your unlock
 pairing key, can't approve. Turning it off needs Face ID too; with a lost or reset phone, right-click the tray icon
 › **Turn off Face ID for permissions**. Prompts shown on the PC itself are unchanged.
 
+**On the PC**: an Allow clicked in the desktop app is checked by Windows instead (`jarvis/winverify.py`): Windows
+Hello's "Making sure it's you" box (your PIN, face or fingerprint), or Windows' own password box if Hello isn't set
+up. Jarvis only learns whether it was you, never the PIN or password.
+
+**Fewer prompts**: messages and emails are sent without asking. Settings › Security › **Ask before risky actions**
+(`ask_permission` in `config.json`) switched off means nothing asks at all: commands, deleting, overwriting and
+shutting down just happen. The hard limits stay: system and Windows folders still can't be deleted.
+
 ## Bulgarian
 
 Settings › **Language you speak**: English, Български or Both (`voice_language` in `config.json`). Bulgarian uses the

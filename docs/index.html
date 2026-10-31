@@ -1169,9 +1169,10 @@
       <div class="group-foot">For “Hey Jarvis” on your PC and dictation here. Replies in Bulgarian are read in a Bulgarian voice either way.</div>
       <div class="group-title">Security</div>
       <div class="group">
-        <label class="row"><span class="grow">Face ID for permissions<span class="sub">Sending, deleting, running commands and shutting down need your face before they're allowed</span></span><span class="switch"><input type="checkbox" id="faceidToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Ask before risky actions<span class="sub">Running commands, deleting, overwriting and shutting down wait for your Allow. Off: Jarvis just does them</span></span><span class="switch"><input type="checkbox" id="askToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Face ID for permissions<span class="sub" id="faceidSub">Deleting, running commands and shutting down need your face before they're allowed</span></span><span class="switch"><input type="checkbox" id="faceidToggle"><span></span></span></label>
       </div>
-      <div class="group-foot">Your PC checks the Face ID itself, so someone holding your unlocked phone can't approve anything. Turning it off needs Face ID too. Lost your phone? Right-click the Jarvis tray icon on the PC › Turn off Face ID for permissions.</div>
+      <div class="group-foot">Messages and emails always go without asking. Your PC checks the Face ID itself, so someone holding your unlocked phone can't approve anything; in the desktop app on your PC it asks for your Windows PIN or password instead. Turning Face ID off needs it too. Lost your phone? Right-click the Jarvis tray icon on the PC › Turn off Face ID for permissions.</div>
       <div class="group-title">Notifications</div>
       <div class="group">
         <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
@@ -1317,10 +1318,15 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.7";   // bump together with version.json
+const VERSION = "2026-10-31.8";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv28", when: "Oct 31, 2026", title: "Fewer permission prompts", notes: [
+    "Messages and emails go straight out: Jarvis doesn't ask first any more.",
+    "Settings › Security › Ask before risky actions: turn it off and Jarvis just does things (commands, deleting, shutting down) without asking.",
+    "In the desktop app, Allow asks for your Windows PIN or password instead of Face ID.",
+  ]},
   { v: "JNIv27", when: "Oct 31, 2026", title: "Humanoid Jarvis", notes: [
     "Voice mode has a Humanoid button: the orb becomes a head made of the same glowing threads. He looks around, blinks, faces you while you talk, looks up while he thinks, and his mouth moves with his voice. Tap it again for the orb.",
   ]},
@@ -1999,6 +2005,13 @@ const Models = {
   },
   close() { $("modelMenu").hidden = true; },
 };
+$("askToggle").onchange = e => {
+  const on = e.target.checked;
+  post({ type: "set", key: "ask_permission", value: on, id: newId() })
+    .then(() => toast(on ? "Jarvis asks before risky actions" : "Jarvis won't ask any more", on ? "shield" : "check"),
+          () => { e.target.checked = !on; toast("Not connected to your PC", "x", "var(--red)"); });
+};
+if (desktop) $("faceidSub").textContent = "On this PC, your Windows PIN or password is asked instead";
 $("modelChip").onclick = e => { e.stopPropagation(); $("modelMenu").hidden ? Models.open() : Models.close(); };
 document.addEventListener("pointerdown", e => { if (!$("modelMenu").hidden && !e.target.closest("#modelMenu, #modelChip")) Models.close(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") Models.close(); });
@@ -2664,6 +2677,7 @@ function onState(data) {
     napOn = data.nap; napSince = data.nap_since || 0; renderStatusBar();
   }
   if (typeof data.faceid === "boolean") { faceidOn = data.faceid; $("faceidToggle").checked = data.faceid; }
+  if (typeof data.ask_permission === "boolean" && document.activeElement !== $("askToggle")) $("askToggle").checked = data.ask_permission;
   setModes(data.modes || []);
   if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
@@ -4397,6 +4411,8 @@ const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\
 const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4)), c => c.charCodeAt(0));
 const canFaceId = () => !!(window.PublicKeyCredential && navigator.credentials?.create);
 function faceidSign(challenge, keys) {   // must run straight from a tap (iOS needs the gesture)
+  // the desktop app: the PC asks Windows instead (your PIN or password, jarvis/winverify.py); nothing to sign here
+  if (desktop) { try { window.pywebview?.api?.let_windows_ask(); } catch {} return Promise.resolve({ pc: true }); }
   return navigator.credentials.get({ publicKey: {
     challenge: unb64u(challenge), allowCredentials: (keys || []).map(id => ({ type: "public-key", id: unb64u(id) })),
     userVerification: "required", timeout: 60000 } }).then(a => ({
@@ -4453,7 +4469,7 @@ function showAsk(data) {
     msg.textContent = why;
     const code = document.createElement("code"); code.textContent = rest.join("\n\n"); msg.append(code);
   } else msg.textContent = data.detail || "";
-  wrap.querySelector(".destructive").textContent = (data.confirm || "Allow") + (data.faceid ? " with Face ID" : "");
+  wrap.querySelector(".destructive").textContent = (data.confirm || "Allow") + (data.faceid ? (desktop ? " with your PC password" : " with Face ID") : "");
   const answer = (allow, webauthn) => {
     wrap.remove();
     if (!webauthn) asks.delete(data.id);   // with Face ID it may come back (ask_retry) if the PC rejects it

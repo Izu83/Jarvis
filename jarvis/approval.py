@@ -16,7 +16,13 @@ import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .config import settings
+
 log = logging.getLogger("jarvis.approval")
+
+# Which risk categories each autonomy level auto-approves (everything else still asks the user).
+# Hard safety stays in code regardless: files.check_deletable blocks system/Windows/main-user folders.
+_AUTO = {"ask": (), "risky_only": ("cmd", "change"), "full": ("cmd", "change", "delete")}
 
 TIMEOUT = 120   # seconds to answer before it counts as "no"
 _ask_handler = None
@@ -35,6 +41,28 @@ def _call(payload: dict, timeout: float):
             return json.load(r)
     except OSError:
         return None
+
+
+def _live(key: str, default):
+    """A setting as saved right now. The tools run in their own process (mcp_server.py), whose copy of the settings
+    is from when it started, so a switch flipped on the phone since then is read from config.json."""
+    try:
+        from .config import CONFIG_PATH
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8")).get(key, settings.get(key, default))
+    except Exception:
+        return settings.get(key, default)
+
+
+def automatic(risk: str) -> str:
+    """Why this kind of action goes ahead without asking, or "" if the user should be asked."""
+    if risk == "send":
+        return "messages and emails never ask"
+    if not _live("ask_permission", True):
+        return "asking is switched off"   # Settings › Security › Ask before risky actions
+    level = _live("autonomy", "ask")
+    if risk in _AUTO.get(level, ()):
+        return "autonomy " + level
+    return ""
 
 
 def ask(title: str, detail: str, confirm: str = "Allow") -> bool:

@@ -266,6 +266,7 @@ class PhoneChannel:
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
                        "away": away.is_on(), "away_since": away.since(), "faceid": faceid.enabled(),
+                       "ask_permission": bool(settings.get("ask_permission", True)),
                        "nap": nap.is_on(), "nap_since": nap.since(),
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
@@ -529,8 +530,8 @@ class PhoneChannel:
         if not scan or data.get("scan") != scan["scan"] or time.time() - scan["ts"] > 1800:
             self.reply(msg_id, "That scan is out of date. Run /cleandisk again.")
             return
-        if scan["challenge"] and not faceid.verify(data.get("webauthn"), scan["challenge"]):
-            self.reply(msg_id, "Face ID didn't check out, so nothing was cleaned.")
+        if scan["challenge"] and not self._its_you(data, scan["challenge"], "Let Jarvis clean up your disk"):
+            self.reply(msg_id, "That wasn't confirmed as you, so nothing was cleaned.")
             return
         chosen = [scan["items"][i] for i in data.get("ids", []) if i in scan["items"]]
         self._clean = None   # one clean per scan
@@ -546,6 +547,15 @@ class PhoneChannel:
         self._publish({"kind": "clean_done", "id": msg_id, "text": " ".join([text, *out["notes"]]),
                        "freed": out["freed"]})
 
+    @staticmethod
+    def _its_you(data: dict, challenge: str, reason: str) -> bool:
+        """Face ID from the phone, checked against its key; from the desktop app, Windows checks it's you instead
+        (your PIN, face, fingerprint or password: winverify.py)."""
+        if data.get("_desktop"):
+            from . import winverify
+            return winverify.verify(reason)
+        return faceid.verify(data.get("webauthn"), challenge)
+
     def _answer(self, data: dict) -> None:
         """Allow / Don't Allow from the phone. With Face ID on, an Allow needs a valid signature for this exact
         prompt; a bad one leaves the prompt open (Face ID can be tried again), it never counts as a yes."""
@@ -555,10 +565,11 @@ class PhoneChannel:
             return
         allow = data.get("allow") is True
         p = entry["payload"]
-        if allow and p.get("faceid") and not faceid.verify(data.get("webauthn"), p["challenge"]):
-            log.warning("Permission: an Allow without a valid Face ID was ignored (%s).", p.get("title"))
-            self._publish({"kind": "ask_retry", "id": ask_id,
-                           "text": "Face ID didn't check out, so it isn't allowed yet. Try again."})
+        if allow and p.get("faceid") and not self._its_you(data, p["challenge"], "Allow Jarvis to: " + p.get("title", "")):
+            log.warning("Permission: an Allow that wasn't confirmed as you was ignored (%s).", p.get("title"))
+            self._publish({"kind": "ask_retry", "id": ask_id, "text": (
+                "Windows didn't confirm it's you" if data.get("_desktop") else "Face ID didn't check out")
+                + ", so it isn't allowed yet. Try again."})
             return
         entry["ok"] = allow
         entry["event"].set()
@@ -674,11 +685,11 @@ class PhoneChannel:
                            "keys": faceid.ids()})
         elif kind == "faceid_off":
             ch, self._faceid_off = getattr(self, "_faceid_off", ""), ""
-            if ch and faceid.verify(data.get("webauthn"), ch):
+            if ch and self._its_you(data, ch, "Turn off Face ID for Jarvis's permissions"):
                 faceid.clear()
                 self.reply(msg_id, "Face ID for permissions is off.")
             else:
-                self.reply(msg_id, "Face ID didn't check out, so it's still on.")
+                self.reply(msg_id, "That wasn't confirmed as you, so it's still on.")
         elif kind == "nap":   # Sleep tile › Nap, /nap: screens off, still reachable
             self.reply(msg_id, nap.turn_on())
         elif kind == "nap_off":   # the napping chip's Wake, /wake
@@ -750,6 +761,9 @@ class PhoneChannel:
                 if data.get("value") in EFFORTS:
                     set_setting("claude_code_effort", data["value"])
                     log.info("Thinking effort set to %s.", data["value"])
+            elif key == "ask_permission":
+                set_setting("ask_permission", value)
+                log.info("Asking before risky actions turned %s.", "on" if value else "off")
             elif key == "local_first":
                 set_setting("local_first", value)
                 log.info("Local models first turned %s from the phone.", "on" if value else "off")
@@ -880,6 +894,7 @@ class PhoneChannel:
                 if isinstance(message, str):
                     data = self._decrypt(message)
                     if data:   # run off the event loop so slow work never blocks other messages
+                        data["_desktop"] = is_desktop   # set here, never taken from the message
                         self.loop.run_in_executor(None, self._safe_handle, data)
         except ConnectionClosed:
             pass

@@ -14,15 +14,11 @@ from .config import settings
 
 log = logging.getLogger("jarvis.tools")
 
-# Which risk categories each autonomy level auto-approves (everything else still asks the user).
-# Hard safety stays in code regardless: files.check_deletable blocks system/Windows/main-user folders.
-_AUTO = {"ask": (), "risky_only": ("cmd", "change"), "full": ("cmd", "change", "delete")}
-
-
 def _confirm(risk: str, title: str, detail: str, confirm: str) -> bool:
-    """Ask the user to approve an action, unless the chosen autonomy level auto-approves this kind of action."""
-    if risk in _AUTO.get(settings.get("autonomy", "ask"), ()):
-        log.info("Auto-approved (%s): %s", risk, title)
+    """Ask the user to approve an action, unless this kind of action goes ahead without asking (approval.automatic)."""
+    why = approval.automatic(risk)
+    if why:
+        log.info("Not asking (%s): %s", why, title)
         return True
     return approval.ask(title, detail, confirm)
 

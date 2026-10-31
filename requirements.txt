@@ -27,3 +27,4 @@ mss
 icalendar
 recurring-ical-events
 pywebview
+winrt-Windows.Security.Credentials.UI

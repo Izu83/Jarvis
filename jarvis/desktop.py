@@ -94,6 +94,10 @@ def serve_page() -> http.server.ThreadingHTTPServer:
 class Api:
     """What the page can ask the app for (window.pywebview.api)."""
 
+    def let_windows_ask(self):
+        """Allow was clicked here: let Windows' "Making sure it's you" box (shown for Jarvis) come to the front."""
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)   # ASFW_ANY
+
     def pair(self):
         """The pairing window (QR code), for a new phone."""
         subprocess.Popen([str(_pythonw()), "-m", "jarvis.pairing"], cwd=str(ROOT),

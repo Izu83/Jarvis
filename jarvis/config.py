@@ -76,6 +76,9 @@ DEFAULTS = {
     # things freely, still confirm deletes/power/messages), "full" (do almost everything without asking; system/Windows
     # folders are still never deletable, and shutdowns and sending messages still confirm).
     "autonomy": "full",
+    # false = never ask: everything risky just happens (Settings › Security › Ask before risky actions).
+    # Sending messages and emails never asks either way.
+    "ask_permission": True,
     "wake_word_model": "hey_jarvis",
     "wake_threshold": 0.5,
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
