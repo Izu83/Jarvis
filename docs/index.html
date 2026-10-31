@@ -769,6 +769,59 @@
   .live-ring.right { border-color: var(--orange); }
   @keyframes ring { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
   .hint { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 20px); left: 16px; color: rgba(255,255,255,.6); font-size: 13px; }
+  /* ---------- the model picker (in the message box, like Claude's) ---------- */
+  .model-chip { flex: none; align-self: center; height: 30px; margin: 0 4px 0 2px; padding: 0 8px 0 11px; border-radius: 15px; display: inline-flex; align-items: center; gap: 3px;
+    font-size: 13.5px; font-weight: 600; color: var(--label2); background: var(--fill); white-space: nowrap; letter-spacing: -.1px; }
+  .model-chip svg.i { width: 13px; height: 13px; stroke-width: 2.6; }
+  .model-chip:hover { color: var(--label); }
+  .model-chip.local { color: var(--green, #34c759); }
+  /* on the phone it makes room for what you type */
+  html:not(.desktop) .model-chip { height: 28px; font-size: 12.5px; padding: 0 6px 0 9px; }
+  html:not(.desktop) .field:has(#text:not(:placeholder-shown)) .model-chip { display: none; }
+  .model-menu { position: fixed; z-index: 40; width: min(340px, calc(100vw - 24px)); border-radius: 22px; padding: 6px; animation: island .35s var(--spring) both; }
+  .model-menu .mm-sec { padding: 9px 12px 4px; font-size: 12px; font-weight: 600; color: var(--label2); letter-spacing: .2px; text-transform: uppercase; }
+  .model-menu .mm-opt { width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border-radius: 15px; text-align: left; color: var(--label); }
+  .model-menu .mm-opt:hover, .model-menu .mm-opt:focus-visible { background: var(--fill); outline: 0; }
+  .model-menu .mm-opt[disabled] { opacity: .45; }
+  .model-menu .mm-opt b { display: block; font-size: 15.5px; font-weight: 600; line-height: 20px; }
+  .model-menu .mm-opt small { display: block; font-size: 13px; line-height: 17px; color: var(--label2); }
+  .model-menu .mm-opt .t { flex: 1; min-width: 0; }
+  .model-menu .mm-opt .ck { width: 18px; height: 18px; margin-top: 1px; color: var(--accent); stroke-width: 2.8; visibility: hidden; flex: none; }
+  .model-menu .mm-opt.on .ck { visibility: visible; }
+  .model-menu .mm-think { display: flex; align-items: center; gap: 10px; padding: 8px 12px 10px; border-top: .5px solid var(--sep); margin-top: 4px; }
+  .model-menu .mm-think span { flex: 1; font-size: 14px; font-weight: 600; }
+  .model-menu .mm-think .segment { flex: none; }
+  .model-menu .mm-now { padding: 0 12px 8px; font-size: 12px; color: var(--label2); }
+  .mm-seg { display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: var(--fill); }
+  .mm-seg button { height: 28px; padding: 0 10px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--label2); }
+  .mm-seg button.on { background: var(--card-solid, var(--label)); color: var(--base); }
+
+  /* ---------- the desktop app (jarvis/desktop.py): chats down the side like Claude, the chat in a centred column ---------- */
+  .link-card { display: none; }
+  html.desktop { --side: 300px; }
+  html.desktop .drawer { width: var(--side); border-radius: 0; animation: none; transform: none !important; padding-top: 16px; padding-bottom: 12px; }
+  html.desktop .drawer.closing { animation: none; }
+  html.desktop .drawer-head h2 { font-size: 24px; }
+  html.desktop .scrim { display: none !important; }
+  html.desktop #menuBtn { display: none; }
+  html.desktop #log { left: var(--side); padding-left: max(28px, calc((100vw - var(--side) - 820px) / 2)); padding-right: max(28px, calc((100vw - var(--side) - 820px) / 2)); }
+  html.desktop .dock { left: var(--side); padding-left: max(20px, calc((100vw - var(--side) - 840px) / 2)); padding-right: max(20px, calc((100vw - var(--side) - 840px) / 2)); padding-bottom: 14px; }
+  html.desktop .modes, html.desktop .clock-pill, html.desktop .toast { left: calc(50% + var(--side) / 2); }
+  html.desktop .bg-clock, html.desktop .top-fade, html.desktop #voiceView { left: var(--side); }
+  html.desktop .lost, html.desktop .warn-banner { left: calc(var(--side) + 12px); }
+  html.desktop .sheet-wrap { align-items: center; }
+  html.desktop .sheet { border-radius: 28px; max-height: 88%; }
+  html.desktop .sheet.tall { height: 88%; }
+  html.desktop .bubble, html.desktop #text { font-size: 16px; }
+  html.desktop ::-webkit-scrollbar { width: 10px; }
+  html.desktop ::-webkit-scrollbar-thumb { background: var(--fill); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+  html.desktop .link-card { display: flex; align-items: center; gap: 10px; margin: 6px 12px 4px; padding: 10px 12px; border-radius: 16px; background: var(--fill); font-size: 13.5px; line-height: 18px; }
+  .link-card .t { flex: 1; min-width: 0; }
+  .link-card b { display: block; font-size: 14px; font-weight: 600; color: var(--label); }
+  .link-card small { color: var(--label2); }
+  .link-card svg.i { width: 22px; height: 22px; color: var(--label2); flex: none; }
+  .link-card.on svg.i { color: var(--green, #34c759); }
+  .link-card button { flex: none; height: 28px; padding: 0 11px; border-radius: 14px; font-size: 13px; font-weight: 600; color: #fff; background: var(--accent-grad); }
 </style>
 </head>
 <body>
@@ -947,6 +1000,7 @@
     </div>
     <div class="field glass">
       <textarea id="text" rows="1" placeholder="Ask Jarvis, or type /" enterkeyhint="send"></textarea>
+      <button class="model-chip press" id="modelChip" aria-label="Choose the model" aria-haspopup="menu" hidden><span id="modelName">Sonnet</span><svg class="i"><use href="#i-chevron"/></svg></button>
       <button id="send" aria-label="Send" disabled><svg class="i"><use href="#i-up"/></svg></button>
     </div>
   </div>
@@ -960,6 +1014,8 @@
   </nav>
 </footer>
 
+<div class="model-menu glass strong" id="modelMenu" role="menu" hidden></div>
+
 <!-- chats sidebar -->
 <div class="scrim" id="drawerScrim" hidden></div>
 <aside class="drawer glass strong" id="drawer" hidden>
@@ -972,6 +1028,7 @@
   </div>
   <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="search" placeholder="Search" autocomplete="off"></label>
   <nav class="chats" id="chatList"></nav>
+  <div class="link-card" id="linkCard"><svg class="i"><use href="#i-phone"/></svg><span class="t"><b id="linkTitle">Your phone</b><small id="linkSub">Checking…</small></span><button class="press" id="linkPair">Pair</button></div>
   <button class="me-row glass press" id="meRow">
     <img class="avatar" src="avatar.jpg" alt="">
     <span class="t"><b>Izu83</b><small><span class="dot" id="meDot"></span><span id="meHost">Jarvis</span></small></span>
@@ -1256,11 +1313,19 @@
 
 <script>
 const $ = id => document.getElementById(id);
+// The desktop app (jarvis/desktop.py) serves this page on 127.0.0.1:8788 and talks to Jarvis on the same PC.
+const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
+if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.4";   // bump together with version.json
+const VERSION = "2026-10-31.5";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv26", when: "Oct 31, 2026", title: "Jarvis on your desktop & the model picker", notes: [
+    "Jarvis has a desktop app on your PC: chat with him there, with your chats down the side like in Claude. It's connected straight away, no pairing.",
+    "Pick the model, like in Claude: tap the model name in the message box. Opus, Sonnet or Haiku, or Local (free, on your PC's graphics card), and how hard it thinks.",
+    "The desktop app shows whether your phone is connected, and can show the pairing code for a new phone.",
+  ]},
   { v: "JNIv25", when: "Oct 31, 2026", title: "Jarvis's voice & the evening recap", notes: [
     "A proper Jarvis voice: Ryan, a British man, like the films. Settings › Jarvis's voice has five to pick from; tap one to hear it. Your PC speaks with it too.",
     "Voice mode writes your words as you say them, not only after you stop.",
@@ -1857,6 +1922,100 @@ function renderChat() {
   else scrollDown(false);
 }
 
+// ================= the model picker =================
+// Which Claude model does the work (Claude Code's opus / sonnet / haiku), or the free local models first, and how hard
+// it thinks (effort). The PC switches over for the next command (jarvis/brain.py starts a fresh session with it).
+const Models = {
+  LIST: [
+    { id: "opus", name: "Opus", sub: "Smartest. For hard, many-step jobs. Uses your Claude limit fastest." },
+    { id: "sonnet", name: "Sonnet", sub: "Smart and quick. Best for most things." },
+    { id: "haiku", name: "Haiku", sub: "Fastest. Good for simple commands." },
+  ],
+  EFFORT: [["low", "Low"], ["medium", "Medium"], ["high", "High"]],
+  s: null,
+  label() {
+    const s = this.s;
+    if (!s) return "";
+    if (s.local_first && s.brain === "hermes") return "Local";
+    const m = this.LIST.find(x => x.id === s.claude_model) || { name: "Claude" };
+    const v = /claude-(opus|sonnet|haiku)-(\d+)-(\d+)/.exec(s.model_id || "");
+    return desktop && v && v[1] === s.claude_model ? `${m.name} ${v[2]}.${v[3]}` : m.name;   // the phone has no room for the version
+  },
+  state(d) {
+    if (!("claude_model" in d)) return;   // an older Jarvis on the PC: nothing to pick from
+    this.s = { claude_model: d.claude_model, effort: d.effort, local_first: !!d.local_first, brain: d.brain, model_id: d.model_id || "", local: d.local || [] };
+    this.paint();
+  },
+  paint() {
+    $("modelChip").hidden = !this.s;
+    $("modelName").textContent = this.label();
+    $("modelChip").classList.toggle("local", this.label() === "Local");
+    if (!$("modelMenu").hidden) this.renderMenu();
+  },
+  set(key, value) {
+    post({ type: "set", key, value, id: newId() }).catch(() => toast("Not connected to your PC", "x", "var(--red)"));
+  },
+  pick(id) {
+    const s = this.s;
+    if (id === "local") { s.local_first = true; this.set("local_first", true); }
+    else {
+      if (s.local_first) { s.local_first = false; this.set("local_first", false); }
+      if (s.claude_model !== id) { s.claude_model = id; this.set("claude_code_model", id); }
+    }
+    this.paint(); this.close();
+    toast(id === "local" ? "Local models first" : `${this.LIST.find(x => x.id === id).name} from your next message`, "sparkles", "var(--blue)");
+  },
+  renderMenu() {
+    const s = this.s, menu = $("modelMenu");
+    const local = s.local_first && s.brain === "hermes";
+    const names = (s.local || []).map(m => m.name).filter(Boolean).join(" + ") || "Hermes + Qwen3";
+    const opt = (id, name, sub, on, off) => `<button class="mm-opt" role="menuitemradio" aria-checked="${on}" data-id="${id}"${off ? " disabled" : ""}${on ? ' data-on="1"' : ""}><span class="t"><b>${name}</b><small>${sub}</small></span><svg class="i ck"><use href="#i-check"/></svg></button>`;
+    menu.innerHTML = '<div class="mm-sec">Claude</div>'
+      + this.LIST.map(m => opt(m.id, m.name, m.sub, !local && s.claude_model === m.id, false)).join("")
+      + '<div class="mm-sec">On your PC</div>'
+      + opt("local", "Local", s.brain === "hermes" ? `${names}. Free, on your graphics card. Slower; Claude steps in when they can't.` : "Not set up on this PC (brain isn't \"hermes\" in config.json).", local, s.brain !== "hermes")
+      + `<div class="mm-think"><span>Thinking</span><div class="mm-seg">${this.EFFORT.map(([v, l]) => `<button data-effort="${v}" class="${s.effort === v ? "on" : ""}">${l}</button>`).join("")}</div></div>`
+      + (s.model_id && !local ? `<div class="mm-now">Running now: ${s.model_id}</div>` : "");
+    for (const b of menu.querySelectorAll(".mm-opt")) {
+      b.classList.toggle("on", !!b.dataset.on);
+      b.onclick = () => this.pick(b.dataset.id);
+    }
+    for (const b of menu.querySelectorAll("[data-effort]")) b.onclick = () => {
+      s.effort = b.dataset.effort; this.set("claude_code_effort", s.effort); this.renderMenu();
+    };
+  },
+  open() {
+    if (!this.s) return;
+    const menu = $("modelMenu");
+    this.renderMenu();
+    menu.hidden = false;
+    const r = $("modelChip").getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.right - w)) + "px";
+    menu.style.top = Math.max(12, r.top - h - 10) + "px";
+  },
+  close() { $("modelMenu").hidden = true; },
+};
+$("modelChip").onclick = e => { e.stopPropagation(); $("modelMenu").hidden ? Models.open() : Models.close(); };
+document.addEventListener("pointerdown", e => { if (!$("modelMenu").hidden && !e.target.closest("#modelMenu, #modelChip")) Models.close(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") Models.close(); });
+addEventListener("resize", () => Models.close());
+
+// ================= the desktop app: is the phone connected? =================
+const PhoneLink = {
+  state(d) {
+    if (!d.devices) return;
+    const n = d.devices.phones || 0, seen = d.devices.phone_seen;
+    $("linkCard").classList.toggle("on", n > 0);
+    $("linkTitle").textContent = n > 0 ? (n > 1 ? `${n} phones connected` : "Phone connected") : "Phone not connected";
+    $("linkSub").textContent = n > 0 ? "Chats on it stay on it" : seen ? "Last seen " + relTime(seen * 1000) + (relTime(seen * 1000) === "now" ? "" : " ago") : (d.devices.tunnel ? "Open Jarvis on your phone" : "Starting the link…");
+    $("linkPair").textContent = n > 0 ? "Pair another" : "Pair";
+  },
+};
+$("linkPair").onclick = () => {
+  if (window.pywebview?.api?.pair) window.pywebview.api.pair();
+  else toast("Right-click the Jarvis tray icon › Pair your phone", "phone");
+};
+
 // ================= sidebar =================
 const relTime = ts => {
   const s = (Date.now() - ts) / 1000;
@@ -1883,6 +2042,7 @@ function chatRow(c, indent) {
   delBtn.onclick = () => deleteChat(c);
   wrap.append(b);
   onLongPress(b, () => chatMenu(c));
+  b.addEventListener("contextmenu", e => { e.preventDefault(); chatMenu(c); });   // the desktop app: right-click
   swipeable(wrap, b);
   return wrap;
 }
@@ -1936,10 +2096,12 @@ function renderSidebar() {
     list.append(head);
     loose.forEach(c => list.append(chatRow(c)));
   }
-  if (!visible.length && !db.groups.length) list.innerHTML = '<div class="empty-note">Your chats will appear here.<br>Swipe a chat left to move or delete it.</div>';
+  if (!visible.length && !db.groups.length) list.innerHTML = '<div class="empty-note">Your chats will appear here.<br>' + (desktop ? "Right-click" : "Swipe left on") + ' a chat to move or delete it.</div>';
 }
 function openDrawer() { renderSidebar(); for (const id of ["drawer", "drawerScrim"]) { $(id).classList.remove("closing"); $(id).hidden = false; } $("drawer").style.transform = ""; }
-function closeDrawer() { hideAnimated($("drawer"), () => { $("search").value = ""; $("drawer").style.transform = ""; }); hideAnimated($("drawerScrim")); }
+function closeDrawer() {
+  if (desktop) { $("search").value = ""; renderSidebar(); return; }   // on the desktop the chats stay down the side
+  hideAnimated($("drawer"), () => { $("search").value = ""; $("drawer").style.transform = ""; }); hideAnimated($("drawerScrim")); }
 function openChat(id) { db.current = id; saveDb(); closeDrawer(); renderChat(); }
 function newChat(group = null) {
   const c = current();
@@ -2189,7 +2351,8 @@ async function connect() {
   if (connecting || (ws && ws.readyState <= WebSocket.OPEN)) return;
   connecting = true; clearTimeout(retryTimer);
   renderStatus(false);
-  const candidates = [...new Set([load("jarvis.lastUrl"), await discover(), cfg.url].filter(Boolean))];
+  // the desktop app is on the PC itself: straight to Jarvis, never through the internet
+  const candidates = desktop ? [cfg.url] : [...new Set([load("jarvis.lastUrl"), await discover(), cfg.url].filter(Boolean))];
   for (const url of candidates) if (await openSocket(url)) { connecting = false; return; }
   connecting = false;
   if (!pcSeen || !candidates.length) showLost();
@@ -2485,6 +2648,8 @@ function renderLang() {
 }
 let awayOn = false, awaySince = 0, napOn = false, napSince = 0;
 function onState(data) {
+  Models.state(data);
+  if (desktop) PhoneLink.state(data);
   if (data.voice && data.voice !== jarvisVoice) { jarvisVoice = data.voice; store("jarvis.voice", data.voice); renderVoices(); }
   if (data.where) Clock.set(data.where);
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
@@ -4464,6 +4629,7 @@ async function start() {
     catch { store("jarvis.pairing"); cfg = null; }
   }
   for (const id of ["log", "dock", "modeSwitch", "bgClock", "clockPill"]) $(id).hidden = !cfg;
+  if (desktop && cfg) openDrawer();
   if (cfg) Clock.start();
   $("setup").hidden = !!cfg;
   if (!cfg) return;

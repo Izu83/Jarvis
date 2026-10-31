@@ -258,6 +258,17 @@ def _compose_thoughts(think_text: list[str], narration: list[str], steps: list[s
     return body.strip()
 
 
+# The model the Claude Code session reports it's running (e.g. "claude-sonnet-5-5"), for the model picker
+RUNNING = {"model": ""}
+MODELS = ("opus", "sonnet", "haiku")      # Claude Code's names for them (claude_code_model)
+EFFORTS = ("low", "medium", "high")       # claude_code_effort
+
+
+def _wanted() -> tuple[str, str]:
+    """The model and effort the next Claude Code session should use (the model picker can change them)."""
+    return settings["claude_code_model"], settings["claude_code_effort"]
+
+
 def make_brain_named(name: str):
     """Build a specific brain by name: 'api', 'hermes' (free, local), or 'claude-code' (the default)."""
     if name == "api":
@@ -329,6 +340,7 @@ class ClaudeCodeBrain:
         ]
         if settings["claude_code_model"]:
             cmd += ["--model", settings["claude_code_model"]]
+        self.spawned_with = _wanted()
         self.proc = subprocess.Popen(
             cmd, cwd=self.workdir, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             env={**os.environ, "MCP_TOOL_TIMEOUT": "300000"},   # tools may wait up to 2 min for permission
@@ -348,9 +360,12 @@ class ClaudeCodeBrain:
         try:
             for line in proc.stdout:
                 try:
-                    events.put(json.loads(line))
+                    event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if event.get("type") == "system" and event.get("subtype") == "init" and event.get("model"):
+                    RUNNING["model"] = event["model"]
+                events.put(event)
         except Exception:
             log.exception("Lost the Claude Code output stream")
         events.put(None)  # process ended (or we can't read it any more)
@@ -376,7 +391,10 @@ class ClaudeCodeBrain:
         while True:
             time.sleep(15)
             with self.lock:
-                if self.commands and time.time() - self.last_used > IDLE_RESET_SECONDS:
+                if self.spawned_with != _wanted():   # picked another model: have it warm before the next command
+                    log.info("Model picker: starting a Claude Code session with %s (%s effort).", *_wanted())
+                    self._restart()
+                elif self.commands and time.time() - self.last_used > IDLE_RESET_SECONDS:
                     log.info("Idle: starting a fresh Claude Code session.")
                     self._restart()
 
@@ -385,7 +403,8 @@ class ClaudeCodeBrain:
             if self.personality != memory.personality():   # the humour setting changed: a fresh session gets it
                 self.personality, self.system = memory.personality(), system_prompt()
                 self._restart()
-            elif self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION:
+            elif (self.proc.poll() is not None or self.commands >= self.MAX_COMMANDS_PER_SESSION
+                  or self.spawned_with != _wanted()):
                 self._restart()
             command = self._with_memory(command, chat, recent, fresh=self.commands == 0 or chat != self.thread)
             self.commands += 1

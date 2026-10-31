@@ -53,7 +53,7 @@ run.bat --no-voice     # phone only
 run.bat --startup      # start Jarvis hidden at every login (--startup-off to stop)
 ```
 
-Jarvis lives in the taskbar tray (under the ^ arrow): right-click its icon to stop what Jarvis is doing, pick a microphone, pair your phone (a
+Jarvis lives in the taskbar tray (under the ^ arrow): click its icon to open the desktop app, right-click it to stop what Jarvis is doing, pick a microphone, pair your phone (a
 window with the QR code and the pairing link), restart Jarvis, open the log or quit. `run.bat` and `Jarvis.vbs` both start it that way, with no console window. Only one Jarvis runs at
 a time.
 
@@ -134,6 +134,37 @@ which you can also edit by hand.
 - **Never lost**: if the phone's connection silently dropped, the app reconnects and re-sends (the PC never runs it
   twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again. Files Jarvis sends (pictures, videos) wait on
   the PC until the phone confirms it has them (`.brain/outbox.json`, 3 days), and stay saved in the chat on the phone.
+
+## The desktop app
+
+```
+pythonw -m jarvis.desktop              # open it (starts Jarvis too, if he isn't running)
+python -m jarvis.desktop --install     # put "Jarvis" on the Desktop and in the Start menu
+```
+
+Jarvis in a window on the PC: the same app as on the phone (chat, Voice mode, Settings), with your chats down the side
+like in Claude. Open it from the **Jarvis** shortcut, Windows search, or by clicking the tray icon.
+
+- **No pairing**: it talks to Jarvis on this PC directly (`ws://127.0.0.1:8787/desktop/ws`), never through the
+  internet. Its chats are its own; the phone keeps its own.
+- **Your phone**: the card at the bottom of the chats says whether the phone is connected (or when it last was), and
+  **Pair** opens the QR code for a new phone.
+- **Closing the window doesn't stop Jarvis**: he stays in the tray for the phone and "Hey Jarvis". Quit from the tray.
+- The page comes from `docs/` through a small web server on `127.0.0.1:8788` (only this PC can reach it), in an Edge
+  WebView2 window (pywebview). Its chats and settings are kept in `.brain/desktop-app`.
+
+### Picking the model
+
+Tap the model's name in the message box (on the phone too), like in Claude:
+
+- **Opus**: the smartest, for hard many-step jobs. Uses your Claude limit fastest.
+- **Sonnet**: smart and quick, for most things (the default).
+- **Haiku**: the fastest, for simple commands.
+- **Local**: Hermes and Qwen3 on your graphics card first (free, slower); Claude steps in when they can't.
+- **Thinking**: Low, Medium or High (Claude Code's effort).
+
+The choice is saved in `config.json` (`claude_code_model`, `claude_code_effort`, `local_first`). Jarvis starts a fresh
+Claude session with it within 15 seconds, so the next command uses it. The menu also shows the exact model running.
 
 ## Voice mode
 
@@ -433,6 +464,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |
 | `jarvis/orb.py` | The Jarvis orb: the icons, the tray icon and the pop-up's live orb |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
 | `jarvis/cleandisk.py` | /cleandisk: scan a disk into safe / your call / leave alone, clean what's ticked |

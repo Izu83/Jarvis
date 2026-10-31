@@ -23,6 +23,7 @@ log = logging.getLogger("jarvis.tray")
 
 WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon is clicked
 ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR, ID_STOP, ID_FACEID = 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030
+ID_APP = 1031
 MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
@@ -90,8 +91,13 @@ class Tray:
         return sub
 
     def _on_tray(self, hwnd, msg, wparam, lparam):
-        if lparam in (win32con.WM_RBUTTONUP, win32con.WM_LBUTTONUP):
+        if lparam == win32con.WM_LBUTTONUP:   # a click opens the desktop app; right-click shows the menu
+            self._open_app()
+        elif lparam == win32con.WM_RBUTTONUP:
             menu = win32gui.CreatePopupMenu()
+            win32gui.AppendMenu(menu, win32con.MF_STRING, ID_APP, "Open Jarvis")
+            win32gui.SetMenuDefaultItem(menu, ID_APP, False)
+            win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
             if self.on_stop is not None:
                 idle = 0 if self.busy() else win32con.MF_GRAYED
                 win32gui.AppendMenu(menu, win32con.MF_STRING | idle, ID_STOP, "Stop what Jarvis is doing")
@@ -120,6 +126,11 @@ class Tray:
     def _pythonw() -> Path:
         pyw = ROOT / ".venv" / "Scripts" / "pythonw.exe"
         return pyw if pyw.exists() else Path(sys.executable).with_name("pythonw.exe")
+
+    def _open_app(self) -> None:
+        """The desktop app (desktop.py): chat with Jarvis in a window. Its own process, like the pairing window."""
+        subprocess.Popen([str(self._pythonw()), "-m", "jarvis.desktop"], cwd=str(ROOT),
+                         creationflags=subprocess.CREATE_NO_WINDOW)
 
     def _open_pairing(self) -> None:
         """The QR code and pairing link in a window of its own (its own process, so the tray stays responsive)."""
@@ -151,6 +162,8 @@ class Tray:
             from . import faceid
             faceid.clear()
             log.info("Face ID for permissions turned off from the tray.")
+        elif cmd == ID_APP:
+            self._open_app()
         elif cmd == ID_PAIR:
             log.info("Showing the pairing QR code.")
             self._open_pairing()

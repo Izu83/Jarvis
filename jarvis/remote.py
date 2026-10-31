@@ -88,6 +88,8 @@ class PhoneChannel:
         self.port = int(settings.get("phone_port", 8787))
         self.seen = collections.deque(maxlen=500)
         self.clients: set = set()
+        self.desktops: set = set()   # the desktop app's connections (also in clients)
+        self.phone_seen = 0.0         # when a phone was last connected (the desktop app shows it)
         self.loop: asyncio.AbstractEventLoop | None = None
         self.tunnel = Tunnel(self.port, self._announce)
         self.watch_until = 0.0
@@ -250,8 +252,15 @@ class PhoneChannel:
         except Exception:
             log.debug("Couldn't say where the PC is", exc_info=True)
             where = None
+        from .brain import RUNNING
         self._publish({"kind": "state", "id": "state", "where": where, "modes": modes.overview(), "pc": status, "local": local,
                        "use_claude": settings["use_claude"],
+                       # the model picker
+                       "claude_model": settings["claude_code_model"], "effort": settings["claude_code_effort"],
+                       "model_id": RUNNING["model"],
+                       # the desktop app's "is the phone connected?" card
+                       "devices": {"phones": len(self.clients) - len(self.desktops), "desktops": len(self.desktops),
+                                   "phone_seen": self.phone_seen, "tunnel": bool(last_url())},
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
@@ -729,6 +738,16 @@ class PhoneChannel:
             elif key == "use_claude":
                 set_setting("use_claude", value)
                 log.info("Claude turned %s from the phone.", "on" if value else "off")
+            elif key == "claude_code_model":
+                from .brain import MODELS
+                if data.get("value") in MODELS:
+                    set_setting("claude_code_model", data["value"])
+                    log.info("Model set to %s.", data["value"])
+            elif key == "claude_code_effort":
+                from .brain import EFFORTS
+                if data.get("value") in EFFORTS:
+                    set_setting("claude_code_effort", data["value"])
+                    log.info("Thinking effort set to %s.", data["value"])
             elif key == "local_first":
                 set_setting("local_first", value)
                 log.info("Local models first turned %s from the phone.", "on" if value else "off")
@@ -843,8 +862,15 @@ class PhoneChannel:
             push.send_async("Jarvis", text[:160], "reply", "./")
 
     async def _client(self, ws) -> None:
+        # the desktop app (desktop.py) connects on this PC at /desktop/ws; everything else is a phone, via the tunnel
+        is_desktop = ws.request is not None and ws.request.path.startswith("/desktop")
         self.clients.add(ws)
-        log.info("Phone connected (%d open).", len(self.clients))
+        if is_desktop:
+            self.desktops.add(ws)
+        else:
+            self.phone_seen = time.time()
+        log.info("%s connected (%d open).", "Desktop app" if is_desktop else "Phone", len(self.clients))
+        self.soon("state", 0.3, self.send_state)
         for entry in list(self.asks.values()):   # a question still waiting? ask again on the new connection
             await ws.send(self._seal(dict(entry["payload"])))
         try:
@@ -857,7 +883,11 @@ class PhoneChannel:
             pass
         finally:
             self.clients.discard(ws)
-            log.info("Phone disconnected (%d open).", len(self.clients))
+            self.desktops.discard(ws)
+            if not is_desktop:
+                self.phone_seen = time.time()
+            log.info("%s disconnected (%d open).", "Desktop app" if is_desktop else "Phone", len(self.clients))
+            self.soon("state", 0.3, self.send_state)
 
     def _safe_handle(self, data: dict) -> None:
         try:
