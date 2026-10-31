@@ -52,10 +52,12 @@ def keys_setup() -> None:
     from . import cloud
     from .config import set_secret, set_setting
 
-    print("Jarvis can also use ChatGPT and Grok, paid per use through their APIs (not the ChatGPT or Grok apps).")
-    print("It only sends them what they're best at, or what Claude and Gemini can't answer, and keeps both together")
-    print(f"under your monthly budget (now ${settings.get('paid_budget', 5.0):g}). Press Enter to skip one.\n")
-    where = {"chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai"}
+    print("Gemini: FREE with a Google AI Studio key (no card). ChatGPT and Grok: paid per use through their APIs")
+    print("(not the ChatGPT or Grok apps); Jarvis only sends them what they're best at, or what the others can't")
+    print(f"answer, and keeps both together under your monthly budget (now ${settings.get('paid_budget', 5.0):g}).")
+    print("Press Enter to skip one.\n")
+    where = {"gemini": "https://aistudio.google.com/apikey (free)", "chatgpt": "https://platform.openai.com/api-keys",
+             "grok": "https://console.x.ai"}
     for provider, (env, base, *_rest) in cloud.PROVIDERS.items():
         name = cloud.NAMES[provider]
         have = " (you have one; Enter keeps it)" if cloud.has_key(provider) else ""
@@ -71,8 +73,13 @@ def keys_setup() -> None:
             continue
         set_secret(env, key)
         set_setting("use_" + provider, True)
-        print(f"  {name} is connected and ticked in the model menu.")
-    budget = input(f"Monthly budget for both, in USD [{settings.get('paid_budget', 5.0):g}]: ").strip()
+        if provider == "gemini":
+            model = cloud.best_gemini_model(key)
+            if model:
+                set_setting("gemini_model", model)
+        print(f"  {name} is connected and ticked in the model menu"
+              + (f" ({settings.get('gemini_model')})." if provider == "gemini" and settings.get("gemini_model") else "."))
+    budget = input(f"Monthly budget for ChatGPT and Grok together, in USD [{settings.get('paid_budget', 5.0):g}]: ").strip()
     if budget:
         try:
             set_setting("paid_budget", max(0.0, float(budget)))

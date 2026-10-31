@@ -207,7 +207,6 @@ class HermesBrain:
         self.last_thinking = ""
         self.lock = threading.Lock()
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
-        self._gemini_brain = None   # likewise for Gemini (gemini.py)
         self._strikes: dict[str, int] = {}   # errors in a row, per team member (see REST_SECONDS)
         log.info("Local brain ready: %s via %s. Claude is the fallback.",
                  " + ".join(f"{name} ({m})" for m, name, _ in self.team.values()), self.host)
@@ -342,8 +341,6 @@ class HermesBrain:
     def close(self) -> None:
         if self._fallback is not None:
             self._fallback.close()
-        if self._gemini_brain is not None:
-            self._gemini_brain.close()
 
     def _claude(self):
         if self._fallback is None:
@@ -383,12 +380,10 @@ class HermesBrain:
             return last or "None of the models could answer that right now."
 
     def _available(self) -> set[str]:
-        from . import cloud, gemini
+        from . import cloud
         have = set()
         if settings.get("use_claude", True):
             have.add("claude")
-        if settings.get("use_gemini", True) and gemini.ready():
-            have.add("gemini")
         if any(settings.get("use_" + k, True) for k in self.team):
             have.add("local")
         have.update(p for p in cloud.PROVIDERS if cloud.usable(p))
@@ -402,15 +397,10 @@ class HermesBrain:
         if model == "claude":
             answer = self._to_claude(command, chat, recent, progress)
             return answer, not getattr(self._fallback, "failed", False)
-        if model == "gemini":
-            if self._gemini_brain is None:
-                from .gemini import GeminiBrain
-                self._gemini_brain = GeminiBrain()
-            brain = self._gemini_brain
-        else:
-            from .cloud import CloudBrain
-            brain = CloudBrain(model)
-        answer = brain.handle(command, chat=chat, recent=recent, progress=progress)
+        from .cloud import CloudBrain
+        brain = CloudBrain(model)   # Gemini, ChatGPT, Grok
+        extra = {"search": True} if model == "gemini" and router.kind(original) == "current" else {}
+        answer = brain.handle(command, chat=chat, recent=recent, progress=progress, **extra)
         self.last_thinking = getattr(brain, "last_thinking", "") or ""
         return answer, not brain.failed
 

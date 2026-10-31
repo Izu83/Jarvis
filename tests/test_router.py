@@ -63,3 +63,29 @@ def test_cloud_runs_tools_and_counts_the_cost(monkeypatch):
     assert ran == [("open_app", {"name": "Spotify"})]
     assert sent[1]["messages"][-1] == {"role": "tool", "tool_call_id": "c1", "content": "Opened."}
     assert spent == [pytest.approx(.002), pytest.approx(.0014)]   # 1000 in + 100 out at $1 / $10 per million
+
+
+def test_gemini_searches_google_for_current_things(monkeypatch):
+    sent = []
+    reply = {"candidates": [{"content": {"parts": [{"text": "Bitcoin is at $100,000 right now."}]}}],
+             "usageMetadata": {"promptTokenCount": 50, "candidatesTokenCount": 12}}
+    monkeypatch.setattr(cloud, "secret", lambda name: "key")
+    monkeypatch.setattr(cloud.requests, "post", lambda url, **kw: (sent.append((url, kw["json"])), type("R", (), {
+        "status_code": 200, "text": "", "json": lambda self: reply})())[1])
+    monkeypatch.setattr(cloud.usage, "record_other", lambda *a: None)
+    monkeypatch.setattr(cloud.memory, "context", lambda *a, **k: "")
+    monkeypatch.setattr(cloud, "system_prompt", lambda: "You are Jarvis.")
+    brain = cloud.CloudBrain("gemini")
+    assert brain.handle("how much is bitcoin right now", search=True) == "Bitcoin is at $100,000 right now."
+    url, body = sent[0]
+    assert url.endswith(f"/models/{brain.model}:generateContent") and body["tools"] == [{"google_search": {}}]
+    assert not brain.failed
+
+
+def test_newest_stable_flash(monkeypatch):
+    ids = ["models/gemini-2.0-flash", "models/gemini-2.5-flash", "models/gemini-2.5-flash-lite", "models/gemini-3.0-flash",
+           "models/gemini-3.5-flash-preview", "models/gemini-2.5-pro", "models/text-embedding-004"]
+    monkeypatch.setattr(cloud.requests, "get", lambda url, **kw: type("R", (), {
+        "json": lambda self: {"data": [{"id": i} for i in ids]}})())
+    assert cloud.best_gemini_model("key") == "gemini-3.0-flash"
+    assert cloud.usable("gemini") is False   # no key (the test config has none)

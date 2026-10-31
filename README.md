@@ -170,12 +170,15 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 | Everyday questions and chat | Gemini, Claude, local, ChatGPT, Grok |
 
 - **Claude**: your Claude plan, through Claude Code (`claude_code_model`, Sonnet).
-- **Gemini**: your Google plan, through Google's Gemini CLI (`jarvis/gemini.py`), with Jarvis's tools and Google
-  Search. Install once with `npm install -g @google/gemini-cli`, then run `gemini.cmd` and sign in with Google. It
-  takes what it's best at and the everyday questions, so your Claude limit lasts.
-- **ChatGPT, Grok**: paid per use through their APIs (`jarvis/cloud.py`). `run.bat --keys` adds the API keys
-  (kept in `.env`) and the monthly budget (`paid_budget`, USD, both together). The spend is estimated from
-  `chatgpt_price` / `grok_price` (USD per million tokens); past the budget they're skipped until next month.
+- **Gemini**: free, with a Google AI Studio key (https://aistudio.google.com/apikey, no card; it has daily
+  limits, and past them the next model answers). `run.bat --keys` adds it and picks the newest Flash model. It gets
+  Jarvis's tools, answers anything current with Google Search, and takes the everyday questions so your Claude limit
+  lasts. (Google no longer lets personal accounts use the Gemini CLI, even with a Gemini plan, so it's the API.)
+- **ChatGPT, Grok**: paid per use through their APIs. `run.bat --keys` adds the keys (kept in `.env`) and the
+  monthly budget (`paid_budget`, USD, both together). The spend is estimated from `chatgpt_price` / `grok_price`
+  (USD per million tokens); past the budget they're skipped until next month.
+
+All three run through `jarvis/cloud.py` (the same chat-completions API with tool calling).
 - **Hermes, Qwen3**: free on your graphics card. Settings › Local brain › "Try local models first" puts them first.
 
 ## Voice mode
@@ -493,7 +496,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
-| `jarvis/router.py`, `gemini.py`, `cloud.py` | Picking the model for each message; Gemini through the Gemini CLI; ChatGPT and Grok through their APIs |
+| `jarvis/router.py`, `cloud.py` | Picking the model for each message; Gemini, ChatGPT and Grok through their APIs |
 | `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |
 | `jarvis/orb.py` | The Jarvis orb: the icons, the tray icon and the pop-up's live orb |
 | `jarvis/away.py` | Away mode: low-level input hooks, physical input only |

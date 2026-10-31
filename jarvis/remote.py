@@ -281,9 +281,8 @@ class PhoneChannel:
     @staticmethod
     def _models_state() -> dict:
         """The model picker: what's ticked, what's set up, and this month's spend on the pay-per-use ones."""
-        from . import cloud, gemini, usage
-        return {"use_gemini": bool(settings.get("use_gemini", True)), "gemini_installed": bool(gemini.exe()),
-                "gemini_signed_in": gemini.signed_in(),
+        from . import cloud, usage
+        return {"use_gemini": bool(settings.get("use_gemini", True)), "gemini_key": cloud.has_key("gemini"),
                 "use_chatgpt": bool(settings.get("use_chatgpt")), "chatgpt_key": cloud.has_key("chatgpt"),
                 "use_grok": bool(settings.get("use_grok")), "grok_key": cloud.has_key("grok"),
                 "spend": round(usage.month_spend(), 2), "budget": float(settings.get("paid_budget", 5.0))}

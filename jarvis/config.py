@@ -51,11 +51,13 @@ DEFAULTS = {
     "use_claude": True,
     "use_hermes": True,
     "use_qwen": True,
-    # Gemini through the Gemini CLI on your Google plan (gemini.py; "" model = the CLI's default). ChatGPT and Grok are
-    # pay-per-use through their APIs (cloud.py): off until you add a key (run.bat --keys) and tick them; together they
-    # stay under paid_budget (USD a month). Prices are USD per million tokens [input, output], for the estimate.
+    # Gemini, ChatGPT and Grok through their APIs (cloud.py), each once you add its key (run.bat --keys). Gemini is free
+    # with a Google AI Studio key (the newest Flash model is picked when you add it). ChatGPT and Grok are paid per use:
+    # off until ticked, and together they stay under paid_budget (USD a month). Prices are USD per million tokens
+    # [input, output], for the estimate.
     "use_gemini": True,
     "gemini_model": "",
+    "gemini_price": [0, 0],
     "use_chatgpt": False,
     "use_grok": False,
     "chatgpt_model": "gpt-5-mini",

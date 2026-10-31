@@ -1332,12 +1332,15 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.15";   // bump together with version.json
+const VERSION = "2026-10-31.16";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv34", when: "Oct 31, 2026", title: "Gemini, free", notes: [
+    "Gemini now runs on a free Google AI Studio key (Google no longer lets personal accounts use the Gemini CLI). On the PC: run.bat --keys and paste the key from aistudio.google.com/apikey. It answers anything current with Google Search.",
+  ]},
   { v: "JNIv33", when: "Oct 31, 2026", title: "Claude, Gemini, ChatGPT and Grok", notes: [
-    "Jarvis now picks the best and cheapest model for each message: Gemini (on your Google plan, with Google Search) for anything current and everyday questions, Claude for doing things on your PC and code, and the next one in line if one can't.",
+    "Jarvis now picks the best and cheapest model for each message: Gemini (free, with Google Search) for anything current and everyday questions, Claude for doing things on your PC and code, and the next one in line if one can't.",
     "ChatGPT and Grok can join too, paid per use with an API key (run.bat --keys on the PC), only when they're the best pick, and never past your monthly budget.",
     "The model menu shows them all: tick the ones Jarvis may use.",
   ]},
@@ -1965,12 +1968,13 @@ function renderChat() {
 
 // ================= the model picker =================
 // Ticks, any mix (at least one). For each command the PC picks the best ticked model for the job that costs the least
-// (jarvis/router.py): your plans first (Gemini for anything current and everyday questions, Claude for doing things
-// on the PC and code), the local models when told to go first, and pay-per-use ChatGPT / Grok only within the budget.
+// (jarvis/router.py): your Claude plan and free Gemini first (Gemini for anything current and everyday questions,
+// Claude for doing things on the PC and code), the local models when told to go first, and pay-per-use ChatGPT / Grok
+// only within the budget.
 const Models = {
   LIST: [
-    { key: "use_claude", name: "Claude", group: "Your plans" },
-    { key: "use_gemini", name: "Gemini", group: "Your plans" },
+    { key: "use_claude", name: "Claude", group: "Your plan" },
+    { key: "use_gemini", name: "Gemini", group: "Free" },
     { key: "use_chatgpt", name: "ChatGPT", group: "Pay per use" },
     { key: "use_grok", name: "Grok", group: "Pay per use" },
     { key: "use_hermes", name: "Hermes", group: "On your PC", model: "Hermes", sub: "Free and private. Quick one-step commands; slower." },
@@ -1980,7 +1984,7 @@ const Models = {
   s: null,
   usable(m) {
     const s = this.s, x = s.models || {};
-    if (m.key === "use_gemini") return x.gemini_installed && x.gemini_signed_in;
+    if (m.key === "use_gemini") return !!x.gemini_key;
     if (m.key === "use_chatgpt") return !!x.chatgpt_key;
     if (m.key === "use_grok") return !!x.grok_key;
     if (m.model) return s.brain === "hermes";
@@ -2000,9 +2004,8 @@ const Models = {
       return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}, on your Claude plan. Best at doing things on your PC, and code.`;
     }
     if (m.key === "use_gemini") {
-      if (!x.gemini_installed) return "Not installed on the PC.";
-      if (!x.gemini_signed_in) return "Sign in once on the PC: run gemini.cmd and choose Sign in with Google.";
-      return "On your Google plan, with Google Search. Best for anything current, YouTube, long documents and everyday questions.";
+      if (!x.gemini_key) return "Needs a free key from aistudio.google.com: run.bat --keys on the PC.";
+      return "Free, with Google Search. Best for anything current, YouTube, long documents and everyday questions.";
     }
     if (m.key === "use_chatgpt" || m.key === "use_grok") {
       if (!this.usable(m)) return "Needs an API key (paid per use): run.bat --keys on the PC.";
@@ -2016,7 +2019,7 @@ const Models = {
     const on = this.on().map(m => m.key);
     const has = k => on.includes(k);
     if (!on.length) return "";
-    const plans = ["use_claude", "use_gemini"].filter(has);
+    const plans = ["use_claude", "use_gemini"].filter(has);   // the ones that cost nothing extra
     if (plans.length === 2) return "For each message Jarvis picks the best and cheapest: Gemini for anything current and everyday questions, Claude for doing things on your PC and code. If one can't, the next one tries.";
     if (plans.length === 1) return `${plans[0] === "use_claude" ? "Claude" : "Gemini"} answers; the others step in if it can't.`;
     if (has("use_chatgpt") || has("use_grok")) return "Only pay-per-use models: every message costs a little, up to your budget.";
