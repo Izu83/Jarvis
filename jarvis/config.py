@@ -55,6 +55,8 @@ DEFAULTS = {
     # with a Google AI Studio key (the newest Flash model is picked when you add it). ChatGPT and Grok are paid per use:
     # off until ticked, and together they stay under paid_budget (USD a month). Prices are USD per million tokens
     # [input, output], for the estimate.
+    # Website jobs in Jarvis's own hidden Chrome (hidden_browser.py), not on your screen. false = your browser + mouse.
+    "hidden_browser": True,
     "use_gemini": True,
     "gemini_model": "",
     "gemini_price": [0, 0],

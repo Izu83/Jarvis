@@ -4,6 +4,7 @@ rem (right-click it to restart, open the log or quit). With arguments it runs in
 rem   run.bat --text      type commands here      run.bat --console   see the log live in this window
 rem   run.bat --pair      connect your phone      run.bat --email     connect your email
 rem   run.bat --keys      API keys for ChatGPT and Grok (pay per use)
+rem   run.bat --browser   show Jarvis's hidden browser to log in to a site for him (e.g. Instagram)
 cd /d "%~dp0"
 if not "%~1"=="" goto here
 start "" wscript.exe "%~dp0Jarvis.vbs"

@@ -66,6 +66,17 @@ TOOLS = [
         },
     },
     {
+        "name": "open_login_window",
+        "description": "Show your own hidden browser (its separate profile) in a normal window on the user's screen so "
+                       "THEY can sign in to a site there themselves. Use it when a website job needs a login the "
+                       "hidden browser doesn't have yet; then tell them to log in, close the window and ask again.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string", "description": "the site's https:// URL (its login page)"}},
+            "required": [],
+        },
+    },
+    {
         "name": "list_windows",
         "description": "List open windows with their id, app, title and current monitor.",
         "input_schema": {"type": "object", "properties": {}},
@@ -683,6 +694,9 @@ def run(name: str, args: dict) -> str:
         return "\n".join(hits) if hits else "No folders found."
     if name == "open_target":
         return apps.open_target(args["target"])
+    if name == "open_login_window":
+        from .hidden_browser import login_window
+        return login_window(args.get("url", ""))
     if name == "list_windows":
         return "\n".join(w.describe() for w in win.list_windows()) or "No windows open."
     if name == "arrange_windows":

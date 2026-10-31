@@ -90,12 +90,15 @@ isn't watching, so do the task and write the answer as a message to them (no "as
 "would you like me to…?" or hand them steps to do themselves when you could do them. When a detail is missing, \
 choose a sensible default (file name, the Desktop or Documents folder, a subject line) and mention what you chose. \
 Ask only when a wrong guess would matter (who to send something to, spending money, deleting their things).
-- Websites and web apps (Instagram, Google Drive, Gmail on the web, YouTube, any site): open the URL with \
-open_target (the user's browsers: Opera is the default, Zen is installed too), then look_at_screen and act with \
-mouse_click / type_text / press_keys, looking again after each important step. They are signed in already in their \
-browser. To upload a file on a website (e.g. Drive's New > File upload), click the upload control, then in the \
-Windows file dialog type the file's full path into the File name box and press Enter. Then wait a few seconds and \
-look again until the site says the upload is complete, before you say it's done.
+- Websites and web apps (Windy, Instagram, Google Drive, any site): do the job in YOUR OWN HIDDEN BROWSER, the \
+mcp__browser__* tools (browser_navigate, browser_snapshot to read the page and get element refs, browser_click, \
+browser_type, browser_fill_form, browser_press_key, browser_file_upload, browser_take_screenshot then Read it to see \
+maps and charts). It has no window, so the user's screen, mouse and keyboard stay theirs: never use open_target, \
+look_at_screen or the mouse for a website job, unless the user asks to SEE or OPEN the page themselves ("open Windy", \
+"show me"). It keeps its own sign-ins: if a site wants a login, call open_login_window with the site's URL and tell \
+the user to log in there and ask again; never type their passwords. Wait for pages and check the result (snapshot \
+again) before saying something is sent or done. If the hidden browser isn't available, fall back to open_target + \
+look_at_screen + mouse in their browser (Opera is the default, Zen is installed too).
 - Making things: write_file creates any text file (code, notes, HTML, CSV, Markdown). For anything else (convert, \
 zip, resize, Office files, downloads), write a script and run it with run_powershell. If the task needs a program \
 that isn't installed, install it with `winget install --id <Id> -e --accept-source-agreements \
@@ -145,6 +148,7 @@ STEP_LABELS = {
     "open_folder": lambda a: "Opening File Explorer…",
     "find_folder": lambda a: f"Looking for “{a.get('name', '')}”…",
     "open_target": lambda a: "Opening it…",
+    "open_login_window": lambda a: "Opening my browser for you to log in…",
     "list_windows": lambda a: "Checking what's open…",
     "arrange_windows": lambda a: f"Arranging windows on monitor {a.get('monitor', '')}…",
     "window_action": lambda a: f"{str(a.get('action', '')).title()} {a.get('window', '')}…",
@@ -228,16 +232,31 @@ STEP_KINDS = {
     "Memory": ("remember", "forget"),
     "Web": ("WebSearch", "WebFetch"),
 }
+# the hidden browser (hidden_browser.py): what each of its actions looks like on the phone
+_SITE = lambda a: (a.get("url", "").split("//")[-1].split("/")[0].removeprefix("www.") or "the page")
+BROWSER_LABELS = {
+    "browser_navigate": lambda a: f"Opening {_SITE(a)} in my browser…",
+    "browser_snapshot": lambda a: "Reading the page…",
+    "browser_take_screenshot": lambda a: "Looking at the page…",
+    "browser_click": lambda a: f"Clicking {a.get('element', 'it')}…",
+    "browser_type": lambda a: "Typing…",
+    "browser_fill_form": lambda a: "Filling in the form…",
+    "browser_press_key": lambda a: f"Pressing {a.get('key', 'a key')}…",
+    "browser_file_upload": lambda a: "Uploading the file…",
+    "browser_wait_for": lambda a: "Waiting for the page…",
+}
 _KIND_OF = {tool: kind for kind, names in STEP_KINDS.items() for tool in names}
 
 
 def step_kind(tool: str) -> str:
+    if tool.startswith("mcp__browser__"):
+        return "Web"
     return _KIND_OF.get(tool.removeprefix("mcp__jarvis__"), "Step")
 
 
 def describe_step(tool: str, args: dict) -> str:
     """'mcp__jarvis__open_app' + {'name': 'Claude'} -> 'Opening Claude…' for the phone's live status."""
-    label = STEP_LABELS.get(tool.removeprefix("mcp__jarvis__"))
+    label = STEP_LABELS.get(tool.removeprefix("mcp__jarvis__")) or BROWSER_LABELS.get(tool.removeprefix("mcp__browser__"))
     try:
         return label(args) if label else "Working…"
     except Exception:
@@ -304,12 +323,17 @@ class ClaudeCodeBrain:
         self.workdir = ROOT / ".brain"
         self.workdir.mkdir(exist_ok=True)
         self.mcp_config = self.workdir / "mcp.json"
-        self.mcp_config.write_text(json.dumps({"mcpServers": {"jarvis": {
+        servers = {"jarvis": {
             "command": sys.executable,
             "args": [str(ROOT / "jarvis" / "mcp_server.py")],
             # lets the tools ask the user for permission through this Jarvis process (approval.py)
             "env": {k: v for k, v in os.environ.items() if k.startswith("JARVIS_APPROVAL_")},
-        }}}), encoding="utf-8")
+        }}
+        from .hidden_browser import mcp_server
+        browser = mcp_server()   # his own hidden Chrome for website jobs (hidden_browser.py)
+        if browser:
+            servers["browser"] = browser
+        self.mcp_config.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
         self.lock = threading.Lock()
         self.failed = False   # the last command got no real answer (limit, crash, timeout): a backup brain may try
         self.proc: subprocess.Popen | None = None
@@ -332,7 +356,7 @@ class ClaudeCodeBrain:
             # Jarvis's own tools, which ask the user where it matters
             "--tools", BUILTIN_TOOLS,
             "--mcp-config", str(self.mcp_config), "--strict-mcp-config",
-            "--allowedTools", "mcp__jarvis," + BUILTIN_TOOLS,
+            "--allowedTools", "mcp__jarvis,mcp__browser," + BUILTIN_TOOLS,
             "--add-dir", *_drives(),
             "--include-partial-messages",   # the answer word by word, for the phone (partial.py)
             "--no-session-persistence",

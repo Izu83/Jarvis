@@ -24,6 +24,7 @@ log = logging.getLogger("jarvis.tray")
 WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon is clicked
 ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR, ID_STOP, ID_FACEID = 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030
 ID_APP = 1031
+ID_LOGIN = 1032
 MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
@@ -111,6 +112,7 @@ class Tray:
             from . import faceid
             if faceid.enabled():   # a lost or reset phone can't do Face ID any more: turn it off from here
                 win32gui.AppendMenu(menu, win32con.MF_STRING, ID_FACEID, "Turn off Face ID for permissions")
+            win32gui.AppendMenu(menu, win32con.MF_STRING, ID_LOGIN, "Log in to a site for Jarvis…")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_PHONE, "Open the phone page")
             win32gui.AppendMenu(menu, win32con.MF_STRING, ID_LOG, "Open the log")
             win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
@@ -164,6 +166,9 @@ class Tray:
             log.info("Face ID for permissions turned off from the tray.")
         elif cmd == ID_APP:
             self._open_app()
+        elif cmd == ID_LOGIN:   # his hidden browser in a window, so you can sign in to Instagram & co. for him
+            from .hidden_browser import login_window
+            threading.Thread(target=login_window, args=("https://www.instagram.com/",), daemon=True).start()
         elif cmd == ID_PAIR:
             log.info("Showing the pairing QR code.")
             self._open_pairing()

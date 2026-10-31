@@ -1333,10 +1333,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.17";   // bump together with version.json
+const VERSION = "2026-11-01.1";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv36", when: "Nov 1, 2026", title: "Website jobs, out of sight", notes: [
+    "Jarvis does website jobs (checking Windy, sending an Instagram message, filling in a form) in his own hidden browser, so nothing opens on your screen and your mouse stays yours.",
+    "He's logged in only where you log him in: on the PC, tray icon › Log in to a site for Jarvis… (or he'll ask you himself).",
+  ]},
   { v: "JNIv35", when: "Oct 31, 2026", title: "Stop, wait, and the orb wakes up", notes: [
     "While Jarvis is talking, say “Стоп” / “Stop” and he goes quiet, or “Чакай” / “Wait” and he goes quiet and listens. On your PC too, no “Hey Jarvis” needed.",
     "Saying “Hey Jarvis” to your PC lights up the orb (or the humanoid) in Voice mode: listening, your words, thinking, speaking.",

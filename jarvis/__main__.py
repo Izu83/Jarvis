@@ -143,6 +143,8 @@ def main() -> None:
     parser.add_argument("--pair", action="store_true", help="show the link/QR code that connects your phone")
     parser.add_argument("--email", action="store_true", help="connect your email account (app password)")
     parser.add_argument("--keys", action="store_true", help="API keys for ChatGPT and Grok (pay per use)")
+    parser.add_argument("--browser", nargs="?", const="", metavar="URL",
+                        help="show Jarvis's hidden browser so you can log in to a site for him")
     parser.add_argument("--startup", action="store_true", help="start Jarvis hidden at login from now on")
     parser.add_argument("--startup-off", action="store_true", help="stop starting Jarvis at login")
     args = parser.parse_args()
@@ -168,6 +170,10 @@ def main() -> None:
         return
     if args.keys:
         keys_setup()
+        return
+    if args.browser is not None:
+        from .hidden_browser import login_window
+        print(login_window(args.browser))
         return
 
     # Only one Jarvis at a time. A named mutex is held for the life of the process; a second copy (however it

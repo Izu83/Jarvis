@@ -372,6 +372,21 @@ than words ("Кой сити" for "Кой си ти"). Without a usable graphics
 command counts as English only when Whisper is sure it's English, otherwise Bulgarian. Replies written in Cyrillic
 are spoken with `edge_voice_bg` (bg-BG-KalinaNeural). Phone dictation follows the same setting.
 
+## Website jobs in a hidden browser
+
+Checking Windy, sending an Instagram message, filling in a form: Jarvis does these in his own hidden Chrome
+(`jarvis/hidden_browser.py`, Microsoft's Playwright MCP in `.brain/browser-mcp`), headless, so nothing opens on your
+screen and your mouse and keyboard stay yours. It uses your installed Chrome with its own profile
+(`.brain/browser-profile`), presents itself as normal Chrome, and closes after 5 idle minutes. Your screen is used
+only when you ask to see a page ("open Windy").
+
+It's signed in only where you sign it in: tray › **Log in to a site for Jarvis…** (Instagram), `run.bat --browser
+[url]`, or Jarvis asks you himself (`open_login_window`). That shows the same profile in a normal Chrome window; log in
+yourself, close it, and he stays logged in, hidden. `hidden_browser: false` in `config.json` goes back to your
+browser and the mouse.
+
+Install (once): `npm install --prefix .brain/browser-mcp @playwright/mcp@0.0.83`.
+
 ## Where you are
 
 Settings › Security › **Share where I am** (on by default): the phone, or the desktop app, sends its GPS position with
@@ -512,6 +527,7 @@ a notification first).
 | `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
+| `jarvis/hidden_browser.py` | Jarvis's own hidden Chrome for website jobs, and its log-in window |
 | `jarvis/location.py` | Where you are: the device's GPS position as an address, for the model |
 | `jarvis/router.py`, `cloud.py` | Picking the model for each message; Gemini, ChatGPT and Grok through their APIs |
 | `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |
