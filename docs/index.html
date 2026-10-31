@@ -1319,7 +1319,7 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.11";   // bump together with version.json
+const VERSION = "2026-10-31.12";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
@@ -1327,6 +1327,9 @@ const RELEASES = [
     "Messages and emails go straight out: Jarvis doesn't ask first any more.",
     "Settings › Security › Ask before risky actions: turn it off and Jarvis just does things (commands, deleting, shutting down) without asking.",
     "In the desktop app, Allow asks for your Windows PIN or password instead of Face ID.",
+  ]},
+  { v: "JNIv31", when: "Oct 31, 2026", title: "A real face for the humanoid", notes: [
+    "Humanoid Jarvis is now a real human head: the glowing wireframe of a 3D head scan, with neck and shoulders, bright eyes and a jaw that moves as he talks. Head scan: “Infinite, 3D Head Scan” by Lee Perry-Smith (CC BY 3.0).",
   ]},
   { v: "JNIv30", when: "Oct 31, 2026", title: "Humanoid, redrawn like a 3D scan", notes: [
     "Humanoid Jarvis is drawn like a 3D scan now: glowing contour lines wrap around his head, with loops around the face, a calm closed mouth, bright eyes, and a neck and shoulders that fade away. His mouth opens softly as he talks.",
@@ -3689,159 +3692,74 @@ const Orb = {
     setTimeout(() => { this.form = form; this.cv.style.opacity = ""; VoiceMode.renderToggles(); setTimeout(() => this.resize(), 320); }, 230);
   },
   buildHead() {
-    // A head drawn like a 3D scan: dashed contour lines wrapping around it at every height, a calm closed mouth and
-    // bright eyes, on a neck and shoulders. y points down, z towards you; the shape is in units of the head's radius.
-    const pts = [], links = [], MOUTH = .47, EYE_Y = -.08;
-    const at = (table, v) => { for (let i = 1; i < table.length; i++) if (v <= table[i][0]) { const [a, p] = table[i - 1], [b, q] = table[i]; return p + (q - p) * (v - a) / (b - a); } return table.at(-1)[1]; };
-    const shape = (x, y, z) => {
-      // how wide (kx) and deep (kz) the head is at each height: crown, temples, cheekbones, jaw, chin
-      let X = x * at([[-1, .95], [-.85, .86], [-.6, .78], [-.2, .79], [.1, .81], [.4, .82], [.62, .82], [.8, .76], [.93, .66], [1, .56]], y);
-      let Y = y * (y < -.4 ? .99 : 1.05) + (y < -.4 ? -.024 : 0), Z = z * at([[-1, .95], [-.6, .9], [-.3, .92], [.3, .92], [.7, .8], [1, .62]], y);
-      if (z < 0 && y < .45) Z *= 1.1;                                                                             // the back of the skull
-      if (z > 0 && y > .55) Z += .1 * z * (y - .55) / .45;                                                        // the chin comes forward
-      const side = Math.exp(-((y - .08) ** 2) / .045 - (z + .04) ** 2 / .03);
-      X += Math.sign(x) * .055 * side;                                                                            // the ears
-      if (z > .25) {
-        const front = Math.min(1, (z - .25) / .3);
-        X += Math.sign(x) * .035 * front * Math.exp(-((y - .12) ** 2) / .012 - (Math.abs(x) - .5) ** 2 / .02);  // cheekbones
-        for (const ex of [-.33, .33]) Z -= .09 * front * Math.exp(-((x - ex) ** 2 + (y - EYE_Y) ** 2) / .02);   // eye sockets
-        Z += .045 * front * Math.exp(-((y + .2) ** 2) / .006) * Math.exp(-((Math.abs(x) - .3) ** 2) / .06);       // the brow
-        Z += .26 * front * Math.exp(-(x * x) / .01) * Math.max(0, Math.min(1, (y + .06) / .32)) * (y < .3 ? 1 : Math.exp(-((y - .3) ** 2) / .0025));   // the nose
-        Z += .05 * front * Math.exp(-((Math.abs(x) - .07) ** 2) / .002 - ((y - .29) ** 2) / .002);                // the nostrils
-        Z += .035 * front * Math.exp(-(x * x) / .025 - ((y - MOUTH) ** 2) / .005);                                // the lips
-        Z += .03 * front * Math.exp(-(x * x) / .03 - ((y - .82) ** 2) / .01);                                     // the chin
+    // A real head: the wireframe of a 3D scan ("Infinite, 3D Head Scan" by Lee Perry-Smith, CC BY 3.0, via three.js),
+    // packed into head.bin by the PC side (see README). Loaded only when the humanoid is first shown.
+    if (this.headLoading) return;
+    this.headLoading = true;
+    fetch("head.bin").then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(buf => {
+      const v = new DataView(buf), nv = v.getUint32(4, true), ne = v.getUint32(8, true);
+      const xyz = new Int16Array(buf, 12, nv * 3), w = new Uint8Array(buf, 12 + nv * 6, nv * 3);
+      const ends = new Uint16Array(buf.slice(12 + nv * 9, 12 + nv * 9 + ne * 4)), marks = new Float32Array(buf.slice(12 + nv * 9 + ne * 4));
+      const pts = [];
+      for (let i = 0; i < nv; i++) {
+        pts.push({ x: xyz[i * 3] / 1e4, y: xyz[i * 3 + 1] / 1e4, z: xyz[i * 3 + 2] / 1e4, jaw: w[i * 3] / 255, lip: w[i * 3 + 1] / 255,
+                   body: w[i * 3 + 2] / 255, size: .5, seed: Math.random() * 6.283, px: 0, py: 0, d: 0 });
       }
-      return [X, Y, Z];
-    };
-    const onFace = (dx, dy) => [dx, dy, Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy))];
-    // how much a point moves with the jaw: below the mouth, at the front
-    const jawOf = (x, y, z) => Math.max(0, Math.min(1, (y - MOUTH - .012) / .07)) * Math.max(0, Math.min(1, (z + .25) / .55));
-    const add = (dir, extra = {}) => {
-      const [x, y, z] = shape(...dir);
-      pts.push({ x, y, z, jaw: jawOf(...dir), dust: false, seed: Math.random() * 6.283, size: .55 + Math.random() * .35,
-                 px: 0, py: 0, d: 0, rim: 0, ...extra });
-      return pts.length - 1;
-    };
-    const chain = (ids, closed) => ids.forEach((p, k) => (k || closed) && link(ids[(k || ids.length) - 1], p));
-    const link = (i, j) => links.push([i, j]);
-    const FACE_Y = .12, inFace = (x, y, z) => z > 0 && (x / .6) ** 2 + ((y - FACE_Y) / .76) ** 2 < 1;
-    const hole = (x, y, z) => z > .45 && ((Math.abs(y - EYE_Y) < .05 && Math.abs(Math.abs(x) - .33) < .115) || (Math.abs(y - MOUTH) < .02 && Math.abs(x) < .21));
-    // the face: loops around the nose, like a scan (the jaw's seam isn't crossed, so the mouth can open)
-    for (let i = 1; i <= 17; i++) {
-      const rho = i / 17, n = Math.max(12, Math.round(110 * rho)), off = Math.random() * 6.283;
-      let prev = null, first = null;
-      for (let k = 0; k <= n; k++) {
-        const a = off + k / n * Math.PI * 2, dx = Math.cos(a) * .6 * rho * .985, dy = FACE_Y + Math.sin(a) * .76 * rho * .985;
-        const dir = onFace(dx, dy);
-        if (hole(...dir)) { prev = null; continue; }
-        const id = k === n && first !== null ? first : add(dir);
-        if (k === 0) first = id;
-        const q = prev !== null && pts[prev], p = pts[id];
-        const seam = q && Math.abs(q.jaw - p.jaw) > .3 && Math.abs((q.y + p.y) / 2 - MOUTH) < .1;
-        if (prev !== null && !seam && (k + i) % 7 !== 6) link(prev, id);
-        prev = id;
+      // The scan is up to 13 times denser round the mouth, eyes and nostrils than on the cheeks; drawn as it is, those
+      // parts blaze. So the head is cut into small cubes and each keeps only a few threads and one dot, in random order.
+      const CELL = .055, cellOf = (x, y, z) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`;
+      const order = [...Array(ne).keys()];
+      for (let i = ne - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      // where the scan's dense patches meet the rest, a seam of points joins short threads to long ones; the threads
+      // along that seam draw a hard frame round the mouth and eyes, so they're left out
+      const lo = new Float32Array(nv).fill(9), hi = new Float32Array(nv);
+      for (let k = 0; k < ne; k++) {
+        const a = ends[k * 2], b = ends[k * 2 + 1], p = pts[a], q = pts[b], l = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+        for (const v of [a, b]) { lo[v] = Math.min(lo[v], l); hi[v] = Math.max(hi[v], l); }
       }
-    }
-    // the rest of the head: one ring per height, dashed
-    const RINGS = 46, M = 76;
-    for (let i = 0; i < RINGS; i++) {
-      const y = -.985 + i * 1.97 / (RINGS - 1), r = Math.sqrt(1 - y * y), n = Math.max(10, Math.round(M * r)), off = Math.random() * 6.283;
-      let prev = null, first = null;
-      for (let k = 0; k <= n; k++) {
-        const a = off + k / n * Math.PI * 2, dir = [r * Math.sin(a), y, r * Math.cos(a)];
-        if (hole(...dir) || inFace(...dir)) { prev = null; continue; }
-        const id = k === n && first !== null ? first : add(dir);
-        if (k === 0) first = id;
-        if (prev !== null && (k + i) % 6 !== 5) link(prev, id);   // dashes: a short gap every few steps
-        prev = id;
+      const seam = v => hi[v] > lo[v] * 2.2;
+      const threads = new Map(), dots = new Set(), links = [];
+      for (const k of order) {
+        const a = ends[k * 2], b = ends[k * 2 + 1], p = pts[a], q = pts[b];
+        if (seam(a) && seam(b)) continue;
+        const key = cellOf((p.x + q.x) / 2, (p.y + q.y) / 2, (p.z + q.z) / 2), n = threads.get(key) || 0;
+        if (n < 3) { threads.set(key, n + 1); links.push([a, b]); }
       }
-    }
-    const eyes = [];
-    for (const ex of [-.33, .33]) {
-      // almond eyes: an upper and a lower lid meeting at the corners, a ring for the iris and a light in it
-      const upper = [], lower = [], iris = [];
-      for (let k = 0; k <= 10; k++) {
-        const u = k / 5 - 1, tilt = .01 * u * Math.sign(ex);
-        upper.push(add(onFace(ex + u * .1, EYE_Y - .036 * (1 - u * u) - tilt), { lid: 1, ey: shape(...onFace(ex, EYE_Y + .018))[1], size: .9 }));
+      for (let i = 0; i < nv; i++) {
+        const key = cellOf(pts[i].x, pts[i].y, pts[i].z);
+        if (dots.has(key)) pts[i].size = 0; else dots.add(key);
       }
-      lower.push(upper[0]);
-      for (let k = 1; k < 10; k++) {
-        const u = k / 5 - 1;
-        lower.push(add(onFace(ex + u * .1, EYE_Y + .024 * (1 - u * u) - .01 * u * Math.sign(ex)), { size: .8 }));
+      const eyes = [0, 3].map(o => { pts.push({ x: marks[o], y: marks[o + 1], z: marks[o + 2] + .015, jaw: 0, lip: 0, body: 0, eye: true, size: 0, px: 0, py: 0, d: 0 }); return pts.length - 1; });
+      pts.push({ x: marks[6], y: marks[7], z: marks[8], jaw: 0, lip: 0, body: 0, size: 0, px: 0, py: 0, d: 0 });
+      const mouth = pts.length - 1;
+      for (let k = 0; k < 30; k++) {   // a little dust floating around it, like the orb's
+        const a = Math.random() * 6.283, b = Math.acos(Math.random() * 2 - 1), s = 1.25 + Math.random() * .35;
+        pts.push({ x: Math.sin(b) * Math.cos(a) * s * .85, y: Math.cos(b) * s * .95 + .1, z: Math.sin(b) * Math.sin(a) * s * .7, jaw: 0, lip: 0, body: 0,
+                   dust: true, seed: Math.random() * 6.283, size: .5 + Math.random() * .6, px: 0, py: 0, d: 0 });
       }
-      lower.push(upper[10]);
-      for (let k = 0; k < 10; k++) {
-        const a = k / 10 * Math.PI * 2;
-        iris.push(add(onFace(ex + .026 * Math.cos(a), EYE_Y - .004 + .024 * Math.sin(a)), { iris: 1, ey: shape(...onFace(ex, EYE_Y))[1], size: .9 }));
-      }
-      chain(upper); chain(lower); chain(iris, true);
-      eyes.push(add(onFace(ex, EYE_Y - .004), { eye: true, size: 1.4 }));
-    }
-    // the lips: closed and calm, corners shared; the lower one goes down with the jaw when he talks
-    const upper = [], lower = [];
-    for (let k = 0; k <= 12; k++) {
-      const u = k / 6 - 1;
-      upper.push(add(onFace(u * .2, MOUTH - .006 - .012 * (1 - u * u) + .006 * Math.exp(-(u * u) / .02)), { jaw: 0, lip: 1, up: 1 - u * u, size: .9 }));
-    }
-    lower.push(upper[0]);
-    for (let k = 1; k < 12; k++) {
-      const u = k / 6 - 1;
-      lower.push(add(onFace(u * .2, MOUTH + .006 + .02 * (1 - u * u)), { jaw: 1 - u * u * (2 - u * u) * .55, lip: 2, size: .9 }));
-    }
-    lower.push(upper[12]);
-    chain(upper); chain(lower);
-    // the neck, widening into the shoulders, in the same contour lines
-    for (let row = 0; row < 13; row++) {   // (starting under the jaw, so no lines show through the chin)
-      const y = .96 + row * .052, spread = Math.max(0, (y - 1.06) / .5), w = .34 + .92 * spread ** 1.3, dz = .3 + .1 * spread;
-      const n = Math.round(48 + 40 * spread), off = Math.random() * 6.283;
-      let prev = null, first = null;
-      for (let k = 0; k <= n; k++) {
-        const a = off + k / n * Math.PI * 2, side = Math.abs(Math.sin(a));
-        let id;
-        if (k === n) id = first;
-        else {
-          pts.push({ x: Math.sin(a) * w, y: y + spread * .36 * side ** 1.6, z: Math.cos(a) * dz * (1 - .25 * spread * side) - .12, jaw: 0, dust: false,
-                     seed: Math.random() * 6.283, size: .5 + Math.random() * .3, px: 0, py: 0, d: 0, rim: 0, neck: true });
-          id = pts.length - 1;
-        }
-        if (k === 0) first = id;
-        if (prev !== null && (k + row) % 6 !== 5) link(prev, id);
-        prev = id;
-      }
-    }
-    for (let k = 0; k < 26; k++) {   // a little dust floating around it, like the orb's
-      const a = Math.random() * 6.283, b = Math.acos(Math.random() * 2 - 1), s = 1.2 + Math.random() * .3;
-      pts.push({ x: Math.sin(b) * Math.cos(a) * s * .9, y: Math.cos(b) * s * .95 - .05, z: Math.sin(b) * Math.sin(a) * s * .9, jaw: 0, dust: true,
-                 seed: Math.random() * 6.283, size: .5 + Math.random() * .6, px: 0, py: 0, d: 0, rim: 0 });
-    }
-    this.head = { pts, links, eyes, upper, lower };
+      this.head = { pts, links, eyes, mouth };
+    }).catch(() => { this.headLoading = false; });
   },
   placeHead(R, c, lv, breath) {
     const H = this.head, t = this.t, L = this.look, mo = this.mo, band = Math.sin(t * 1.6);
     // it looks around a little, holds still and faces you while it listens, and looks up while it thinks
-    const yaw = (.3 * Math.sin(t * .27) + .1 * Math.sin(t * .71 + 1)) * (1 - .65 * L.heart) * (1 - .4 * L.think) + .25 * L.think * Math.sin(t * .5);
-    const pitch = -.02 + .035 * Math.sin(t * .21) - .12 * L.think + .05 * mo, roll = .04 * Math.sin(t * .17) + .05 * L.heart;
-    const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pitch), cp = Math.cos(pitch), sr = Math.sin(roll), cr = Math.cos(roll);
-    const S = R * 1.08, lift = R * .3, browUp = .025 * L.think + .015 * L.heart + .012 * mo;
+    const yaw = (.26 * Math.sin(t * .27) + .08 * Math.sin(t * .71 + 1)) * (1 - .65 * L.heart) * (1 - .4 * L.think) + .22 * L.think * Math.sin(t * .5);
+    const pitch = .02 + .03 * Math.sin(t * .21) - .1 * L.think + .04 * mo, roll = .03 * Math.sin(t * .17) + .04 * L.heart;
+    const S = R * 1.12, lift = R * .2;
     for (const p of H.pts) {
       let x = p.x, y = p.y, z = p.z;
-      if (p.jaw) { y += mo * .09 * p.jaw; z -= mo * .03 * p.jaw; }   // the jaw drops as he talks
-      if (p.lip === 1) y -= mo * .028 * p.up;                         // and the upper lip lifts, so it opens as an oval
-      if (p.brow) y -= browUp;                                        // brows go up as he listens and thinks
-      if (p.lid && this.blink > 0) y += (p.ey - y) * this.blink;      // blinking: the upper lid comes down
-      if (p.iris && this.blink > 0) y = p.ey + (y - p.ey) * (1 - this.blink);
-      const wave = Math.sin(p.x * 3.1 + t * 2.3) * Math.sin(p.y * 2.7 - t * 1.9 + p.seed * .2);
-      const sweep = L.think * .05 * Math.exp(-((p.y - band) ** 2) * 14);
-      const s = S * (breath + lv * .03 * wave + sweep + (p.dust ? .04 * Math.sin(t * .8 + p.seed) : 0));
+      if (p.jaw) { y += mo * .07 * p.jaw; z -= mo * .025 * p.jaw; }   // the jaw drops as he talks
+      if (p.lip) y -= mo * .018 * p.lip;                              // and the upper lip lifts a little
+      const sweep = L.think * .03 * Math.exp(-((p.y - band) ** 2) * 14);
+      const s = S * (breath + sweep + (p.dust ? .04 * Math.sin(t * .8 + p.seed) : 0));
       x *= s; y *= s; z *= s;
-      if (p.neck) { const k = .35; const x0 = x * Math.cos(yaw * k) + z * Math.sin(yaw * k); z = -x * Math.sin(yaw * k) + z * Math.cos(yaw * k); x = x0; }   // the neck turns less
-      else { const x0 = x * cy + z * sy; z = -x * sy + z * cy; x = x0; }   // turn
-      const y1 = y * cp - z * sp, z1 = y * sp + z * cp;                   // nod
-      const x2 = x * cr - y1 * sr, y2 = x * sr + y1 * cr;                 // tilt
-      const f = 3.4 / (3.4 - z1 / R);
-      p.px = c + x2 * f; p.py = c - lift + y2 * f; p.d = Math.max(0, Math.min(.999, (z1 / S + 1.2) / 2.4));
-      // the outline catches the light: points side-on to you (on the head, not the shoulders) glow a little more
-      p.rim = p.dust || p.neck ? 0 : Math.max(0, 1 - Math.abs(z1) / (Math.hypot(x2, y2 * .7, z1) + 1e-6) * 1.6);
+      const k = 1 - .75 * p.body;   // the shoulders turn much less than the head
+      const ya = yaw * k, pa = pitch * k, ra = roll * k, sy = Math.sin(ya), cy = Math.cos(ya), sp = Math.sin(pa), cp = Math.cos(pa);
+      const x0 = x * cy + z * sy, z0 = -x * sy + z * cy;
+      const y1 = y * cp - z0 * sp, z1 = y * sp + z0 * cp;
+      const x2 = x0 * Math.cos(ra) - y1 * Math.sin(ra), y2 = x0 * Math.sin(ra) + y1 * Math.cos(ra);
+      const f = 6 / (6 - z1 / R);   // a gentle perspective, like a long lens
+      p.px = c + x2 * f; p.py = c - lift + y2 * f; p.d = Math.max(0, Math.min(.999, (z1 / S + .75) / 1.9));
     }
   },
   init() {
@@ -3943,8 +3861,8 @@ const Orb = {
     }
     const ay = this.spin, ax = .38 + .18 * Math.sin(t * .23), sy = Math.sin(ay), cy = Math.cos(ay), sx = Math.sin(ax), cx = Math.cos(ax);
     const breath = swell + L.breathe * Math.sin(t * 1.25), band = Math.sin(t * 1.6);
-    const head = this.form === "head";
-    if (head && !this.head) this.buildHead();
+    let head = this.form === "head";
+    if (head && !this.head) { this.buildHead(); head = false; }   // the orb until the head has loaded
     const P = head ? this.head.pts : this.pts, LK = head ? this.head.links : this.links;
     if (head) this.placeHead(R, c, lv, breath);
     else for (const p of this.pts) {
@@ -3959,22 +3877,29 @@ const Orb = {
       p.px = c + x1 * f; p.py = c + y2 * f; p.d = Math.max(0, Math.min(.999, (z2 / R + 1.3) / 2.6));
     }
     const lines = [[], [], [], []];   // four depth layers, one stroke each
-    for (const [i, j] of LK) { const a = P[i], q = P[j]; lines[((a.d + q.d) * 2) | 0].push(a, q); }
+    const open = head && this.mo > .03;
+    for (const [i, j] of LK) {
+      const a = P[i], q = P[j];
+      if (open && Math.abs(a.jaw - q.jaw) > .4) continue;   // the lips part: no threads across the open mouth
+      lines[((a.d + q.d) * 2) | 0].push(a, q);
+    }
     const lift = 1 + lv * 1.2 + this.pop * .8;
-    lines.forEach((Ln, k) => {
+    const strokeAll = (sets, dim) => sets.forEach((Ln, k) => {
       if (!Ln.length) return;
       g.beginPath();
       for (let n = 0; n < Ln.length; n += 2) { g.moveTo(Ln[n].px, Ln[n].py); g.lineTo(Ln[n + 1].px, Ln[n + 1].py); }
-      const a = (.06 + k * .08) * lift * (head ? 1.15 : 1);   // the head is drawn mostly in its lines
+      // the head: nearly even brightness front to back (a step in it drew a bright box round the mouth); the orb: deeper = dimmer
+      const a = (head ? [.07, .2, .26, .28][k] * 1.25 : .06 + k * .08) * lift * dim;
       if (k > 1) { g.lineWidth = this.dpr * 2.6; g.strokeStyle = rgba(a * .22); g.stroke(); }   // soft glow on the near side
       g.lineWidth = this.dpr * .7; g.strokeStyle = rgba(a); g.stroke();
     });
-    if (head && this.mo > .03) {   // light inside the open mouth
-      const H = this.head, lips = [...H.upper, ...H.lower.slice(1, -1).reverse()].map(i => P[i]);
-      g.beginPath(); g.moveTo(lips[0].px, lips[0].py);
-      for (const q of lips.slice(1)) g.lineTo(q.px, q.py);
-      g.closePath(); g.fillStyle = rgba(.13 * this.mo); g.fill();
-      g.lineWidth = this.dpr * 1.1; g.strokeStyle = rgba(.25 + .3 * this.mo); g.stroke();
+    strokeAll(lines, 1);
+    if (open) {   // a soft light inside the open mouth
+      const m = P[this.head.mouth], w = R * .2, h = R * .1 * this.mo;
+      const e = g.createRadialGradient(m.px, m.py + h * .4, 0, m.px, m.py + h * .4, w);
+      e.addColorStop(0, rgba(.22 * this.mo)); e.addColorStop(1, rgba(0));
+      g.save(); g.translate(m.px, m.py + h * .4); g.scale(1, Math.max(.15, h / w)); g.translate(-m.px, -(m.py + h * .4));
+      g.fillStyle = e; g.beginPath(); g.arc(m.px, m.py + h * .4, w, 0, Math.PI * 2); g.fill(); g.restore();
     }
     const dots = [[], [], [], []], sparks = [];
     for (const p of P) {
@@ -3983,8 +3908,8 @@ const Orb = {
     }
     dots.forEach((Ln, k) => {
       g.beginPath();
-      for (const p of Ln) { const s = this.dpr * p.size * (.8 + k * .45) * (1 + lv * .5) * (1 + (p.rim || 0) ** 3 * 1.4); g.rect(p.px - s / 2, p.py - s / 2, s, s); }
-      g.fillStyle = rgba(.25 + k * .22, Math.min(255, r + 60), Math.min(255, gr + 30), b); g.fill();
+      for (const p of Ln) { if (!p.size) continue; const s = this.dpr * p.size * (.8 + k * .45) * (1 + lv * .5); g.rect(p.px - s / 2, p.py - s / 2, s, s); }
+      g.fillStyle = rgba(head ? [.2, .45, .55, .6][k] : .25 + k * .22, Math.min(255, r + 60), Math.min(255, gr + 30), b); g.fill();
     });
     for (const p of sparks) {
       const f = (Math.sin(t * .9 + p.seed * 13) - .996) / .004, s = this.dpr * (2 + 5 * f);
@@ -3994,19 +3919,15 @@ const Orb = {
     }
     if (head) {   // the eyes: two soft lights, brighter as he speaks, out for a moment when he blinks
       for (const i of this.head.eyes) {
-        const p = P[i], s = R * (.075 + .03 * lv) * (.6 + .4 * p.d), a = (.55 + .35 * lv + .2 * this.pop) * (1 - this.blink * .9);
+        const p = P[i], s = R * (.11 + .03 * lv) * (.7 + .3 * p.d), a = (.85 + .15 * lv + .2 * this.pop) * (1 - this.blink * .9);
         const e = g.createRadialGradient(p.px, p.py, 0, p.px, p.py, s);
-        e.addColorStop(0, `rgba(255,255,255,${a.toFixed(3)})`); e.addColorStop(.35, rgba(a * .7)); e.addColorStop(1, rgba(0));
+        e.addColorStop(0, `rgba(255,255,255,${a.toFixed(3)})`); e.addColorStop(.12, `rgba(255,255,255,${(a * .8).toFixed(3)})`); e.addColorStop(.3, rgba(a * .5)); e.addColorStop(1, rgba(0));
         g.fillStyle = e; g.fillRect(p.px - s, p.py - s, s * 2, s * 2);
       }
     }
     if (head) {
-      // the outline: a soft halo on the points side-on to you, so the face reads in 3D
-      g.beginPath();
-      for (const p of P) if (p.rim > .55) { const s = this.dpr * 4.5 * p.rim; g.rect(p.px - s / 2, p.py - s / 2, s, s); }
-      g.fillStyle = rgba(.07 + .06 * lv); g.fill();
       // a faint hologram scan going down over him every few seconds
-      const S = R * 1.08, top = c - R * .3 - S * 1.05, span = S * 2.3, phase = (t / 5.5) % 1, sy = top + span * phase;
+      const S = R * 1.12, top = c - R * .2 - S * 1.05, span = S * 2.3, phase = (t / 5.5) % 1, sy = top + span * phase;
       const scan = g.createLinearGradient(0, sy - S * .07, 0, sy + S * .07);
       scan.addColorStop(0, rgba(0)); scan.addColorStop(.5, rgba(.07 * Math.sin(phase * Math.PI))); scan.addColorStop(1, rgba(0));
       g.fillStyle = scan; g.fillRect(c - S, sy - S * .07, S * 2, S * .14);
