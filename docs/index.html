@@ -596,9 +596,9 @@
   .net div { flex: 1; }
   .net .arrow { font-size: 13px; color: var(--label2); }
   .net b { display: block; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--label2); }
-  .live .dot { width: 7px; height: 7px; }
-  .live .dot.ok { animation: pulse 2s ease-in-out infinite; }
+  .sys-live { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--label2); }
+  .sys-live .dot { width: 7px; height: 7px; }
+  .sys-live .dot.ok { animation: pulse 2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
 
   /* iOS action sheet */
@@ -1214,7 +1214,7 @@
 <div class="sheet-wrap" id="sysSheet" hidden>
   <div class="sheet tall glass strong" role="dialog" aria-label="System">
     <div class="grabber"></div>
-    <div class="sheet-head"><span class="live"><span class="dot" id="sysDot"></span><span id="sysLive">Live</span></span><h3 id="sysHost">System</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-head"><span class="sys-live"><span class="dot" id="sysDot"></span><span id="sysLive">Live</span></span><h3 id="sysHost">System</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
     <div class="sheet-body">
       <div class="sys" id="sys">
         <div class="scard full"><h4><svg class="i"><use href="#i-cpu"/></svg>Processor</h4>
@@ -1318,7 +1318,7 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-10-31.8";   // bump together with version.json
+const VERSION = "2026-10-31.9";   // bump together with version.json
 const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
