@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="300" viewBox="0 0 1000 300" role="img" aria-label="How your phone connects to your PC">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5fe3ff"/>
+    </marker>
+  </defs>
+  <rect width="1000" height="300" rx="20" fill="#050b12"/>
+  <rect x="1" y="1" width="998" height="298" rx="19" fill="none" stroke="#5fe3ff" stroke-opacity="0.18" stroke-width="2"/>
+  <g font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+    <rect x="30" y="70" width="220" height="84" rx="14" fill="#0c1c2a" stroke="#5fe3ff" stroke-width="2"/>
+    <text x="48" y="108.0" font-size="19" font-weight="600" fill="#e8fbff">Your iPhone</text>
+    <text x="48" y="131.0" font-size="14.5" fill="#8fb3c4">the Jarvis web app</text>
+    <rect x="390" y="70" width="220" height="84" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="408" y="108.0" font-size="19" font-weight="600" fill="#e8fbff">Cloudflare tunnel</text>
+    <text x="408" y="131.0" font-size="14.5" fill="#8fb3c4">sees only scrambled data</text>
+    <rect x="750" y="70" width="220" height="84" rx="14" fill="#0c1c2a" stroke="#5fe3ff" stroke-width="2"/>
+    <text x="768" y="108.0" font-size="19" font-weight="600" fill="#e8fbff">Jarvis on your PC</text>
+    <text x="768" y="131.0" font-size="14.5" fill="#8fb3c4">holds the same key</text>
+    <line x1="252" y1="112" x2="386" y2="112" stroke="#5fe3ff" stroke-width="2.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+    <line x1="612" y1="112" x2="746" y2="112" stroke="#5fe3ff" stroke-width="2.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+    <text x="319" y="100" font-size="13.5" fill="#5fe3ff" text-anchor="middle">AES-256-GCM</text>
+    <text x="679" y="100" font-size="13.5" fill="#5fe3ff" text-anchor="middle">AES-256-GCM</text>
+    <rect x="390" y="200" width="220" height="70" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="408" y="231.0" font-size="19" font-weight="600" fill="#e8fbff">ntfy relay</text>
+    <text x="408" y="254.0" font-size="14.5" fill="#8fb3c4">passes on the PC's address</text>
+    <path d="M860 156 L860 235 L614 235" fill="none" stroke="#5fe3ff" stroke-opacity="0.5" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
+    <path d="M386 235 L140 235 L140 160" fill="none" stroke="#5fe3ff" stroke-opacity="0.5" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
+    <text x="30" y="44" font-size="15" font-weight="700" fill="#8fb3c4" letter-spacing="1.5">END-TO-END ENCRYPTED, FROM ANYWHERE</text>
+
+  </g>
+</svg>

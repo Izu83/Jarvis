@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="410" viewBox="0 0 1000 410" role="img" aria-label="How Jarvis works">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5fe3ff"/>
+    </marker>
+  </defs>
+  <rect width="1000" height="410" rx="20" fill="#050b12"/>
+  <rect x="1" y="1" width="998" height="408" rx="19" fill="none" stroke="#5fe3ff" stroke-opacity="0.18" stroke-width="2"/>
+  <g font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+    <text x="40" y="52" font-size="15" font-weight="700" fill="#8fb3c4" letter-spacing="1.5">YOU</text>
+    <text x="370" y="52" font-size="15" font-weight="700" fill="#8fb3c4" letter-spacing="1.5">ON YOUR PC</text>
+    <text x="752" y="52" font-size="15" font-weight="700" fill="#8fb3c4" letter-spacing="1.5">HE DOES IT</text>
+    <rect x="30" y="80" width="270" height="80" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="48" y="116.0" font-size="19" font-weight="600" fill="#e8fbff">“Hey Jarvis”</text>
+    <text x="48" y="139.0" font-size="14.5" fill="#8fb3c4">your PC's microphone</text>
+    <path d="M302 120 C334.0 120 334.0 236 366 236" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="30" y="188" width="270" height="80" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="48" y="224.0" font-size="19" font-weight="600" fill="#e8fbff">iPhone or desktop app</text>
+    <text x="48" y="247.0" font-size="14.5" fill="#8fb3c4">text or voice, from anywhere</text>
+    <path d="M302 228 C334.0 228 334.0 236 366 236" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="30" y="296" width="270" height="80" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="48" y="332.0" font-size="19" font-weight="600" fill="#e8fbff">Siri</text>
+    <text x="48" y="355.0" font-size="14.5" fill="#8fb3c4">“Hey Siri, Ask Jarvis”</text>
+    <path d="M302 336 C334.0 336 334.0 236 366 236" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="370" y="80" width="330" height="296" rx="18" fill="#0c1c2a" stroke="#5fe3ff" stroke-width="2"/>
+    <text x="394" y="118" font-size="23" font-weight="700" fill="#e8fbff">Jarvis</text>
+    <circle cx="410" cy="160" r="15" fill="none" stroke="#5fe3ff" stroke-width="2"/>
+    <text x="410" y="166" font-size="16" font-weight="700" fill="#5fe3ff" text-anchor="middle">1</text>
+    <text x="438" y="158" font-size="18" font-weight="600" fill="#e8fbff">Hears you</text>
+    <text x="438" y="181" font-size="14.5" fill="#8fb3c4">wake word + Whisper, on your PC</text>
+    <circle cx="410" cy="234" r="15" fill="none" stroke="#5fe3ff" stroke-width="2"/>
+    <text x="410" y="240" font-size="16" font-weight="700" fill="#5fe3ff" text-anchor="middle">2</text>
+    <text x="438" y="232" font-size="18" font-weight="600" fill="#e8fbff">Quick commands</text>
+    <text x="438" y="255" font-size="14.5" fill="#8fb3c4">music, volume, modes: instant, no AI</text>
+    <circle cx="410" cy="308" r="15" fill="none" stroke="#5fe3ff" stroke-width="2"/>
+    <text x="410" y="314" font-size="16" font-weight="700" fill="#5fe3ff" text-anchor="middle">3</text>
+    <text x="438" y="306" font-size="18" font-weight="600" fill="#e8fbff">Claude handles the prompt</text>
+    <text x="438" y="329" font-size="14.5" fill="#8fb3c4">plans the steps, uses the tools</text>
+    <path d="M702 228 C725.0 228 725.0 102 748 102" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="752" y="80" width="218" height="46" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="770" y="110.0" font-size="16.5" font-weight="600" fill="#e8fbff">Apps, windows, monitors</text>
+    <path d="M702 228 C725.0 228 725.0 162 748 162" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="752" y="140" width="218" height="46" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="770" y="170.0" font-size="16.5" font-weight="600" fill="#e8fbff">Music and volume</text>
+    <path d="M702 228 C725.0 228 725.0 222 748 222" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="752" y="200" width="218" height="46" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="770" y="230.0" font-size="16.5" font-weight="600" fill="#e8fbff">Files and email</text>
+    <path d="M702 228 C725.0 228 725.0 282 748 282" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="752" y="260" width="218" height="46" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="770" y="290.0" font-size="16.5" font-weight="600" fill="#e8fbff">Websites, out of sight</text>
+    <path d="M702 228 C725.0 228 725.0 342 748 342" fill="none" stroke="#5fe3ff" stroke-opacity="0.75" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="752" y="320" width="218" height="46" rx="14" fill="#0c1c2a" stroke="#1d3a4f" stroke-width="1.5"/>
+    <text x="770" y="350.0" font-size="16.5" font-weight="600" fill="#e8fbff">Answers on your phone</text>
+
+  </g>
+</svg>
