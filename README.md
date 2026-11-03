@@ -257,7 +257,7 @@ The same app as on your phone, in a window on the PC, with your chats down the s
     <td>
       Claude handles the prompts. Tap the model name in the message box and tick any others Jarvis may use too. For each message he picks the best ticked one for the job that costs the least, and if one fails or hits its limit, the next one answers.<br><br>
       <b>Claude</b>: your Claude plan. Doing things on the PC, code, reading the screen.<br><br>
-      <b>Gemini</b>: free, with a key from <a href="https://aistudio.google.com/apikey">Google AI Studio</a>. Everyday questions, and anything current, with Google Search.<br><br>
+      <b>Gemini</b>: free, with a key from <a href="https://aistudio.google.com/apikey">Google AI Studio</a>. Everyday questions, and anything current, with Google Search. Always the newest Flash model your key can use, and the next one down when that's busy or out of today's free allowance.<br><br>
       <b>ChatGPT, Grok</b>: pay per use, never past the monthly budget you set. Grok for X / Twitter.<br><br>
       <b>Hermes, Qwen3</b>: free on your graphics card with <a href="https://ollama.com">Ollama</a>. Simple commands when you're offline or out of Claude.
     </td>

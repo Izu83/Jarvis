@@ -173,7 +173,10 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 
 - **Claude**: your Claude plan, through Claude Code (`claude_code_model`, Sonnet).
 - **Gemini**: free, with a Google AI Studio key (https://aistudio.google.com/apikey, no card; it has daily
-  limits, and past them the next model answers). `run.bat --keys` adds it and picks the newest Flash model. It gets
+  limits, about 20 a day per model). Jarvis uses the newest stable Flash model your key can use (`gemini-3.8-flash`
+  as of November 2026) and goes down to the next one (3.7, 3.6, 3.5, 2.5 Flash) whenever it's busy or out of today's
+  allowance; past all of them the next brain answers. Pro models aren't used: the free tier gives them nothing.
+  `gemini_model` in config.json puts one model first. `run.bat --keys` adds the key. It gets
   Jarvis's tools, answers anything current with Google Search, and takes the everyday questions so your Claude limit
   lasts. (Google no longer lets personal accounts use the Gemini CLI, even with a Gemini plan, so it's the API.)
 - **ChatGPT, Grok**: paid per use through their APIs. `run.bat --keys` adds the keys (kept in `.env`) and the

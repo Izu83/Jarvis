@@ -73,12 +73,9 @@ def keys_setup() -> None:
             continue
         set_secret(env, key)
         set_setting("use_" + provider, True)
-        if provider == "gemini":
-            model = cloud.best_gemini_model(key)
-            if model:
-                set_setting("gemini_model", model)
+        best = cloud.best_gemini_model(key) if provider == "gemini" else None
         print(f"  {name} is connected and ticked in the model menu"
-              + (f" ({settings.get('gemini_model')})." if provider == "gemini" and settings.get("gemini_model") else "."))
+              + (f" (the newest it can use: {best}, and the next one down when that's busy)." if best else "."))
     budget = input(f"Monthly budget for ChatGPT and Grok together, in USD [{settings.get('paid_budget', 5.0):g}]: ").strip()
     if budget:
         try:

@@ -58,7 +58,7 @@ DEFAULTS = {
     # Website jobs in Jarvis's own hidden Chrome (hidden_browser.py), not on your screen. false = your browser + mouse.
     "hidden_browser": True,
     "use_gemini": True,
-    "gemini_model": "",
+    "gemini_model": "",   # "" = the newest Flash the key can use, then the next one down; a name = try that one first
     "gemini_price": [0, 0],
     "use_chatgpt": False,
     "use_grok": False,
