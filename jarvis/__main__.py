@@ -44,7 +44,8 @@ def pair() -> None:
 
 
 def keys_setup() -> None:
-    """API keys for the pay-per-use models (ChatGPT, Grok): typed hidden, checked, saved in .env."""
+    """API keys for Gemini and OpenRouter's free models (free) and ChatGPT, Grok (pay per use): typed hidden, checked,
+    saved in .env."""
     import getpass
 
     import requests
@@ -52,11 +53,13 @@ def keys_setup() -> None:
     from . import cloud
     from .config import set_secret, set_setting
 
-    print("Gemini: FREE with a Google AI Studio key (no card). ChatGPT and Grok: paid per use through their APIs")
+    print("Gemini: FREE with a Google AI Studio key (no card). Free models: FREE with an OpenRouter key (no card;")
+    print("DeepSeek whenever it's free there, otherwise the strongest free models). ChatGPT and Grok: paid per use through their APIs")
     print("(not the ChatGPT or Grok apps); Jarvis only sends them what they're best at, or what the others can't")
     print(f"answer, and keeps both together under your monthly budget (now ${settings.get('paid_budget', 5.0):g}).")
     print("Press Enter to skip one.\n")
-    where = {"gemini": "https://aistudio.google.com/apikey (free)", "chatgpt": "https://platform.openai.com/api-keys",
+    where = {"gemini": "https://aistudio.google.com/apikey (free)", "openrouter": "https://openrouter.ai/keys (free)",
+             "chatgpt": "https://platform.openai.com/api-keys",
              "grok": "https://console.x.ai"}
     for provider, (env, base, *_rest) in cloud.PROVIDERS.items():
         name = cloud.NAMES[provider]
@@ -65,7 +68,8 @@ def keys_setup() -> None:
         if not key:
             continue
         try:
-            ok = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
+            check = f"{base}/key" if provider == "openrouter" else f"{base}/models"   # OpenRouter's model list is public
+            ok = requests.get(check, headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
         except requests.RequestException:
             ok = False
         if not ok:
@@ -139,7 +143,7 @@ def main() -> None:
     parser.add_argument("--no-tray", action="store_true", help="don't show the taskbar tray icon")
     parser.add_argument("--pair", action="store_true", help="show the link/QR code that connects your phone")
     parser.add_argument("--email", action="store_true", help="connect your email account (app password)")
-    parser.add_argument("--keys", action="store_true", help="API keys for ChatGPT and Grok (pay per use)")
+    parser.add_argument("--keys", action="store_true", help="API keys: Gemini and the free models (free), ChatGPT and Grok (pay per use)")
     parser.add_argument("--browser", nargs="?", const="", metavar="URL",
                         help="show Jarvis's hidden browser so you can log in to a site for him")
     parser.add_argument("--startup", action="store_true", help="start Jarvis hidden at login from now on")

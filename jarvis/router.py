@@ -5,13 +5,15 @@ Pro through Claude Code, Gemini Pro through the Gemini CLI: no extra cost, but e
 APIs (ChatGPT, Grok: only with a key, ticked, and under the monthly budget). Among your plans, Gemini takes what
 it's best at and the everyday questions, so your Claude limit lasts for what Claude is best at.
 
-    doing things on the PC, many steps     Claude    -> Gemini -> local -> ChatGPT
-    code                                    Claude    -> ChatGPT -> Gemini
+    doing things on the PC, many steps     Claude    -> Gemini -> free models -> local -> ChatGPT
+    code                                    Claude    -> ChatGPT -> Gemini -> free models
     seeing the screen, photos you send      Claude    -> Gemini -> ChatGPT
-    current things (news, prices, search)   Gemini    -> Claude -> Grok -> ChatGPT
-    YouTube, long documents                 Gemini    -> Claude
+    current things (news, prices, search)   Gemini    -> Claude -> Grok -> ChatGPT -> free models
+    YouTube, long documents                 Gemini    -> Claude -> free models
     X / Twitter                             Grok      -> Gemini -> Claude
-    everyday questions and chat             Gemini    -> Claude -> local -> ChatGPT -> Grok
+    everyday questions and chat             Gemini    -> free models -> Claude -> local -> ChatGPT -> Grok
+
+("Free models" are OpenRouter's: DeepSeek whenever it's free there, otherwise the strongest free ones.)
 
 Whoever is switched off in the model menu (or not set up) is skipped, and the next in line answers when one fails or
 hits its limit. All of it is plain rules on the PC: picking costs nothing.
@@ -54,14 +56,14 @@ def kind(command: str) -> str:
     return "chat"
 
 
-ORDER = {
-    "action":  ["claude", "gemini", "local", "chatgpt"],
-    "code":    ["claude", "chatgpt", "gemini", "local"],
+ORDER = {   # "openrouter" = OpenRouter's free models (DeepSeek when it's free there): text only, no web search
+    "action":  ["claude", "gemini", "openrouter", "local", "chatgpt"],
+    "code":    ["claude", "chatgpt", "gemini", "openrouter", "local"],
     "sight":   ["claude", "gemini", "chatgpt"],
-    "current": ["gemini", "claude", "grok", "chatgpt"],
-    "long":    ["gemini", "claude", "chatgpt"],
+    "current": ["gemini", "claude", "grok", "chatgpt", "openrouter"],
+    "long":    ["gemini", "claude", "openrouter", "chatgpt"],
     "x":       ["grok", "gemini", "claude", "chatgpt"],
-    "chat":    ["gemini", "claude", "local", "chatgpt", "grok"],
+    "chat":    ["gemini", "openrouter", "claude", "local", "chatgpt", "grok"],
 }
 
 

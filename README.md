@@ -121,7 +121,7 @@ The first start downloads the speech models (a few hundred MB, plus about 1.6 GB
 | `run.bat --startup` | Start Jarvis automatically when you log in to Windows (`--startup-off` to stop) |
 | `.venv\Scripts\python -m jarvis.desktop --install` | Put a **Jarvis** shortcut on the Desktop and in the Start menu |
 | `run.bat --pair` | Show the QR code that connects your phone (the tray menu has it too) |
-| `run.bat --keys` | Add a free Gemini key, or ChatGPT / Grok keys (see [The models](#the-models)) |
+| `run.bat --keys` | Add the free Gemini and OpenRouter keys, or ChatGPT / Grok keys (see [The models](#the-models)) |
 | `run.bat --email` | Connect your email so Jarvis can check, read and send it |
 | `npm install --prefix .brain/browser-mcp @playwright/mcp@0.0.83` | The hidden browser for website jobs |
 | `run.bat --console` | Run with the log in a window, to see what's going on |
@@ -258,6 +258,7 @@ The same app as on your phone, in a window on the PC, with your chats down the s
       Claude handles the prompts. Tap the model name in the message box and tick any others Jarvis may use too. For each message he picks the best ticked one for the job that costs the least, and if one fails or hits its limit, the next one answers.<br><br>
       <b>Claude</b>: your Claude plan. Doing things on the PC, code, reading the screen.<br><br>
       <b>Gemini</b>: free, with a key from <a href="https://aistudio.google.com/apikey">Google AI Studio</a>. Everyday questions, and anything current, with Google Search. Always the newest Flash model your key can use, and the next one down when that's busy or out of today's free allowance.<br><br>
+      <b>Free models</b>: free, with a key from <a href="https://openrouter.ai/keys">OpenRouter</a>. DeepSeek whenever it's free there, otherwise the strongest free model (like NVIDIA's Nemotron 3 Ultra). About 50 questions a day.<br><br>
       <b>ChatGPT, Grok</b>: pay per use, never past the monthly budget you set. Grok for X / Twitter.<br><br>
       <b>Hermes, Qwen3</b>: free on your graphics card with <a href="https://ollama.com">Ollama</a>. Simple commands when you're offline or out of Claude.
     </td>
@@ -266,13 +267,13 @@ The same app as on your phone, in a window on the PC, with your chats down the s
 
 | The job | Who goes first |
 |---|---|
-| Doing things on the PC, many steps | Claude, then Gemini, local, ChatGPT |
-| Code | Claude, then ChatGPT, Gemini |
+| Doing things on the PC, many steps | Claude, then Gemini, the free models, local, ChatGPT |
+| Code | Claude, then ChatGPT, Gemini, the free models |
 | The screen, photos you send | Claude, then Gemini, ChatGPT |
-| Anything current (news, prices, search) | Gemini, then Claude, Grok, ChatGPT |
-| YouTube, long documents | Gemini, then Claude |
+| Anything current (news, prices, search) | Gemini, then Claude, Grok, ChatGPT, the free models |
+| YouTube, long documents | Gemini, then Claude, the free models |
 | X / Twitter | Grok, then Gemini, Claude |
-| Everyday questions and chat | Gemini, then Claude, local, ChatGPT, Grok |
+| Everyday questions and chat | Gemini, then the free models, Claude, local, ChatGPT, Grok |
 
 <h2><a name="jarvis-messages-you"></a><img src="assets/readme/headers/jarvis-messages-you.svg" alt="Jarvis messages you" width="100%"></h2>
 

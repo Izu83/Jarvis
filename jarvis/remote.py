@@ -78,7 +78,8 @@ def pairing_link() -> str:
 
 
 # the model picker's ticks (Settings and the model menu) and what the log calls them
-MODEL_TICKS = {"use_claude": "Claude", "use_gemini": "Gemini", "use_chatgpt": "ChatGPT", "use_grok": "Grok",
+MODEL_TICKS = {"use_claude": "Claude", "use_gemini": "Gemini", "use_openrouter": "The free models",
+               "use_chatgpt": "ChatGPT", "use_grok": "Grok",
                "use_hermes": "Hermes", "use_qwen": "Qwen3"}
 
 
@@ -283,6 +284,8 @@ class PhoneChannel:
         """The model picker: what's ticked, what's set up, and this month's spend on the pay-per-use ones."""
         from . import cloud, usage
         return {"use_gemini": bool(settings.get("use_gemini", True)), "gemini_key": cloud.has_key("gemini"),
+                "use_openrouter": bool(settings.get("use_openrouter", True)), "openrouter_key": cloud.has_key("openrouter"),
+                "openrouter_now": cloud.current_free_model(),
                 "use_chatgpt": bool(settings.get("use_chatgpt")), "chatgpt_key": cloud.has_key("chatgpt"),
                 "use_grok": bool(settings.get("use_grok")), "grok_key": cloud.has_key("grok"),
                 "spend": round(usage.month_spend(), 2), "budget": float(settings.get("paid_budget", 5.0))}

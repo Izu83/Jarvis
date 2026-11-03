@@ -155,7 +155,7 @@ like in Claude. Open it from the **Jarvis** shortcut, Windows search, or by clic
 - The page comes from `docs/` through a small web server on `127.0.0.1:8788` (only this PC can reach it), in an Edge
   WebView2 window (pywebview). Its chats and settings are kept in `.brain/desktop-app`.
 
-### Picking the models: Claude, Gemini, ChatGPT, Grok and the local ones
+### Picking the models: Claude, Gemini, the free models, ChatGPT, Grok and the local ones
 
 Tap the model name in the message box (on the phone too) and tick the models Jarvis may use. For each message
 `jarvis/router.py` picks the best ticked one for the job that costs the least, with plain rules on the PC (picking
@@ -163,13 +163,13 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 
 | The job | Order |
 |---|---|
-| Doing things on the PC, many steps | Claude, Gemini, local, ChatGPT |
-| Code | Claude, ChatGPT, Gemini |
+| Doing things on the PC, many steps | Claude, Gemini, free models, local, ChatGPT |
+| Code | Claude, ChatGPT, Gemini, free models |
 | The screen, photos you send | Claude, Gemini, ChatGPT |
-| Anything current (news, prices, search) | Gemini, Claude, Grok, ChatGPT |
-| YouTube, long documents | Gemini, Claude |
+| Anything current (news, prices, search) | Gemini, Claude, Grok, ChatGPT, free models |
+| YouTube, long documents | Gemini, Claude, free models |
 | X / Twitter | Grok, Gemini, Claude |
-| Everyday questions and chat | Gemini, Claude, local, ChatGPT, Grok |
+| Everyday questions and chat | Gemini, free models, Claude, local, ChatGPT, Grok |
 
 - **Claude**: your Claude plan, through Claude Code (`claude_code_model`, Sonnet).
 - **Gemini**: free, with a Google AI Studio key (https://aistudio.google.com/apikey, no card; it has daily
@@ -179,11 +179,19 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
   `gemini_model` in config.json puts one model first. `run.bat --keys` adds the key. It gets
   Jarvis's tools, answers anything current with Google Search, and takes the everyday questions so your Claude limit
   lasts. (Google no longer lets personal accounts use the Gemini CLI, even with a Gemini plan, so it's the API.)
+- **Free models**: OpenRouter's free models, with a free key from https://openrouter.ai/keys (no card).
+  `run.bat --keys` adds it. DeepSeek goes first whenever one of its models is free there (none is in November
+  2026); otherwise the strongest free ones that can use Jarvis's tools, in order: NVIDIA Nemotron 3 Ultra,
+  Thinking Machines Inkling, Gemma 4 31B, Nemotron 3.5 Lightning, and the rest. The list is looked up every 6 hours,
+  so new free models join by themselves. A busy one is skipped for 2 minutes. The free allowance is about 50
+  requests a day for all of them together (1,000 after a one-time $10 top-up on OpenRouter); once it's used up
+  they rest until midnight UTC. `openrouter_model` in config.json puts one model first. They're text only (no
+  photos, no web search).
 - **ChatGPT, Grok**: paid per use through their APIs. `run.bat --keys` adds the keys (kept in `.env`) and the
   monthly budget (`paid_budget`, USD, both together). The spend is estimated from `chatgpt_price` / `grok_price`
   (USD per million tokens); past the budget they're skipped until next month.
 
-All three run through `jarvis/cloud.py` (the same chat-completions API with tool calling).
+All four run through `jarvis/cloud.py` (the same chat-completions API with tool calling).
 - **Hermes, Qwen3**: free on your graphics card. Settings › Local brain › "Try local models first" puts them first.
 
 ## Voice mode

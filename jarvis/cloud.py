@@ -29,11 +29,14 @@ PROVIDERS = {
     #           .env key          API base                       model setting     default model    price setting
     "gemini":  ("GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini_model",
                 "gemini-2.5-flash", "gemini_price"),
+    "openrouter": ("OPENROUTER_API_KEY", "https://openrouter.ai/api/v1", "openrouter_model",
+                   "nvidia/nemotron-3-ultra-550b-a55b:free", "openrouter_price"),
     "chatgpt": ("OPENAI_API_KEY", "https://api.openai.com/v1", "chatgpt_model", "gpt-5-mini", "chatgpt_price"),
     "grok":    ("XAI_API_KEY",    "https://api.x.ai/v1",       "grok_model",    "grok-4-fast", "grok_price"),
 }
-NAMES = {"gemini": "Gemini", "chatgpt": "ChatGPT", "grok": "Grok"}
-FREE = {"gemini"}   # no budget to watch
+NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", "grok": "Grok"}
+FREE = {"gemini", "openrouter"}   # no budget to watch
+LADDERS = {"gemini", "openrouter"}   # many models, tried in turn (see below)
 SEARCH_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
@@ -47,31 +50,70 @@ def over_budget() -> bool:
 
 def usable(provider: str) -> bool:
     on = settings.get("use_" + provider, provider in FREE)
-    return bool(on) and has_key(provider) and (provider in FREE or not over_budget())
+    return bool(on) and has_key(provider) and (provider in FREE or not over_budget()) and not _all_resting(provider)
 
 
-# Gemini is used as a ladder: the newest stable Flash model your key can use first, and the next one down whenever
-# it's busy ("high demand") or out of its free allowance for the day (each model has its own, about 20 a day).
-# Pro models aren't on it: the free tier gives them nothing. gemini_model in config.json, if set, goes first.
-_ladder: tuple[float, list[str]] = (0.0, [])
-_resting: dict[str, float] = {}   # "model" (chat) or "model/search" -> until when it's skipped
+# The free ones are used as a ladder: the best model first, and the next one down whenever it's busy or out of its
+# free allowance, each skipped until it's back.
+#  - Gemini: the newest stable Flash model your key can use first (each has its own allowance, about 20 a day).
+#    Pro models aren't on it: the free tier gives them nothing.
+#  - OpenRouter: its free models (":free"; about 50 requests a day for all of them together, 1,000 after a one-time
+#    $10 top-up). DeepSeek first whenever one of its models is free, then the strongest of the rest.
+# A model named in config.json (gemini_model / openrouter_model) goes first.
+_ladders: dict[str, tuple[float, list[str]]] = {}
+_resting: dict[str, float] = {}   # "provider:model" (chat) or "...:model/search" -> until when it's skipped
+_provider_resting: dict[str, float] = {}   # the whole provider: OpenRouter's daily free allowance is used up
+_names: dict[str, str] = {}   # OpenRouter model id -> its name ("NVIDIA: Nemotron 3 Ultra (free)"), for the phone
+# OpenRouter's free models, best first after DeepSeek (by name; anything else comes after these, newest first).
+# Too small, or not for chatting: left out.
+OPENROUTER_PREFER = ("nemotron-3-ultra", "inkling:", "nemotron-3.5-super", "gemma-4-31b", "nemotron-3.5-lightning",
+                     "gemma-4-26b", "inkling-small")
+OPENROUTER_SKIP = ("content-safety", "guard", "lfm-", "-code", "embed", "omni", "-vl", "vision", "audio", "image")
+
+
+def _fetch_models(provider: str, key: str) -> list[str]:
+    """What this provider offers that goes on the ladder, best first."""
+    if provider == "gemini":
+        r = requests.get(f"{PROVIDERS['gemini'][1]}/models", headers={"Authorization": f"Bearer {key}"}, timeout=15)
+        ids = [m.get("id", "").removeprefix("models/") for m in r.json().get("data", [])]
+        found = [(float(m.group(1)), name) for name in ids
+                 if (m := re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash", name))]   # stable only: no -lite, -preview
+        return [name for _, name in sorted(found, reverse=True)]
+    r = requests.get(f"{PROVIDERS['openrouter'][1]}/models", timeout=20)
+    for m in r.json().get("data", []):
+        if m.get("name"):
+            _names[m["id"]] = re.sub(r"\s*\(free\)$", "", m["name"])
+    free = [m for m in r.json().get("data", []) if m.get("id", "").endswith(":free")
+            and "tools" in (m.get("supported_parameters") or [])   # Jarvis's tools are how he does things
+            and not any(x in m["id"] for x in OPENROUTER_SKIP)]
+
+    def rank(m):
+        mid = m["id"]
+        if mid.startswith("deepseek/"):
+            return (0, -m.get("created", 0))
+        for i, name in enumerate(OPENROUTER_PREFER):
+            if name in mid:
+                return (1 + i, 0)
+        return (len(OPENROUTER_PREFER) + 1, -m.get("created", 0))
+    return [m["id"] for m in sorted(free, key=rank)]
+
+
+def ladder(provider: str, key: str) -> list[str]:
+    """The provider's models, best first (looked up at most every 6 hours)."""
+    when, models = _ladders.get(provider, (0.0, []))
+    if not models or time.time() - when > 6 * 3600:
+        try:
+            found = _fetch_models(provider, key)
+            if found:
+                _ladders[provider] = (time.time(), found)
+                models = found
+        except (requests.RequestException, ValueError, AttributeError, KeyError):
+            log.debug("couldn't list %s's models", provider, exc_info=True)
+    return models or [PROVIDERS[provider][3]]
 
 
 def gemini_models(key: str) -> list[str]:
-    """Every stable Gemini Flash model this key can use, newest first (looked up at most every 6 hours)."""
-    global _ladder
-    if _ladder[1] and time.time() - _ladder[0] < 6 * 3600:
-        return _ladder[1]
-    try:
-        r = requests.get(f"{PROVIDERS['gemini'][1]}/models", headers={"Authorization": f"Bearer {key}"}, timeout=15)
-        ids = [m.get("id", "").removeprefix("models/") for m in r.json().get("data", [])]
-    except (requests.RequestException, ValueError, AttributeError):
-        return _ladder[1] or [PROVIDERS["gemini"][3]]
-    found = [(float(m.group(1)), name) for name in ids
-             if (m := re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash", name))]   # stable only: no -lite, -preview...
-    if found:
-        _ladder = (time.time(), [name for _, name in sorted(found, reverse=True)])
-    return _ladder[1] or [PROVIDERS["gemini"][3]]
+    return ladder("gemini", key)
 
 
 def best_gemini_model(key: str) -> str | None:
@@ -80,18 +122,52 @@ def best_gemini_model(key: str) -> str | None:
     return models[0] if models else None
 
 
-def _rest(model: str, r: requests.Response, search: bool = False) -> None:
-    """This model can't answer now: skip it until its allowance comes back (429: as long as Google says, or 10 min
-    when it doesn't), for a few minutes when it's busy (503), or for a day when it's gone (404). Chat and Google
-    Search have separate allowances, so they rest separately."""
+def current_free_model() -> str:
+    """The free model OpenRouter's ladder would use now ("DeepSeek: ..." / "NVIDIA: Nemotron 3 Ultra"), for the
+    phone's model menu. "" until it's known, or when today's free allowance is used up."""
+    if not has_key("openrouter") or _all_resting("openrouter"):
+        return ""
+    if "openrouter" not in _ladders:
+        import threading
+        threading.Thread(target=ladder, args=("openrouter", ""), daemon=True, name="free-models").start()
+        return ""
+    for m in _ladders["openrouter"][1]:
+        if _resting.get("openrouter:" + m, 0) <= time.time():
+            return _names.get(m, m)
+    return ""
+
+
+def _all_resting(provider: str) -> bool:
+    return _provider_resting.get(provider, 0) > time.time()
+
+
+def _until_tomorrow_utc() -> int:
+    return int(86400 - time.time() % 86400) + 60
+
+
+def _rest(provider: str, model: str, r: requests.Response, search: bool = False) -> None:
+    """This model can't answer now: skip it until its allowance comes back (429: as long as the provider says, or
+    10 min when it doesn't), for a few minutes when it's busy (503 and the like), or for a day when it's gone (404).
+    Gemini's chat and Google Search have separate allowances, so they rest separately. OpenRouter's free daily
+    allowance covers all its free models, so when that's used up the whole of it rests until midnight UTC."""
+    name = NAMES[provider]
+    if provider == "openrouter" and r.status_code == 429 and re.search(r"per[- ]day", r.text, re.I):
+        secs = _until_tomorrow_utc()
+        _provider_resting[provider] = time.time() + secs
+        log.info("%s: today's free allowance is used up; back in %s.", name,
+                 f"{secs // 3600} h" if secs >= 3600 else f"{max(1, secs // 60)} min")
+        return
     secs = {429: 600, 404: 86400}.get(r.status_code, 300)
     if r.status_code == 429:
         m = re.search(r'"retryDelay":\s*"(\d+)', r.text)
         if m:
             secs = max(60, int(m.group(1)))
-    _resting[model + "/search" * search] = time.time() + secs
-    why = {429: "has used up its free allowance", 404: "isn't available"}.get(r.status_code, "is busy")
-    log.info("Gemini %s %s; using the next one down for %s.", model, why,
+        elif provider == "openrouter":
+            secs = 120   # a busy free model, or the per-minute limit
+    _resting[f"{provider}:{model}" + "/search" * search] = time.time() + secs
+    why = "isn't available" if r.status_code == 404 else (
+        "has used up its free allowance" if r.status_code == 429 and provider == "gemini" else "is busy")
+    log.info("%s %s %s; using the next one down for %s.", name, model, why,
              f"{secs // 3600} h" if secs >= 3600 else f"{max(1, secs // 60)} min")
 
 
@@ -103,31 +179,35 @@ def _cost(provider: str, tin: int, tout: int) -> float:
 class CloudBrain:
     def __init__(self, provider: str):
         self.provider, self.name = provider, NAMES[provider]
-        key_env, self.base, model_key, default, _ = PROVIDERS[provider]
+        key_env, self.base, self.model_key, default, _ = PROVIDERS[provider]
         self.key = secret(key_env)
-        self.model = settings.get(model_key) or default
+        self.model = settings.get(self.model_key) or default
         self.failed = False
+        self.last_thinking = ""
 
     def _models(self, search: bool = False) -> list[str]:
-        """Which models to try, in order: for Gemini the ladder (minus the ones resting), otherwise the one."""
-        if self.provider != "gemini":
+        """Which models to try, in order: for a ladder its models (minus the ones resting), otherwise the one."""
+        if self.provider not in LADDERS:
             return [self.model]
-        pinned = settings.get("gemini_model") or ""
-        ladder = [pinned] * bool(pinned) + [m for m in gemini_models(self.key) if m != pinned]
-        ready = [m for m in ladder if _resting.get(m + "/search" * search, 0) <= time.time()]
-        return ready or ladder[-1:]   # all resting: try the last anyway, it says why
+        pinned = settings.get(self.model_key) or ""
+        models = [pinned] * bool(pinned) + [m for m in ladder(self.provider, self.key) if m != pinned]
+        ready = [m for m in models if _resting.get(f"{self.provider}:{m}" + "/search" * search, 0) <= time.time()]
+        return ready or models[-1:]   # all resting: try the last anyway, it says why
 
     def _post(self, call, search: bool = False) -> requests.Response:
         """call(model) -> response, down the ladder until one answers (or there's nothing left to try)."""
+        r = None
         for model in self._models(search):
             r = call(model)
-            if r.status_code in (429, 503, 404, 500) and self.provider == "gemini":
-                _rest(model, r, search)
+            if self.provider in LADDERS and (r.status_code in (429, 404) or r.status_code >= 500
+                                             or (self.provider == "openrouter" and r.status_code in (400, 402))):
+                _rest(self.provider, model, r, search)
+                if _all_resting(self.provider):
+                    break
                 continue
             self.model = model
             return r
         return r
-        self.last_thinking = ""
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None,
                search: bool = False) -> str:

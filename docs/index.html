@@ -1342,9 +1342,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-04.1";   // bump together with version.json
+const VERSION = "2026-11-04.2";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv38", when: "Nov 4, 2026", title: "More free brains", notes: [
+    "Gemini is always the newest Flash model your key can use, and the next one down when that's busy or out of today's free uses.",
+    "New: the free models from OpenRouter (a free key, run.bat --keys on the PC). DeepSeek whenever it's free there, otherwise the strongest free model, like NVIDIA's Nemotron 3 Ultra.",
+    "Everyday questions now go to Gemini and the free models first, so your Claude limit lasts longer.",
+  ]},
   { v: "JNIv37", when: "Nov 4, 2026", title: "He hears his name, and only his name", notes: [
     "“Hey Jarvis”, a plain “Jarvis, …” or “Джарвис, …” wakes him now, even said casually or quietly.",
     "Videos, songs and friends talking don't: before he wakes up, Whisper checks it really was his name.",
@@ -2052,6 +2057,7 @@ const Models = {
   LIST: [
     { key: "use_claude", name: "Claude", group: "Your plan" },
     { key: "use_gemini", name: "Gemini", group: "Free" },
+    { key: "use_openrouter", name: "Free models", group: "Free" },
     { key: "use_chatgpt", name: "ChatGPT", group: "Pay per use" },
     { key: "use_grok", name: "Grok", group: "Pay per use" },
     { key: "use_hermes", name: "Hermes", group: "On your PC", model: "Hermes", sub: "Free and private. Quick one-step commands; slower." },
@@ -2062,6 +2068,7 @@ const Models = {
   usable(m) {
     const s = this.s, x = s.models || {};
     if (m.key === "use_gemini") return !!x.gemini_key;
+    if (m.key === "use_openrouter") return !!x.openrouter_key;
     if (m.key === "use_chatgpt") return !!x.chatgpt_key;
     if (m.key === "use_grok") return !!x.grok_key;
     if (m.model) return s.brain === "hermes";
@@ -2084,6 +2091,11 @@ const Models = {
       if (!x.gemini_key) return "Needs a free key from aistudio.google.com: run.bat --keys on the PC.";
       return "Free, with Google Search. Best for anything current, YouTube, long documents and everyday questions.";
     }
+    if (m.key === "use_openrouter") {
+      if (!x.openrouter_key) return "Needs a free key from openrouter.ai: run.bat --keys on the PC.";
+      return "Free, from OpenRouter: DeepSeek whenever it's free there, otherwise the best free model."
+        + (x.openrouter_now ? ` Now: ${esc(x.openrouter_now)}.` : "");
+    }
     if (m.key === "use_chatgpt" || m.key === "use_grok") {
       if (!this.usable(m)) return "Needs an API key (paid per use): run.bat --keys on the PC.";
       return m.key === "use_grok" ? "Pay per use. Only for X / Twitter, or when your plans can't answer."
@@ -2096,9 +2108,11 @@ const Models = {
     const on = this.on().map(m => m.key);
     const has = k => on.includes(k);
     if (!on.length) return "";
-    const plans = ["use_claude", "use_gemini"].filter(has);   // the ones that cost nothing extra
-    if (plans.length === 2) return "For each message Jarvis picks the best and cheapest: Gemini for anything current and everyday questions, Claude for doing things on your PC and code. If one can't, the next one tries.";
-    if (plans.length === 1) return `${plans[0] === "use_claude" ? "Claude" : "Gemini"} answers; the others step in if it can't.`;
+    const plans = ["use_claude", "use_gemini", "use_openrouter"].filter(has);   // the ones that cost nothing extra
+    const free = plans.filter(k => k !== "use_claude").map(k => k === "use_gemini" ? "Gemini" : "the free models");
+    if (has("use_claude") && free.length) return `For each message Jarvis picks the best and cheapest: ${free.join(" and ")} for everyday questions${has("use_gemini") ? " (Gemini for anything current)" : ""}, Claude for doing things on your PC and code. If one can't, the next one tries.`;
+    if (plans.length === 1) return `${has("use_claude") ? "Claude" : free[0][0].toUpperCase() + free[0].slice(1)} answers; the others step in if it can't.`;
+    if (free.length === 2) return "Gemini and the free models answer, at no cost; the others step in if they can't.";
     if (has("use_chatgpt") || has("use_grok")) return "Only pay-per-use models: every message costs a little, up to your budget.";
     return "Only the local models: free and private, but slower. No Claude, no tokens.";
   },
@@ -2106,6 +2120,7 @@ const Models = {
     if (!("use_hermes" in d)) return;   // an older Jarvis on the PC: nothing to pick from
     const m = d.models || {};
     this.s = { use_claude: !!d.use_claude, use_hermes: !!d.use_hermes, use_qwen: !!d.use_qwen, use_gemini: !!m.use_gemini,
+               use_openrouter: !!m.use_openrouter,
                use_chatgpt: !!m.use_chatgpt, use_grok: !!m.use_grok, models: m, brain: d.brain,
                local_first: !!d.local_first, model_id: d.model_id || "", local: d.local || [] };
     this.paint();

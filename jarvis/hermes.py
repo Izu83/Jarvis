@@ -183,7 +183,8 @@ def _needs_claude(command: str) -> bool:
     return bool(_FILE_SEARCH.search(c))
 
 
-MODEL_NAMES = {"claude": "Claude", "gemini": "Gemini", "local": "the local brain", "chatgpt": "ChatGPT", "grok": "Grok"}
+MODEL_NAMES = {"claude": "Claude", "gemini": "Gemini", "openrouter": "the free models", "local": "the local brain",
+               "chatgpt": "ChatGPT", "grok": "Grok"}
 
 
 class HermesBrain:
@@ -398,7 +399,7 @@ class HermesBrain:
             answer = self._to_claude(command, chat, recent, progress)
             return answer, not getattr(self._fallback, "failed", False)
         from .cloud import CloudBrain
-        brain = CloudBrain(model)   # Gemini, ChatGPT, Grok
+        brain = CloudBrain(model)   # Gemini, OpenRouter's free models, ChatGPT, Grok
         extra = {"search": True} if model == "gemini" and router.kind(original) == "current" else {}
         answer = brain.handle(command, chat=chat, recent=recent, progress=progress, **extra)
         self.last_thinking = getattr(brain, "last_thinking", "") or ""

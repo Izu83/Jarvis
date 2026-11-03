@@ -51,7 +51,8 @@ DEFAULTS = {
     "use_claude": True,
     "use_hermes": True,
     "use_qwen": True,
-    # Gemini, ChatGPT and Grok through their APIs (cloud.py), each once you add its key (run.bat --keys). Gemini is free
+    # Gemini, OpenRouter's free models, ChatGPT and Grok through their APIs (cloud.py), each once you add its key
+    # (run.bat --keys). Gemini is free
     # with a Google AI Studio key (the newest Flash model is picked when you add it). ChatGPT and Grok are paid per use:
     # off until ticked, and together they stay under paid_budget (USD a month). Prices are USD per million tokens
     # [input, output], for the estimate.
@@ -60,6 +61,11 @@ DEFAULTS = {
     "use_gemini": True,
     "gemini_model": "",   # "" = the newest Flash the key can use, then the next one down; a name = try that one first
     "gemini_price": [0, 0],
+    # OpenRouter's free models (a free key from openrouter.ai, run.bat --keys): DeepSeek whenever one of its models is
+    # free there, otherwise the strongest free ones. "" = picked for you; a name = try that one first.
+    "use_openrouter": True,
+    "openrouter_model": "",
+    "openrouter_price": [0, 0],
     "use_chatgpt": False,
     "use_grok": False,
     "chatgpt_model": "gpt-5-mini",
