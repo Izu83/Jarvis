@@ -1,579 +1,184 @@
-# Jarvis
+<p align="center">
+  <img src="assets/readme/banner.svg" alt="Jarvis, made by Nikolay Rangelov" width="100%">
+</p>
 
-Voice and phone control for this Windows PC. Say **"Hey Jarvis, open Spotify, Claude and File Explorer,
-put them on my left monitor and open the Jarvis project"**, or type or say it on your phone from anywhere,
-and it happens.
+<p align="center">
+  <a href="https://github.com/Izu83" title="Nikolay Rangelov (Izu83)"><img src="https://github.com/Izu83.png?size=192" width="96" height="96" alt="Nikolay Rangelov"></a>
+</p>
+
+<p align="center">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-11-0e3a4f?style=for-the-badge&labelColor=071422&logo=windows&logoColor=5fe3ff">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.13-0e3a4f?style=for-the-badge&labelColor=071422&logo=python&logoColor=5fe3ff">
+  <img alt="Claude" src="https://img.shields.io/badge/Prompts-Claude-0e3a4f?style=for-the-badge&labelColor=071422&logo=claude&logoColor=5fe3ff">
+  <img alt="Whisper" src="https://img.shields.io/badge/Speech-Whisper-0e3a4f?style=for-the-badge&labelColor=071422">
+  <img alt="iPhone" src="https://img.shields.io/badge/iPhone-web%20app-0e3a4f?style=for-the-badge&labelColor=071422&logo=apple&logoColor=5fe3ff">
+</p>
+
+<p align="center">
+  Say <b>“Hey Jarvis, open Spotify and Discord and put them on my left monitor”</b>, or type it on your iPhone from
+  anywhere, and it happens. Jarvis lives on your PC, listens for his name, answers out loud,
+  and you can chat with him from your phone, the desktop app or Siri.
+</p>
+
+<p align="center">
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#things-you-can-say">Things you can say</a> ·
+  <a href="#on-your-iphone">iPhone</a> ·
+  <a href="#the-models">Models</a> ·
+  <a href="#privacy-and-safety">Privacy</a> ·
+  <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="GUIDE.md"><b>Full guide</b></a>
+</p>
+
+<h2><a name="what-it-does"></a><img src="assets/readme/headers/what-it-does.svg" alt="What it does" width="100%"></h2>
+
+- **Listens for "Hey Jarvis"** on your PC's microphone, in English or Bulgarian, and answers in a natural voice. Say "stop" or "wait" to cut him off.
+- **Runs your PC**: opens apps, folders and websites, moves windows between your monitors, plays and skips music, changes the volume, locks or shuts down the PC.
+- **Saved layouts**: say "work mode" and every app opens in its place on every monitor in a second.
+- **Chat from your iPhone**, from anywhere: the same commands by text or voice, with a live view of your screens, now playing, CPU and GPU stats and your files.
+- **A desktop app** with your chats down the side and a model picker, like a normal chat app.
+- **Voice mode** with a glowing orb (or a 3D head) that listens, thinks and talks back.
+- **Siri**: "Hey Siri, Ask Jarvis" works too, and so does the Share button in any app.
+- **Does website jobs in the background** (checking the weather on Windy, sending an Instagram message) in his own hidden browser, so your screen and mouse stay yours.
+- **Messages you first**: a morning briefing (weather, calendar, reminders, email), an evening recap, reminders, and a heads-up when an important email arrives.
+- **Finds and sends files**: "send me the PDF I downloaded yesterday" lands on your phone.
+- **Remembers** what you talked about and the facts you tell him, and asks before anything risky (Face ID on the phone, Windows Hello on the PC).
+
+<h2><a name="how-it-works"></a><img src="assets/readme/headers/how-it-works.svg" alt="How it works" width="100%"></h2>
 
 ```
-PC mic ── "Hey Jarvis" wake word ─┐
-                                  ├─► Jarvis (this PC) ──► Claude API decides the steps
-Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─┘            │
-                                                                 ▼
-                                    open apps / folders / URLs, tile windows on monitors, media keys
+ "Hey Jarvis" on the PC mic ─┐
+ iPhone app / desktop app ───┼──►  Jarvis on your PC  ──►  Claude decides the steps  ──►  apps, windows, files,
+ Siri shortcut ──────────────┘     (Python, tray icon)                                     music, websites, ...
 ```
 
-## Setup (once)
+1. **Hearing you.** A small wake-word model listens for "Hey Jarvis". Then [Whisper](https://github.com/SYSTRAN/faster-whisper) writes down what you said, on your own PC (on the graphics card when there is one).
+2. **Quick things first.** Simple commands like "next song", "volume up" or "work mode" are understood right on the PC with no AI at all, so they're instant and free.
+3. **Claude handles the prompts.** Everything else goes to Claude, which decides the steps and uses Jarvis's tools to carry them out: open this, move that, read the screen, search the files, send a message.
+4. **Your phone connects** through an encrypted tunnel, so it works from anywhere, not just on your Wi-Fi.
 
-1. **Brain login**: Jarvis runs Claude Code in the background, so it uses your Claude Pro/Max plan (no API key
-   needed). Log the CLI in once: open a terminal, run `claude`, type `/login`, finish in the browser, then `/exit`.
-   *Alternatives* (set `"brain"` in `config.json`):
-   - `"hermes"`: free local models through [Ollama](https://ollama.com), working as a team: **Hermes**
-     (`hermes3:8b`) does quick one-step commands, **Qwen3** (`qwen3:8b`) thinks through multi-step requests and
-     questions and takes over when Hermes gets stuck, and Claude (`hermes_fallback`) only gets what neither can do
-     (screen vision, the web, exact file searches). Install Ollama once; Jarvis starts it and downloads both models
-     by itself the first time (about 10 GB; or run `ollama pull hermes3:8b` and `ollama pull qwen3:8b`). The phone's
-     step pills show which one is working ("Brain · Qwen3 is thinking it through…"). On an 8 GB GPU set the user
-     environment variables `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` (then restart Ollama) so Qwen3
-     with the 16k context fits fully on the GPU; without them part of it runs on the CPU and is too slow.
-     By default (`"local_first": false`) Claude does every command and the local team only steps in when Claude
-     can't answer (usage limit, offline, crash): in real use the 8B models were too slow and too unreliable to go
-     first. Settings › Local brain › **Try local models first** (or `"local_first": true`) switches to the order above.
-   - `"api"`: a paid key from https://console.anthropic.com/settings/keys in `.env` as `ANTHROPIC_API_KEY=`.
-2. **Dependencies** (already done on this PC):
-   ```
-   py -3.13 -m venv .venv
-   .venv\Scripts\pip install -r requirements.txt
-   ```
-3. **Phone page on GitHub Pages** (`https://izu83.github.io/Jarvis/`)
-   - In the GitHub repo go to *Settings → Pages → Build and deployment → Deploy from a branch → `main` / `/docs`*.
-   - Right-click the tray icon › **Pair your phone (QR code)…** and scan the code with the iPhone Camera app, or
-     copy the link from that window. (`run.bat --pair` prints the same in a console and saves `pair-phone.svg`.)
-   - In Safari tap *Share → Add to Home Screen*. Jarvis now opens like an app.
+<h2><a name="getting-started"></a><img src="assets/readme/headers/getting-started.svg" alt="Getting started" width="100%"></h2>
 
-GitHub Pages on a *private* repo needs a paid GitHub plan; on a free account the repo has to be public. That's safe:
-the page and code contain no secrets. Your key lives only in `.env` (git-ignored) and on your phone.
+**You need:** Windows 11, [Python 3.13](https://www.python.org/downloads/), a microphone, a [Claude](https://claude.ai) plan with [Claude Code](https://claude.com/claude-code) installed, and an iPhone if you want the phone app. An NVIDIA graphics card makes speech recognition much faster but isn't required.
 
-## Running
+**1. Download and install**
 
-```
-run.bat                # start Jarvis hidden: no window, just the tray icon
-run.bat --console      # run in this window instead, with the log printed live
-run.bat --text         # also type commands in the console (handy for testing)
-run.bat --no-voice     # phone only
-run.bat --startup      # start Jarvis hidden at every login (--startup-off to stop)
+```bash
+git clone https://github.com/Izu83/Jarvis.git
+cd Jarvis
+py -3.13 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
 ```
 
-Jarvis lives in the taskbar tray (under the ^ arrow): click its icon to open the desktop app, right-click it to stop what Jarvis is doing, pick a microphone, pair your phone (a
-window with the QR code and the pairing link), restart Jarvis, open the log or quit. `run.bat` and `Jarvis.vbs` both start it that way, with no console window. Only one Jarvis runs at
-a time.
+**2. Log in to Claude once.** Open a terminal, run `claude`, type `/login`, finish in the browser, then `/exit`. Jarvis uses that login, so there's no API key to pay for.
 
-Say **"Hey Jarvis"** or press **Ctrl+Alt+J**, give the command, then pause. A pop-up in the top-right of the main
-monitor shows what it heard live, then each step while it works, then the reply, which it also speaks in a natural
-voice (Microsoft's free neural voices via edge-tts; the built-in Windows voice when offline). Everything is logged to
-`jarvis.log`.
+**3. Start Jarvis**
 
-## How a command is handled
+```bash
+run.bat
+```
 
-1. **Modes** ("work mode") run instantly with no AI.
-2. **Quick commands** (media keys, volume, "open X and Y on monitor 3", reminders, lock, power, screenshots/webcam to
-   the phone) are understood by a free local parser (`nlu.py`). Anything with more than one part ("X and then Y") or
-   that it isn't sure about goes to the brain, so nothing is half-done.
-3. **The brain** (Claude Code, the API, or Hermes) does everything else with the tools in `tools.py`.
+Nothing opens: Jarvis sits in the taskbar tray (under the **^** arrow). Click the icon to open the desktop app, right-click it for the menu. Say **"Hey Jarvis"** (or press **Ctrl+Alt+J**), say what you want, and pause.
 
-Commands run one at a time. If you send another while Jarvis is busy, it shows that it's waiting for the first one.
-Saying or typing **"stop"** ("Jarvis, stop", "cancel", "never mind") while he's busy stops the running command
-instead of waiting its turn. When he's idle, "stop" still pauses the music.
+**4. Optional extras**
 
-With **local models first** on, a model that errors twice in a row (Ollama's "500", often when the graphics card is
-busy) rests for 15 minutes and Claude covers for it; Settings › Local brain shows it. Ollama's own output, with the
-reason for those errors, goes to `.brain/ollama.log` when Jarvis starts it.
-
-## Things you can say
-
-- "Open Spotify, Claude and a file folder, organize them on my 3rd monitor and open the Jarvis project on the D disk"
-- "Put Spotify on the vertical monitor" / "Maximize Claude on the main monitor"
-- "Pause the music", "Next song", "Turn the volume up a bit"
-- "Close File Explorer", "What's open on monitor 2?"
-- "Open YouTube"
-
-## Modes
-
-A mode is a saved layout you start with one phrase: **"Jarvis, work mode"**, or type **/work** (`/` + the mode's name) on the phone.
-Modes run instantly and don't use Claude at all. The default `work` mode:
-
-| Monitor | Windows |
+| Command | What it does |
 |---|---|
-| Right vertical (1) | File Explorer (top), Claude (middle), Spotify (bottom) |
-| Left (3) | Opera (left half), File Explorer (right half) |
-| Main (2) | VS Code, full screen |
+| `run.bat --startup` | Start Jarvis automatically when you log in to Windows |
+| `.venv\Scripts\python -m jarvis.desktop --install` | Put a **Jarvis** shortcut on the Desktop and in the Start menu |
+| `run.bat --keys` | Add a free Gemini key, or ChatGPT / Grok keys (see [The models](#the-models)) |
+| `run.bat --email` | Connect your email so Jarvis can check, read and send it |
+| `npm install --prefix .brain/browser-mcp @playwright/mcp@0.0.83` | The hidden browser for website jobs (needs [Node.js](https://nodejs.org) and Chrome) |
+| `run.bat --console` | Run with the log in a window, to see what's going on |
 
-Create or change modes by just asking, e.g. *"Jarvis, make a gaming mode with Discord on the vertical monitor and
-Steam full screen on the main one"* or *"In work mode, put Chrome instead of Opera"*. They're saved in `modes.json`,
-which you can also edit by hand.
+<h2><a name="things-you-can-say"></a><img src="assets/readme/headers/things-you-can-say.svg" alt="Things you can say" width="100%"></h2>
 
-## The phone app
-
-- **Chats and groups**: the sidebar button (top left) lists your chats. Each chat has its own memory, so Jarvis
-  doesn't mix up conversations. Tap the folder button to make a group; press and hold a chat or group to rename,
-  move or delete it. Search finds chats by title or message text.
-- **Control Center**: shown on every new chat, or tap **Your PC** in the tab bar. Spotify now playing with play/pause,
-  skip and volume; live CPU and memory with the busiest app; send your phone's clipboard to the PC or see the PC's
-  clipboard; lock the PC. These buttons go straight to the PC without Claude, so they're instant and free.
-- **Slash commands**: type `/` in the message box for the list: `/work` (and your other modes), `/monitors`,
-  `/camera`, `/system`, `/control`, `/voice` and `/newmode`. Tap one, or type the whole name and press send.
-- **Stop button**: while Jarvis works on something in the chat you're in, the send button becomes a ■ stop
-  button. He stops within a second or so (a command still waiting its turn is just taken off the list). `/stop` does
-  the same for whatever he's doing, even from another chat.
-- **Send again / edit**: press and hold one of your messages to send it again, edit it first, or copy it.
-- **Answers as they're written**: the reply bubble fills in word by word (Claude and the local models both
-  stream); commentary before an action is taken back off when the action starts.
-- **Unread badge**: replies that arrive in another chat get a dot in the sidebar (and on the app icon, where iOS allows it).
-- **Where and when**: at the top of both Chat and Voice, behind everything else: where your PC is (the town and
-  country, from its internet connection or `weather_city`) with the weather there now, its local time to the second
-  (HH:MM:SS) and the date.
-  In the chat it behaves like an iPhone large title: scroll down and it slides away into a small pill under the
-  Chat / Voice switch, while messages fade out under the top of the screen instead of showing through it.
-- **Everything at the bottom**: apart from the Chat / Voice switch and the clock, there's no bar at the top. The tab bar at the bottom has
-  Chats, Your PC (the Control Center, with a green/red dot for the connection), New, Activity and You (settings).
-- **Step pills**: everything Jarvis does for a command appears as a small pill in the chat ("Files · Searching for
-  invoice…"), live while it works and saved afterwards. A **Working** chip above the message box shows the current step even for
-  commands you gave by voice on the PC.
-- **Reminders**: a clock chip above the message box shows the next reminder. Tap it for all reminders and watches; cancel any one.
-- **Activity**: the Activity tab (or Control Center → Recent activity) lists every command (phone or PC mic), its steps and
-  the answer. Kept on the PC in `.brain/activity.json`.
-- **Never lost**: if the phone's connection silently dropped, the app reconnects and re-sends (the PC never runs it
-  twice). If the app was closed while Jarvis worked, the answer is fetched when you open it again. Files Jarvis sends (pictures, videos) wait on
-  the PC until the phone confirms it has them (`.brain/outbox.json`, 3 days), and stay saved in the chat on the phone.
-
-## The desktop app
-
-```
-pythonw -m jarvis.desktop              # open it (starts Jarvis too, if he isn't running)
-python -m jarvis.desktop --install     # put "Jarvis" on the Desktop and in the Start menu
-```
-
-Jarvis in a window on the PC: the same app as on the phone (chat, Voice mode, Settings), with your chats down the side
-like in Claude. Open it from the **Jarvis** shortcut, Windows search, or by clicking the tray icon.
-
-- **No pairing**: it talks to Jarvis on this PC directly (`ws://127.0.0.1:8787/desktop/ws`), never through the
-  internet. Its chats are its own; the phone keeps its own.
-- **Your phone**: the card at the bottom of the chats says whether the phone is connected (or when it last was), and
-  **Pair** opens the QR code for a new phone.
-- **Closing the window doesn't stop Jarvis**: he stays in the tray for the phone and "Hey Jarvis". Quit from the tray.
-- The page comes from `docs/` through a small web server on `127.0.0.1:8788` (only this PC can reach it), in an Edge
-  WebView2 window (pywebview). Its chats and settings are kept in `.brain/desktop-app`.
-
-### Picking the models: Claude, Gemini, ChatGPT, Grok and the local ones
-
-Tap the model name in the message box (on the phone too) and tick the models Jarvis may use. For each message
-`jarvis/router.py` picks the best ticked one for the job that costs the least, with plain rules on the PC (picking
-costs nothing), and the next one in line answers if one fails or hits its limit:
-
-| The job | Order |
+| You say | What happens |
 |---|---|
-| Doing things on the PC, many steps | Claude, Gemini, local, ChatGPT |
-| Code | Claude, ChatGPT, Gemini |
-| The screen, photos you send | Claude, Gemini, ChatGPT |
-| Anything current (news, prices, search) | Gemini, Claude, Grok, ChatGPT |
-| YouTube, long documents | Gemini, Claude |
-| X / Twitter | Grok, Gemini, Claude |
-| Everyday questions and chat | Gemini, Claude, local, ChatGPT, Grok |
+| "Open Spotify, Claude and File Explorer and put them on my left monitor" | Opens all three and tiles them on that monitor |
+| "Work mode" | Opens your saved layout on all monitors, instantly |
+| "Make a gaming mode with Discord on the vertical monitor and Steam full screen" | Saves a new layout you can start by name |
+| "Pause the music", "next song", "turn it up a bit" | Controls whatever is playing |
+| "Send me the latest screenshot" | Sends the file to your phone |
+| "What's the wind like in Botevgrad on Windy?" | Checks the site in the hidden browser and tells you |
+| "Every morning at 8 check my email and tell me what matters" | Saves a task that runs every day and messages you |
+| "Remind me in 20 minutes to take the pizza out" | Sets a reminder that pops up on your phone and PC |
+| "How much space is left on my disks?" | Answers from live PC stats |
+| "Кой си ти?" | Answers in Bulgarian, with a Bulgarian voice |
 
-- **Claude**: your Claude plan, through Claude Code (`claude_code_model`, Sonnet).
-- **Gemini**: free, with a Google AI Studio key (https://aistudio.google.com/apikey, no card; it has daily
-  limits, and past them the next model answers). `run.bat --keys` adds it and picks the newest Flash model. It gets
-  Jarvis's tools, answers anything current with Google Search, and takes the everyday questions so your Claude limit
-  lasts. (Google no longer lets personal accounts use the Gemini CLI, even with a Gemini plan, so it's the API.)
-- **ChatGPT, Grok**: paid per use through their APIs. `run.bat --keys` adds the keys (kept in `.env`) and the
-  monthly budget (`paid_budget`, USD, both together). The spend is estimated from `chatgpt_price` / `grok_price`
-  (USD per million tokens); past the budget they're skipped until next month.
+<h2><a name="on-your-iphone"></a><img src="assets/readme/headers/on-your-iphone.svg" alt="On your iPhone" width="100%"></h2>
 
-All three run through `jarvis/cloud.py` (the same chat-completions API with tool calling).
-- **Hermes, Qwen3**: free on your graphics card. Settings › Local brain › "Try local models first" puts them first.
+The phone app is a web app on GitHub Pages ([izu83.github.io/Jarvis](https://izu83.github.io/Jarvis/)), so there's no App Store and nothing to pay for.
 
-## Voice mode
+<table>
+  <tr>
+    <td align="center" width="200"><img src="docs/icon-192.png" width="120" alt="The Jarvis icon"><br><sub>How it looks on your Home Screen</sub></td>
+    <td>
+      1. On the PC, right-click the Jarvis tray icon › <b>Pair your phone (QR code)…</b><br>
+      2. Scan the code with your iPhone camera and open the link in <b>Safari</b>.<br>
+      3. Tap <b>Share › Add to Home Screen</b>. Jarvis now opens like a normal app.<br><br>
+      <b>Siri:</b> in the app, open <b>Settings › Siri &amp; Share</b> and follow the steps once. Then say <i>“Hey Siri, Ask Jarvis”</i>.
+    </td>
+  </tr>
+</table>
 
-The phone app has two modes, switched at the top: **Chat** and **Voice**. Voice hides the chat and shows only Jarvis,
-a sphere of glowing points and threads. Each moment has its own look: cyan and slowly breathing while it waits;
-mint green with a heartbeat (a ring every beat) while it listens; ripples and a ring for every word while you talk;
-violet, spinning, with two circling arcs while Jarvis works; and cyan, pulsing with every word he says.
+In the app you get your chats, Voice mode, a Control Center (now playing, CPU, clipboard, lock), live pictures of your monitors, a live remote screen (`/live`), the activity log and all the settings. Type `/` in the message box to see every shortcut.
 
-The orb is also Jarvis's icon everywhere: the Home Screen, notifications, the call screen, the PC's tray and a small
-live orb in the "Hey Jarvis" pop-up (mint listening, violet working, cyan speaking). `jarvis/orb.py` holds the
-shape; `python -m jarvis.orb` redraws the icons in `docs/`. Everything said in Voice mode is saved in the chat as usual.
+<h2><a name="the-models"></a><img src="assets/readme/headers/the-models.svg" alt="The models" width="100%"></h2>
 
-- **Talking**: tap the orb (or the big button) and speak. The phone notices when you've stopped by itself. Tap the
-  orb while Jarvis is talking to cut in.
-- **Listening**: the phone records you and sends the recording to the PC, where the same Whisper as "Hey Jarvis"
-  writes it down (about a second, no tokens). That works hands-free on iPhone, gets app names right and follows
-  Settings › Language you speak (English, Bulgarian or both). Where a browser can't record, the phone's own
-  dictation is used instead.
-- **Hands-free** (on by default): after each answer Jarvis listens again, like a conversation. Say "bye" (or
-  "that's all") to stop, or just stay quiet for a few seconds.
-- **Answers out loud** come in Jarvis's own neural voice, split into sentences: the first plays while the rest are
-  still being made, so he starts talking sooner.
-- **Words as you talk**: while you speak, the phone sends what it has so far every 0.8 s and the PC writes back a
-  quick rough version, so the caption fills in live; the careful version follows when you stop.
-- **Interrupt by voice** (Settings › Voice mode, on by default): while Jarvis talks, say "стоп" / "stop" and he
-  goes quiet, or "чакай" / "wait" / "hold on" and he goes quiet and listens; "Jarvis, open Chrome" stops him and does
-  that straight away. Only a phrase that starts that way counts, so his own voice coming back through the mic doesn't
-  stop him. The same works on the PC without "Hey Jarvis" (`voice.py`: what you say over his voice is checked, and
-  words that are just what he's saying are ignored), and "Hey Jarvis" while he talks cuts him off too. The mic stays on while he talks,
-  so on some iPhones he sounds a little quieter; switch it off if that bothers you.
-- **Jarvis's voice** (Settings › Jarvis's voice): Ryan (a British man, like the films, the default), Thomas,
-  Andrew, Sonia or Aria; tap one to hear it. It's used on the PC too. Bulgarian replies get a Bulgarian voice of
-  the same kind (Borislav or Kalina).
-- **Straight into Voice mode**: the link `…/?voice=1` (Settings › Voice mode › Copy) opens Jarvis in Voice mode,
-  already listening. Put it on Back Tap or the Action Button with a Shortcut that opens the link; it opens in
-  Safari, so pair Safari once too.
-- **Captions** show what Jarvis heard and what he's saying; turn them off for just the orb.
-- `/voice` opens Voice mode, and a call from Jarvis opens it once you answer.
+Claude handles the prompts. You can also tick other models in the model picker (in the message box), and Jarvis picks the best ticked one for each message, the cheapest that can do the job well. If one fails or hits its limit, the next one answers.
 
-**Humanoid**: the button next to Hands-free swaps the orb for a real human head and shoulders, drawn as a glowing
-wireframe: a 3D head scan, "Infinite, 3D Head Scan" by Lee Perry-Smith (Infinite Realities, www.ir-ltd.net),
-licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via the three.js examples. `tools/make_head.py`
-packs the part of its wireframe you can see from the front into `docs/head.bin` (loaded only when the humanoid
-is shown); `Orb.buildHead` in `docs/index.html` draws it and moves the jaw. He looks around, blinks, faces you while you talk, looks up while he
-thinks, and his jaw and lips move with his own voice. The choice is remembered on each device.
+| Model | Cost | Best at |
+|---|---|---|
+| **Claude** | Your Claude plan | Doing things on the PC, code, reading the screen |
+| **Gemini** | Free key from [Google AI Studio](https://aistudio.google.com/apikey) | Everyday questions, news and anything current (with Google Search) |
+| **ChatGPT**, **Grok** | Pay per use, with a monthly budget you set | Backup; Grok for X / Twitter |
+| **Hermes**, **Qwen3** | Free, on your graphics card ([Ollama](https://ollama.com)) | Simple commands when you're offline or out of Claude |
 
-## Smarter: acting inside apps
+<h2><a name="privacy-and-safety"></a><img src="assets/readme/headers/privacy-and-safety.svg" alt="Privacy and safety" width="100%"></h2>
 
-Jarvis can read and click the buttons, lists and tabs *inside* apps through Windows UI Automation (the
-accessibility tree screen readers use). So "open Claude's Jarvis project", "go to the settings tab" or "open my chat
-with X" work: it opens the app, finds the control by name and clicks it. It's text-only (no screenshots), so it stays
-cheap. It won't click anything that sends, deletes, buys or changes settings unless you explicitly ask.
+- **Your voice stays on your PC.** The wake word and speech recognition both run locally.
+- **Phone and PC talk end-to-end encrypted** (AES-256-GCM). The tunnel and relay in between only ever see scrambled data.
+- **Your keys live in `.env`** on your PC, which is never uploaded. The code and the phone page contain no secrets.
+- **Risky actions ask first**: deleting files, running commands, shutting down. On the phone the Allow button can require Face ID; on the PC, Windows Hello or your Windows password. You can turn the questions off in Settings.
+- **Hard limits stay**: Windows and system folders can never be deleted.
+- **Keep your pairing link private.** It's the key to your PC. If you lose your phone, delete `JARVIS_TOPIC` and `JARVIS_KEY` from `.env` and run `run.bat --pair`.
 
-## System page
+<h2><a name="troubleshooting"></a><img src="assets/readme/headers/troubleshooting.svg" alt="Troubleshooting" width="100%"></h2>
 
-Tap **System** in the dock or Control Center for live stats every few seconds: CPU (with a graph and per-core bars),
-GPU load/VRAM/temperature/fan (NVIDIA), memory, network speed, free space on every drive (red when nearly full),
-and the busiest apps. You can also ask "how much space is left on my disks?".
-
-## Files and permissions
-
-Jarvis can look through your files (list folders with sizes, search by name, read text files, show what's using
-disk space, suggest what's safe to clean) and organise them (create, write, move, rename, copy). For anything else
-it can run a PowerShell command.
-
-How much Jarvis asks first is the `autonomy` setting:
-
-| `autonomy` | Asks before |
+| Problem | Fix |
 |---|---|
-| `full` (default) | only power actions (sleep/restart/shutdown/sign out) and sending messages |
-| `risky_only` | also deleting, clearing and emptying the Recycle Bin |
-| `ask` | also running commands and overwriting files |
+| "Hey Jarvis" isn't heard | Right-click the tray icon and pick the right microphone. Still nothing? Lower `wake_threshold` in `config.json` (e.g. `0.35`) |
+| It triggers by itself | Raise `wake_threshold` a little |
+| The phone says it can't reach the PC | Make sure Jarvis is running, then right-click the tray icon › **Pair your phone** and scan the new code |
+| "Claude Code CLI not found" | Install [Claude Code](https://claude.com/claude-code), then log in once (step 2 above) |
+| Speech recognition is slow | Without an NVIDIA graphics card it runs on the CPU. That works, just slower |
+| A website job needs a login | Right-click the tray icon › **Log in to a site for Jarvis…**, log in yourself and close the window |
+| Something else is wrong | Say or type **"health check"**. Jarvis checks everything and tells you how to fix what's broken. The log is in `jarvis.log` |
 
-When it asks: from the phone, an Allow / Don't Allow alert appears in the app (keep it open); otherwise a Windows
-dialog pops up and Jarvis says so out loud. No answer within 2 minutes counts as no. Normal deletes go to the
-Recycle Bin; "permanently" (or clearing temp/cache folders) frees the space for real. Windows, Program Files,
-ProgramData, drive roots and your main user folders themselves can't be deleted at all.
+<h2><a name="project-layout"></a><img src="assets/readme/headers/project-layout.svg" alt="Project layout" width="100%"></h2>
 
-## Now playing
-
-The Control Center shows what's playing in any app (Spotify, YouTube in your browser, ...) with its album cover,
-a live progress bar and controls, using Windows' own media information.
-
-## Siri and the Share button
-
-Make an **Ask Jarvis** shortcut once in the iPhone's Shortcuts app (the app's Settings › Siri & Share shows each
-step, with the address link and key to copy). Then say *"Hey Siri, Ask Jarvis"*, or pick Ask Jarvis under any app's
-Share button to send it a link or text. Siri reads the answer out.
-
-A Shortcut can't do the app's encryption, so it uses its own key (`JARVIS_SIRI_KEY` in `.env`) over the same HTTPS
-tunnel: it looks up the PC's current address on the relay (`<topic>-s`), then asks `<address>/ask` with the key and
-the question in headers. Answers that take longer than 45 seconds come to the app as a message instead.
-
-## Live screen
-
-`/live` streams one monitor at up to 20 pictures a second (about 16 measured through the Cloudflare tunnel; it
-needs ~5 Mbit/s, so it's smoother on Wi-Fi than on weak mobile data). Tap to click, press and hold to right-click,
-pinch to zoom; the bar at the bottom types text, presses Enter / Backspace / Esc and scrolls. Switch monitors at the
-top; ✕ (or Esc) closes it and stops the pictures.
-
-How it's fast (`jarvis/live.py`): mss grabs a monitor in ~25 ms (PIL's ImageGrab took ~125 ms), moving pictures are
-halved with `Image.reduce` and sent as binary WebSocket messages (no base64), the phone confirms each one and at
-most 6 are on the way at once (a slow link gets fewer, smaller pictures rather than a growing delay), an unchanged
-screen isn't resent, and once it stops changing one full-size picture follows for sharp zooming.
-
-## Away mode
-
-`/away` (or "I'm leaving", "away mode on"): while it's on, a real hand on the mouse or keyboard gets you a message
-and a webcam photo (kept in `.brain/away/`). Jarvis's own clicks and the live screen don't count: Windows marks
-them as generated input. `/away` again, or "I'm back", turns it off; `/lock` locks the PC. While it's on, a chip
-above the phone's message box says so; tap it to turn away mode off.
-
-## Nap: wake your PC from the phone
-
-A phone web page can't send the signal that wakes a sleeping PC, so there's **Nap** instead: the Sleep tile in
-Control Center asks Nap or Sleep, and `/nap` (or "take a nap") locks the PC, turns the screens off and keeps it
-awake, so Jarvis stays reachable. `/wake`, the "Napping" chip above the message box, or "wake up" turns the screens
-back on (the PC stays locked). Using the mouse or keyboard at the PC ends a nap too. While napping the PC draws its
-normal idle power; real Sleep still switches it off, but then it can't be woken from the phone.
-
-## Find my file
-
-"Send me the PDF I downloaded yesterday", "send me the latest screenshot", "find the photo from last week", "what
-did I download today?": Jarvis looks through Downloads, Desktop, Documents, Pictures, Videos and Music (and
-OneDrive's copies) by kind, time and words in the name, in a fraction of a second and with no tokens. One match is
-sent straight to the phone; several are listed, and "the second one" or "number 3" sends that one. `/find` starts
-the sentence for you. Anything it can't place (no kind of file or "download" in it, or a name it can't find in
-those folders) goes to the brain, which can search every drive.
-
-## Morning briefing
-
-Every morning at `morning_time` (Settings › Morning briefing): the weather, today's calendar, reminders and
-scheduled tasks, unread email and how the PC is doing, in one message, with no tokens. `/briefing`, "brief me" or
-"what's my day look like" gets it any time. Weather comes from Open-Meteo for `weather_city`, or the place your
-internet connection is in when that's empty. Calendars are optional, as many as you like (Settings › Morning
-briefing › Calendar): an iPhone calendar's link (Calendar app › Calendars › ⓘ › Public Calendar › Share Link; iCloud
-calendars only) or Google Calendar's *Secret address in iCal format*. They're kept in `.env` as `CALENDAR_ICS_URL`
-(space-separated), merged in time order, and repeating events count. "Say it out loud on the
-PC" (`briefing_speak`) also reads it out on the PC. With humour on, it ends with a line for the day.
-
-## Evening recap
-
-Every evening at `recap_time` (Settings › Evening recap, 21:30 by default): what Jarvis did for you today (a few of
-the commands), your time in apps on the PC, tomorrow's first calendar events and reminders, and tomorrow's weather.
-No tokens. `/recap` or "how was my day" gets it any time. App time comes from `jarvis/apptime.py`: once a minute the
-app in front counts as a minute, but only if you used the mouse or keyboard in the last two minutes. It's kept for a
-week in `.brain/apptime.json` and never leaves the PC except as that one line.
-
-## Cleaning up a disk
-
-`/cleandisk` asks which disk, scans it (a few seconds) and sorts what it finds:
-
-- **Safe to clean** (ticked): temp files older than a day, browser caches (Chrome, Edge, Brave, Opera, Firefox/Zen),
-  Discord / Spotify / VS Code caches, graphics shader caches, crash reports, pip / npm / yarn / NuGet download caches.
-  Programs rebuild these by themselves.
-- **Your call** (not ticked): the Recycle Bin, downloaded AI models (Hugging Face, PyTorch, Kaggle).
-- **Leave alone** (never cleaned, shown so you know where the space is): the hibernation and page files, Downloads,
-  Documents and other folders of yours.
-
-Only folders `jarvis/cleandisk.py` knows by name are ever cleaned; the phone sends back just the ids you ticked.
-Apps that are open are skipped, files in use stay, links inside a cache are never followed, and with Face ID on,
-cleaning needs your face. Windows Update leftovers and old Windows versions need administrator rights, so the
-pop-up has a button that opens Windows' own Disk Cleanup on the PC.
-
-## Face ID for permissions
-
-Settings › Security › **Face ID for permissions** (Touch ID / Windows Hello in other browsers). Setting it up makes a
-passkey-style key on the phone that only works with your face; the PC keeps the public half in `.brain/faceid.json`.
-Every permission prompt on the phone (sending, deleting, running a command, shutting down: everything that asks)
-then carries a fresh challenge, and Allow only counts when it comes back signed by that key with the face checked.
-The PC checks the signature (`jarvis/faceid.py`), so someone holding your unlocked phone, or anything with only the
-pairing key, can't approve. Turning it off needs Face ID too; with a lost or reset phone, right-click the tray icon
-› **Turn off Face ID for permissions**. Prompts shown on the PC itself are unchanged.
-
-**On the PC**: an Allow clicked in the desktop app is checked by Windows instead (`jarvis/winverify.py`): Windows
-Hello's "Making sure it's you" box (your PIN, face or fingerprint), or Windows' own password box if Hello isn't set
-up. Jarvis only learns whether it was you, never the PIN or password.
-
-**Fewer prompts**: messages and emails are sent without asking. Settings › Security › **Ask before risky actions**
-(`ask_permission` in `config.json`) switched off means nothing asks at all: commands, deleting, overwriting and
-shutting down just happen. The hard limits stay: system and Windows folders still can't be deleted.
-
-## Bulgarian
-
-Settings › **Language you speak**: English, Български or Both (`voice_language` in `config.json`). Bulgarian uses the
-multilingual Whisper model (`whisper_model_multi`, "large-v3-turbo", downloaded once to `.brain/whisper`), on the
-graphics card through NVIDIA's pip libraries (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`). "small" heard sounds rather
-than words ("Кой сити" for "Кой си ти"). Without a usable graphics card (or `whisper_device: "cpu"`) it falls back to
-"small" on the CPU. In Both, each
-command counts as English only when Whisper is sure it's English, otherwise Bulgarian. Replies written in Cyrillic
-are spoken with `edge_voice_bg` (bg-BG-KalinaNeural). Phone dictation follows the same setting.
-
-## Website jobs in a hidden browser
-
-Checking Windy, sending an Instagram message, filling in a form: Jarvis does these in his own hidden Chrome
-(`jarvis/hidden_browser.py`, Microsoft's Playwright MCP in `.brain/browser-mcp`), headless, so nothing opens on your
-screen and your mouse and keyboard stay yours. It uses your installed Chrome with its own profile
-(`.brain/browser-profile`), presents itself as normal Chrome, and closes after 5 idle minutes. Your screen is used
-only when you ask to see a page ("open Windy").
-
-It's signed in only where you sign it in: tray › **Log in to a site for Jarvis…** (Instagram), `run.bat --browser
-[url]`, or Jarvis asks you himself (`open_login_window`). That shows the same profile in a normal Chrome window; log in
-yourself, close it, and he stays logged in, hidden. `hidden_browser: false` in `config.json` goes back to your
-browser and the mouse.
-
-Install (once): `npm install --prefix .brain/browser-mcp @playwright/mcp@0.0.83`.
-
-## Where you are
-
-Settings › Security › **Share where I am** (on by default): the phone, or the desktop app, sends its GPS position with
-each command, and `jarvis/location.py` adds a line for the model with the street address (from OpenStreetMap's
-Nominatim, looked up once per spot) and the coordinates, so "near me", "how far is…" and "the weather here" mean where
-you really are. Spoken to the PC's own mic, it's the desktop app's position, or the town your internet connection is
-in. Positions stay in memory, never on disk.
-
-When you say "Hey Jarvis" to the PC, the orb (or the humanoid) in the apps' Voice mode follows it: listening, your
-words, thinking, speaking.
-
-## Self-check
-
-When something Jarvis depends on breaks he messages you once, with the fix, and again when it works:
-Claude's login or usage limit, email login, the microphone, the local models (Ollama), and Windows running out of
-memory (the page file is on C:, so a full C: makes programs fail at random). `/health`, "health check" or "are you
-okay?" checks everything now. See `jarvis/health.py`.
-
-## Screens on your phone
-
-Type **/monitors** (or `/screens`) to get one picture of all three monitors, laid out like your desk. Tap a monitor (or use the
-All / Left / Main / Right switch) to zoom in; pinch, drag and double-tap work too. Screenshots go straight from the PC to your phone,
-end-to-end encrypted. Claude never sees them, so they cost no tokens. They expire from the relay after 3 hours.
-
-## Email
-
-"Check my email" lists your unread mail sorted into **important** and **not important** (Gmail's own Important
-marker and inbox tabs, newsletter/no-reply signals, and senders you list in `email_vip`). The plain "check my email"
-is answered locally with no tokens. "Read the one from Anna" opens it; "reply to Anna and say I'll be there" writes
-the reply and shows it on your phone. "Email Ana and tell her I'm running late" or "send my CV to boris@work.com"
-writes a new email (attachments too). Names are looked up in what Jarvis remembers and in your past emails, and an
-address found that way is remembered. Every email is shown to you first and only sent if you tap **Send**, whatever
-the autonomy setting. Checking never marks anything as read.
-
-Setup (once):
-1. Gmail: turn on 2-Step Verification, then create an app password at https://myaccount.google.com/apppasswords.
-2. Run `run.bat --email`, type your address and paste the app password (it's hidden as you type; Jarvis checks it
-   signs in, then saves it in `.env` as `EMAIL_APP_PASSWORD` and the address in `config.json`).
-3. Restart Jarvis.
-
-## Memory
-
-Every command and answer (and the steps taken) is kept per chat in `.brain/conversation.json`, whichever part of
-Jarvis handled it: a quick local shortcut, Hermes, Qwen3 or Claude. Each brain is shown the same recent conversation
-(by default the last 10 exchanges of the past 12 hours), so follow-ups like "close it", "do it again" or "send that to Ana" work,
-also after a restart or when Claude's session is swapped for a fresh one. "Remember that…" saves a fact for good in
-`.brain/memory.json` (people, email addresses, preferences); Jarvis also saves clearly useful facts by itself, and
-"forget…" removes them.
-
-On the phone, **Settings › Memory** controls all of it:
-
-- **About me**: a note in your own words (name, work, people, how you like answers), saved in `.brain/about_me.txt`
-  and given to every brain at the start of each conversation.
-- **Humour**: Off, A little (default: a dry, butler-ish quip now and then) or Lots (`humour` in `config.json`).
-- **Remembers the conversation for**: 2 hours, 12 hours, 3 days or 2 weeks (`memory_span`).
-- **Things Jarvis remembers**: every saved fact, each with a delete button, plus a box to add one yourself and a
-  button that forgets recent conversations (About me and the facts stay).
-
-Outlook, Yahoo and iCloud are detected from the address; for anything else set `email_imap_host` / `email_smtp_host`.
-
-## Jarvis messages you
-
-- **More than one message.** While working, Jarvis can send extra chat bubbles with the `message_user` tool (a
-  heads-up before something slow, a result as soon as he has it, a long answer in a few texts); the final answer
-  comes last. From the PC microphone they're said out loud instead.
-- **Without a prompt.** "Every morning at 8 check my email and tell me what matters", "at 18:00 tell me the
-  weather", "in an hour check if the render finished": `schedule_task` saves the task in `.brain/schedule.json`
-  (once, daily, weekdays or weekly) and, when it's due, runs it like a command and sends the answer as a message.
-  Scheduled tasks show up with your reminders on the phone, and × cancels them. Reminders and finished watches now
-  land in the chat too.
-- **On his own** (Settings › Memory › Messages you on his own, `proactive` in `config.json`): *When asked* (only
-  the above), *Important* (default: plus a heads-up when an important email arrives, checked every 5 minutes, no
-  tokens) or *Chatty* (a heads-up for every new email). The morning briefing has its own switch (see Morning
-  briefing). Between `quiet_hours` (23:00 to 08:00)
-  unasked messages still arrive, but without a notification.
-
-Messages wait in `.brain/inbox.json` until the phone confirms them, so they arrive even if the app was closed (with
-a notification first).
-
-## Settings (`config.json`)
-
-| Key | What it does |
+| Path | What it is |
 |---|---|
-| `brain` | `claude-code` (uses your subscription) or `api` (paid key) |
-| `claude_code_model` | Model for the Claude Code brain, e.g. `sonnet` or `haiku` for faster replies (empty = default) |
-| `model` / `effort` | Model and effort for the `api` brain |
-| `monitor_names` | What you call each monitor, by Windows number (1 = right vertical, 2 = main, 3 = left) |
-| `known_folders` | Named shortcuts, e.g. `"projects": "D:\\Projects"` |
-| `ollama_host`, `hermes_model`, `hermes_fallback` | The local Hermes brain and which brain backs it up |
-| `qwen_model` | Qwen3, Hermes's teammate for multi-step commands (`qwen3:8b`; `qwen3:4b` for less VRAM, `qwen3:14b` for more; `""` = Hermes alone) |
-| `local_auto_pull`, `local_ctx` | Download missing local models automatically; the local models' context window (16k) |
-| `use_claude` | `false` = only free local commands, never Claude (also a switch in the phone's Settings) |
-| `autonomy` | `full`, `risky_only` or `ask` (see *Files and permissions*) |
-| `wake_threshold` | Lower (e.g. `0.35`) if "Hey Jarvis" isn't detected; raise if it triggers by itself |
-| `whisper_model` | `small.en` (default), `base.en` (faster, mishears more) or `medium.en` (slowest, best) |
-| `silence_seconds`, `max_command_seconds`, `no_speech_seconds` | How long it listens before ending a command |
-| `input_device` | Which microphone (also in the tray menu); `null` = Windows default |
-| `hotkey`, `hotkey_enabled`, `speak_on_shortcut` | The talk shortcut (default Ctrl+Alt+J) and whether replies to it are spoken |
-| `overlay_enabled`, `tray_enabled` | The "Hey Jarvis" pop-up and the tray icon |
-| `speak_replies`, `tts_engine`, `edge_voice`, `tts_voice` | Spoken answers: `edge` (natural, online) or `windows` (offline) and the voice |
-| `voice_enabled`, `phone_enabled` | Turn either input off |
-| `upload_folder` | Where files from the phone are saved (default `From Phone` on the Jarvis drive) |
-| `warn_disk_gb`, `warn_gpu_temp` | When the phone gets a low-disk / hot-GPU warning |
-| `gesture_app`, `gesture_python` | The Gesture-App folder and the Python that runs it (also used for webcam photos) |
+| `jarvis/` | Jarvis himself: voice, the phone connection, the tools, the models |
+| `docs/` | The phone and desktop app (served by GitHub Pages) |
+| `tests/` | Tests: `.venv\Scripts\python -m pytest tests` |
+| `tools/` | Scripts that build the 3D head and the pictures in this README |
+| `assets/readme/` | The banner and headers used here |
+| `run.bat`, `Jarvis.vbs` | Start Jarvis |
+| `config.json`, `modes.json` | Your settings and saved layouts (made on the first run) |
+| `.env` | Your private keys (never uploaded) |
+| [`GUIDE.md`](GUIDE.md) | **The full guide**: every feature, every setting and what each file does |
 
-## Code map
+<h2><a name="credits"></a><img src="assets/readme/headers/credits.svg" alt="Credits" width="100%"></h2>
 
-| File | Role |
-|---|---|
-| `jarvis/__main__.py` | Starts the voice, phone and worker threads |
-| `jarvis/brain.py` | System prompt + the Claude brains (Claude Code CLI, or the API tool loop) |
-| `jarvis/hermes.py` | The free local brain: Hermes + Qwen3 (Ollama) as a team, with Claude as the fallback |
-| `jarvis/nlu.py` | Free local parser for quick commands |
-| `jarvis/activity.py` | The saved log of every command and its steps (the phone's pills and Activity list) |
-| `jarvis/watchers.py` | Reminders and "tell me when…" watches |
-| `jarvis/proactive.py` | Scheduled tasks, new-email heads-ups and when the morning briefing and evening recap go out |
-| `jarvis/briefing.py` | The morning briefing: weather, calendar (iCal), reminders, email, PC; the clock's place and weather |
-| `jarvis/recap.py`, `apptime.py` | The evening recap, and the minutes you spend in each app |
-| `jarvis/findfile.py` | Find my file: kind / time / name search in your own folders, pick from a list |
-| `jarvis/nap.py` | Nap: locked, screens off, kept awake so the phone can wake it |
-| `jarvis/quips.py` | Canned wit for quick replies and the briefing, as often as the humour setting says |
-| `jarvis/inbox.py` | Jarvis's messages waiting for the phone to pick them up |
-| `jarvis/mcp_server.py` | Gives Claude Code the Jarvis tools |
-| `jarvis/tools.py` | The actions Claude can take (schemas + implementations) |
-| `jarvis/windows.py` | Win32: monitors, window lookup, moving and tiling |
-| `jarvis/apps.py` | Start-menu app launching, folders, folder search |
-| `jarvis/voice.py` | openWakeWord "hey jarvis" + recording + faster-whisper |
-| `jarvis/remote.py` | Encrypted WebSocket phone channel (commands, live status, screenshots, covers) |
-| `jarvis/modes.py` | Saved layouts ("work mode") that run without Claude |
-| `jarvis/screens.py` | Screenshots of each monitor for the phone |
-| `jarvis/ui.py` | Acting inside apps: list/click controls, type, press keys (UI Automation) |
-| `jarvis/sysinfo.py` | Detailed stats for the System page (CPU, GPU, RAM, disks, network, top apps) |
-| `jarvis/tunnel.py` | Cloudflare quick tunnel that gives the phone a public, encrypted way in |
-| `jarvis/media.py` | What's playing in any app, with album covers (Windows media session) |
-| `jarvis/files.py` | Scanning, searching, reading, organising and deleting files (with safety checks) |
-| `jarvis/approval.py` | Asking you before anything destructive (phone alert or Windows dialog) |
-| `jarvis/pc.py` | Live PC status (now playing, CPU/RAM, busiest app), clipboard, lock |
-| `jarvis/push.py` | Web Push notifications to the phone when the app is closed |
-| `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
-| `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
-| `jarvis/hidden_browser.py` | Jarvis's own hidden Chrome for website jobs, and its log-in window |
-| `jarvis/location.py` | Where you are: the device's GPS position as an address, for the model |
-| `jarvis/router.py`, `cloud.py` | Picking the model for each message; Gemini, ChatGPT and Grok through their APIs |
-| `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |
-| `jarvis/orb.py` | The Jarvis orb: the icons, the tray icon and the pop-up's live orb |
-| `jarvis/away.py` | Away mode: low-level input hooks, physical input only |
-| `jarvis/cleandisk.py` | /cleandisk: scan a disk into safe / your call / leave alone, clean what's ticked |
-| `jarvis/faceid.py` | Face ID for permissions: stores the phone's public key, checks each signed Allow |
-| `jarvis/health.py` | The self-check: problems reported once with the fix, `/health` |
-| `jarvis/live.py` | The live screen stream: mss capture, confirmed pictures, adaptive size |
-| `jarvis/partial.py` | The answer as it's written, throttled, for the phone |
-| `jarvis/siri.py` | The "Ask Jarvis" Siri / Share shortcut's key and question handling |
-| `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |
-| `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |
-| `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |
-| `jarvis/autostart.py` | `--startup` / `--startup-off` |
-| `tests/` | `pytest` tests for the parts that don't need Windows (parser, reminders, activity, modes) |
-| `docs/` | The phone page served by GitHub Pages |
+Built with [Claude](https://claude.ai) for the prompts, [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [openWakeWord](https://github.com/dscripka/openWakeWord), [edge-tts](https://github.com/rany2/edge-tts), [Playwright MCP](https://github.com/microsoft/playwright-mcp), [Cloudflare Tunnel](https://github.com/cloudflare/cloudflared), [ntfy](https://ntfy.sh), [Ollama](https://ollama.com), [pywebview](https://pywebview.flowrl.com) and [Open-Meteo](https://open-meteo.com).
 
-## How the phone connects
+The humanoid in Voice mode is "Infinite, 3D Head Scan" by Lee Perry-Smith ([Infinite Realities](https://www.ir-ltd.net)), licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
 
-Jarvis runs a small WebSocket server on your PC and makes it reachable with a free Cloudflare quick tunnel
-(`bin/cloudflared.exe`, no account needed). The tunnel's address changes each time Jarvis starts, so Jarvis announces
-it (encrypted) on an ntfy.sh topic; the phone reads the newest announcement and connects directly. That's only a few
-relay messages a day, well under ntfy's free limit of 250. If the phone can't find the PC, run `run.bat --pair`
-while Jarvis is running and scan the new QR code: it contains the current address.
-
-If `bin/cloudflared.exe` is missing, download it from
-https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe into `bin/`.
-
-## Security notes
-
-- Everything between phone and PC is AES-256-GCM encrypted end to end; Cloudflare and ntfy.sh only see
-  ciphertext. Messages older than 2 minutes, replays, and anything not encrypted with your key are ignored.
-- Jarvis is built to do anything on this PC: it can run PowerShell, change and delete files, see the screen and
-  send you files. With the default `autonomy: full` it does most of that without asking, so your pairing key is
-  effectively the key to the PC. Keep the pairing link private.
-- If your phone is lost, run `run.bat --pair` after deleting `JARVIS_TOPIC`/`JARVIS_KEY` from `.env` to rotate keys.
-- With Face ID for permissions on, nothing that asks permission can be approved from the phone without your face.
-- The Siri shortcut's key (`JARVIS_SIRI_KEY`) can run commands too, unencrypted apart from HTTPS (Cloudflare can see
-  them). Delete it from `.env` and restart Jarvis to turn the shortcut off; a new one is made when you next open
-  Settings › Siri & Share.
-- Windows of apps running as administrator can't be moved unless Jarvis also runs as administrator.
-
-## Tests
-
-```
-.venv\Scripts\pip install pytest
-.venv\Scripts\python -m pytest tests
-```
+<p align="center">
+  <a href="https://github.com/Izu83"><img src="https://github.com/Izu83.png?size=112" width="56" alt="Izu83"></a><br>
+  Made by <b>Nikolay Rangelov</b> (<a href="https://github.com/Izu83">Izu83</a>)
+</p>
