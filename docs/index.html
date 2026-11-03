@@ -692,8 +692,17 @@
   .v-status { margin-top: -6px; min-height: 22px; font-size: 17px; font-weight: 600; letter-spacing: -.2px; color: rgba(255,255,255,.9); transition: opacity .3s; }
   .v-status .cdots { display: inline-flex; gap: 6px; } .v-status .cdots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.75); animation: blink 1.3s infinite; }
   .v-status .cdots i:nth-child(2) { animation-delay: .18s; } .v-status .cdots i:nth-child(3) { animation-delay: .36s; }
-  .v-caption { margin-top: 10px; max-width: 470px; min-height: 72px; font-size: 17px; line-height: 24px; color: rgba(165,232,255,.75); overflow: hidden;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; transition: opacity .3s; }
+  /* the whole answer, never cut off: it takes the room left under the orb and scrolls (it follows along by itself
+     while Jarvis speaks; drag it to read back). A long answer makes the orb smaller to give it more room. */
+  .v-caption { margin-top: 10px; width: 100%; max-width: 520px; min-height: 72px; flex: 0 1 auto; font-size: 17px; line-height: 24px;
+    color: rgba(165,232,255,.75); white-space: pre-line; overflow-wrap: anywhere; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch; transition: opacity .3s; }
+  .v-caption::-webkit-scrollbar { display: none; }
+  .v-caption.scrolls { -webkit-mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 22px), transparent);
+    mask-image: linear-gradient(transparent, #000 14px, #000 calc(100% - 22px), transparent); padding: 8px 0 16px; }
+  #voiceView .v-stage > #orb, #voiceView .v-status { flex-shrink: 0; }
+  #voiceView.long #orb { width: max(120px, min(92vw, 470px, calc(100vh - var(--dock-h, 120px) - env(safe-area-inset-top) - 470px))); }
+  #voiceView.long.humanoid #orb { width: max(140px, min(96vw, 600px, calc(100vh - var(--dock-h, 120px) - env(safe-area-inset-top) - 430px))); }
   .v-caption.you { color: rgba(255,255,255,.95); }
   .v-caption.fade { opacity: 0; }
   #voiceView.nocc .v-caption { visibility: hidden; }
@@ -1772,7 +1781,7 @@ const Voice = {
     this.el.play().catch(() => { this.unlocked = false; });
   },
   stop() {
-    this.token++; this.env = null; this.synth = false;
+    this.token++; this.env = null; this.synth = false; this.prog = null;
     this.halts.splice(0).forEach(f => f());
     try { this.el.pause(); } catch {}
     try { speechSynthesis?.cancel(); } catch {}
@@ -1783,9 +1792,11 @@ const Voice = {
     this.stop();
     const token = this.token, halted = new Promise(r => this.halts.push(r));
     const parts = speechParts(speakable(text)), audio = parts.map(t => this.fetch(t, voice));
+    this.prog = { lens: parts.map(p => p.length), i: 0, playing: false };
     for (let i = 0; i < parts.length && token === this.token; i++) {
       const mp3 = await Promise.race([audio[i], halted]);
       if (token !== this.token) break;
+      this.prog = { ...this.prog, i, playing: true };
       await Promise.race([mp3 ? this.play(mp3, parts[i], token) : this.say(parts[i], token), halted]);
     }
     if (token === this.token) this.env = null;
@@ -1819,6 +1830,13 @@ const Voice = {
       u.onend = u.onerror = () => { this.synth = false; resolve(); };
       speechSynthesis.speak(u);
     });
+  },
+  progress() {   // how far through what he's saying Jarvis is (0…1), by characters; null when he isn't speaking
+    const p = this.prog;
+    if (!p || !p.playing) return null;
+    const total = p.lens.reduce((a, b) => a + b, 0) || 1, before = p.lens.slice(0, p.i).reduce((a, b) => a + b, 0);
+    const d = this.el.duration, frac = this.synth ? .5 : d && isFinite(d) ? Math.min(1, this.el.currentTime / d) : 0;
+    return (before + frac * p.lens[p.i]) / total;
   },
   level() {   // how loud Jarvis is right now (0…1), for the orb
     if (!this.el.paused && this.el.currentTime > 0) {
@@ -2015,7 +2033,7 @@ const PcVoice = {
       : d.state === "hearing" ? () => .3 + .2 * Math.sin(performance.now() / 120) : () => 0;
     $("voiceView").dataset.state = d.state === "working" ? "thinking" : d.state;
     $("vStatus").textContent = { listening: "Listening on your PC…", hearing: "Listening on your PC…", working: "Thinking…", speaking: "Speaking on your PC" }[d.state] || "";
-    if (d.text && VoiceMode.cc) { $("vCaption").textContent = d.text; $("vCaption").classList.toggle("you", d.state !== "speaking"); }
+    if (d.text && VoiceMode.cc) VoiceMode.caption(d.text, d.state !== "speaking");
   },
 };
 
@@ -4140,6 +4158,42 @@ const VoiceMode = {
   CUT: /^[\s,.!?-]*(hey\s+)?(jarvis|stop|wait|hold on|hang on|enough|shut up|pause|quiet|cancel|never ?mind|спри|чакай|изчакай|момент|стоп|стига|млъкни|тихо|джарвис)(?=$|[\s,.!?-])[\s,.!?-]*/i,
   QUIET: /^(stop|enough|shut up|quiet|cancel|never ?mind|спри|стоп|стига|млъкни|тихо)$/i,
   BYE: /^(ok(ay)?[, ]+)?(hang up|end( the)? call|stop( the)? call|(good)?bye|bye bye|that'?s all|that'?s it|i'?m done|thanks?,? bye|довиждане|чао)(?=$|[\s,.!?-])/i,
+  // The words under the orb, all of them: Jarvis's answer without the markdown marks (lists stay on their own lines),
+  // or what you're saying. A long one scrolls; while he speaks it scrolls along with him, unless you've just
+  // dragged it to read something.
+  caption(text, you = false) {
+    const el = $("vCaption");
+    const shown = you ? text : String(text || "")
+      .replace(/```[\s\S]*?```/g, " ").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "").replace(/^\s*[-*•]\s+/gm, "• ").replace(/\n{3,}/g, "\n\n").trim();
+    const changed = el.textContent !== shown;
+    if (changed) { el.textContent = shown; this.heldUntil = 0; }
+    el.classList.toggle("you", you);
+    this.fitCaption(you, changed);
+  },
+  fitCaption(toEnd = false, changed = true) {
+    const el = $("vCaption"), t = el.textContent;
+    $("voiceView").classList.toggle("long", this.cc && (t.length > 160 || (t.match(/\n/g) || []).length > 2));
+    requestAnimationFrame(() => {
+      el.classList.toggle("scrolls", el.scrollHeight > el.clientHeight + 2);
+      if (toEnd) el.scrollTop = el.scrollHeight; else if (changed) el.scrollTop = 0;
+    });
+    if (this.state === "speaking" && !this.follow) this.followAlong();
+  },
+  followAlong() {   // keeps the part Jarvis is saying in view, a third of the way down
+    const el = $("vCaption");
+    el.onpointerdown = el.onwheel = el.ontouchstart = () => { this.heldUntil = Date.now() + 4000; };
+    const tick = () => {
+      if (this.state !== "speaking" || !this.on) { this.follow = 0; return; }
+      const p = Voice.progress(), room = el.scrollHeight - el.clientHeight;
+      if (p !== null && room > 0 && Date.now() > this.heldUntil) {
+        const want = Math.max(0, Math.min(room, p * el.scrollHeight - el.clientHeight / 3));
+        el.scrollTop += (want - el.scrollTop) * .08;
+      }
+      this.follow = requestAnimationFrame(tick);
+    };
+    this.follow = requestAnimationFrame(tick);
+  },
   enter(listenNow) {
     this.on = true; Orb.init(); Orb.run(true); this.renderToggles();
     if (listenNow) this.listen(); else if (this.state === "idle") this.set("idle", undefined, "");
@@ -4159,7 +4213,7 @@ const VoiceMode = {
     const st = $("vStatus");
     if (status === "…") st.innerHTML = '<span class="cdots"><i></i><i></i><i></i></span>';
     else st.textContent = status ?? { idle: "Tap the orb to talk", listening: "Listening…", hearing: "Listening…", thinking: "Thinking…" }[state] ?? "";
-    if (caption !== undefined) { $("vCaption").textContent = caption; $("vCaption").classList.toggle("you", you); }
+    if (caption !== undefined) this.caption(caption, you);
     const [ic, label] = { idle: ["mic", "Talk"], error: ["mic", "Talk"], hearing: ["up", "Done talking"], speaking: ["stop", "Stop"] }[state] || ["x", "Cancel"];
     $("vMain").innerHTML = icon(ic); $("vMain").setAttribute("aria-label", label);
   },
@@ -4168,6 +4222,7 @@ const VoiceMode = {
     const human = (Orb.cv ? Orb.form : load("jarvis.orbForm")) === "head";
     $("vHuman").classList.toggle("on", human); $("voiceView").classList.toggle("humanoid", human);
     $("voiceView").classList.toggle("nocc", !this.cc);
+    this.fitCaption(false, false);
   },
   tap() {   // the orb: talk, or cut Jarvis off and talk
     Mic.wake();
@@ -4227,7 +4282,7 @@ const VoiceMode = {
   },
   onWords(d) { const fn = this.waits.get(d.req); if (fn) { this.waits.delete(d.req); fn(d); } },
   onPartial(d) {   // the words so far, while you're still talking
-    if (d.req === this.liveReq && this.state === "hearing" && d.text) { $("vCaption").textContent = d.text; $("vCaption").classList.add("you"); }
+    if (d.req === this.liveReq && this.state === "hearing" && d.text) this.caption(d.text, true);
   },
   // While Jarvis talks, the mic listens for you cutting in. Only what starts with "stop", "wait", "Jarvis"… counts,
   // so his own voice coming back through the mic doesn't stop him.
