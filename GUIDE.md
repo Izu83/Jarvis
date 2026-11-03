@@ -482,7 +482,8 @@ a notification first).
 | `local_auto_pull`, `local_ctx` | Download missing local models automatically; the local models' context window (16k) |
 | `use_claude` | `false` = only free local commands, never Claude (also a switch in the phone's Settings) |
 | `autonomy` | `full`, `risky_only` or `ask` (see *Files and permissions*) |
-| `wake_threshold` | Lower (e.g. `0.35`) if "Hey Jarvis" isn't detected; raise if it triggers by itself |
+| `wake_check`, `wake_check_threshold` | A small model listens for anything like "Hey Jarvis" (at `0.15`, low on purpose), then Whisper checks the last two seconds really had his name in them, so videos, songs and people talking don't wake him. `wake_check: false` = the small model alone decides, at `wake_threshold` (`0.5`) |
+| `wake_name_alone` | Also wake on a plain "Jarvis, ..." / "Джарвис, ..." at the start of what you say. `"auto"` (default) = only when Whisper runs on the graphics card; `true` / `false` |
 | `whisper_model` | `small.en` (default), `base.en` (faster, mishears more) or `medium.en` (slowest, best) |
 | `silence_seconds`, `max_command_seconds`, `no_speech_seconds` | How long it listens before ending a command |
 | `input_device` | Which microphone (also in the tray menu); `null` = Windows default |

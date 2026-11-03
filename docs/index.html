@@ -1342,10 +1342,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-01.1";   // bump together with version.json
-const JNI = "JNIv21";   // Jarvis · Niko · Izu83 · version 21 — Jarvis's own release name
+const VERSION = "2026-11-04.1";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv37", when: "Nov 4, 2026", title: "He hears his name, and only his name", notes: [
+    "“Hey Jarvis”, a plain “Jarvis, …” or “Джарвис, …” wakes him now, even said casually or quietly.",
+    "Videos, songs and friends talking don't: before he wakes up, Whisper checks it really was his name.",
+    "In Voice mode you see his whole answer, not just three lines. It scrolls along as he speaks.",
+  ]},
   { v: "JNIv36", when: "Nov 1, 2026", title: "Website jobs, out of sight", notes: [
     "Jarvis does website jobs (checking Windy, sending an Instagram message, filling in a form) in his own hidden browser, so nothing opens on your screen and your mouse stays yours.",
     "He's logged in only where you log him in: on the PC, tray icon › Log in to a site for Jarvis… (or he'll ask you himself).",
@@ -1564,6 +1568,8 @@ const RELEASES = [
     "Direct, end-to-end encrypted connection between phone and PC.",
   ] },
 ];
+// Jarvis's own release name (Jarvis · Niko · Izu83 · version N): always the newest release above
+const JNI = RELEASES.map(r => r.v).sort((a, b) => parseInt(b.slice(4)) - parseInt(a.slice(4)))[0];
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];

@@ -317,7 +317,8 @@ Most settings are in the app (**You › Settings**). Everything is also in `conf
 | `morning_time`, `recap_time` | When the briefing and recap arrive |
 | `weather_city` | The town for the weather (empty = where your internet connection is) |
 | `humour` | `off`, `light` or `lots` |
-| `wake_threshold` | Lower if “Hey Jarvis” isn't heard, higher if it wakes up by itself |
+| `wake_check` | `true` (default): Whisper checks it really was his name before he wakes, so videos and people talking don't wake him |
+| `wake_name_alone` | Wake on a plain “Jarvis, …” / “Джарвис, …” too (`"auto"`: when the graphics card runs Whisper) |
 | `hidden_browser` | `false` = website jobs in your own browser, on your screen |
 
 Every setting is explained in the [full guide](GUIDE.md#settings-configjson).
@@ -326,8 +327,8 @@ Every setting is explained in the [full guide](GUIDE.md#settings-configjson).
 
 | Problem | Fix |
 |---|---|
-| “Hey Jarvis” isn't heard | Right-click the tray icon and pick the right microphone. Still nothing? Lower `wake_threshold` in `config.json` (e.g. `0.35`) |
-| He wakes up by himself | Raise `wake_threshold` a little |
+| “Hey Jarvis” isn't heard | Right-click the tray icon and pick the right microphone. Still nothing? Lower `wake_check_threshold` in `config.json` (e.g. `0.08`) |
+| He wakes up by himself | Make sure `wake_check` is on. `run.bat --console` shows “not his name; ignored” each time it stops one |
 | He mishears Bulgarian | Check Settings › Language you speak, and that the graphics card is used (`run.bat --console` says so at the start) |
 | The phone says it can't reach the PC | Make sure Jarvis is running, then right-click the tray icon › **Pair your phone** and scan the new code |
 | “Claude Code CLI not found” | Install [Claude Code](https://claude.com/claude-code), then log in once (step 2 above) |

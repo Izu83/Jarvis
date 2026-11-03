@@ -96,7 +96,16 @@ DEFAULTS = {
     # Sending messages and emails never asks either way.
     "ask_permission": True,
     "wake_word_model": "hey_jarvis",
+    # "Hey Jarvis" is found in two steps: a small, fast model picks out anything that sounds a bit like it
+    # (wake_check_threshold, low on purpose), then Whisper listens to those last two seconds and only wakes him if
+    # his name is really in them, so videos, songs and people talking don't. With wake_check off, the fast model
+    # alone decides, at wake_threshold.
+    "wake_check": True,
+    "wake_check_threshold": 0.15,
     "wake_threshold": 0.5,
+    # Also catch a plain "Jarvis, ..." / "Джарвис, ..." at the start of anything you say (the fast model only really
+    # knows "Hey Jarvis", and not in Bulgarian). "auto": only when Whisper runs on the graphics card.
+    "wake_name_alone": "auto",
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
     # Which language you talk to Jarvis in: "en", "bg" (Bulgarian) or "both". Bulgarian uses the multilingual
     # whisper_model_multi (a ~480 MB download the first time, kept in .brain/whisper).

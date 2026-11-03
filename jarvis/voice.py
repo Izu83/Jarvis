@@ -32,6 +32,12 @@ PRE_ROLL_CHUNKS = 22  # keep ~1.8 s before the wake word so words right after it
 # Vocabulary hint so Whisper spells app names right
 WHISPER_PROMPT = PROMPTS["en"]
 WAKE_PREFIX = re.compile(r"^\W*(hey|hi|ok|okay|хей|ей)?\W*(jarvis|jervis|javis|джарвис|джарвиз)\W*", re.IGNORECASE)
+# His name as Whisper writes it when it double-checks a wake-up: "Jarvis" and its near-misses (Jervis, Javis,
+# Djarvis, Jarviz...), in either alphabet. "Travis", "service" and "gravy" don't count.
+NAME = re.compile(r"\b(?:dzh|dj|j|g|ch|zh)[ae]r?v[iyeu]?[sz]|(?:дж|ж|ч)[аеъ]р?в[иеъ]?[сз]", re.IGNORECASE)
+# ...and at the very start of what you said, for "Jarvis, ..." without the "Hey"
+NAME_FIRST = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|yo|хей|ей|ало)\W+)?\W*(?:dzh|dj|j|g|ch|zh)[ae]r?v[iyeu]?[sz]"
+                        r"|^\W*(?:(?:хей|ей|ало)\W+)?\W*(?:дж|ж|ч)[аеъ]р?в[иеъ]?[сз]", re.IGNORECASE)
 # While he's talking, you can cut in without the wake word: "стоп" / "stop" makes him go quiet, "чакай" / "wait" makes
 # him go quiet and listen ("Jarvis, ..." too, and what follows it is a new command). Whisper may write the Bulgarian
 # words in Latin letters when it's set to English, so those spellings count as well.
@@ -147,6 +153,11 @@ class VoiceListener:
         self._burst: list[np.ndarray] = []   # what you're saying over his voice, being collected
         self._burst_quiet = 0.0
         self._barge_busy = False
+        # "Jarvis, ..." on its own: what you start to say, being collected and then checked for his name off-thread
+        self._gen, self._spotted, self._utter_from, self._n, self._quiet_for = 0, None, None, 0, 1.0
+        self._tape: collections.deque = collections.deque(maxlen=120)   # the last ~10 s, numbered
+        self._to_check: queue.Queue = queue.Queue(maxsize=3)
+        threading.Thread(target=self._check_names, daemon=True, name="name-check").start()
         _listeners.append(self)
 
     def trigger(self) -> None:
@@ -220,7 +231,12 @@ class VoiceListener:
                 time.sleep(2)
 
     def _wake_loop(self) -> None:
-        threshold = settings["wake_threshold"]
+        check = settings.get("wake_check", True)
+        threshold = settings["wake_check_threshold"] if check else settings["wake_threshold"]
+        alone = settings.get("wake_name_alone", "auto")
+        alone = alone is True or (alone == "auto" and self._on_gpu())
+        if alone:
+            log.info("Listening for \"Jarvis\" / \"Джарвис\" on its own too.")
         recent = collections.deque(maxlen=PRE_ROLL_CHUNKS)
         while not self._reopen.is_set():
             try:
@@ -229,16 +245,34 @@ class VoiceListener:
                 continue
             recent.append(chunk)
             from . import speak
-            if speak.speaking():
+            talking = speak.speaking()
+            if talking:
                 self._barge(chunk, recent)
             elif self._burst:
                 self._burst, self._burst_quiet = [], 0.0
+            if alone and not talking:
+                self._listen_for_name(chunk, recent)
             scores = self.wake.predict(chunk)
             manual = self._manual.is_set()
-            if not manual and max(scores.values()) < threshold:
+            spotted = self._spotted
+            if spotted is not None:   # "Jarvis, ..." on its own, found in what you just said
+                self._spotted, pre_roll, source = None, self.spotted_audio(spotted), "wake"
+            elif manual or max(scores.values()) >= threshold:
+                source = "hotkey" if manual else "wake"
+                if source == "wake" and check:
+                    # a few more chunks so the whole word is in, then Whisper listens to make sure it was his name
+                    for _ in range(4):
+                        try: recent.append(self.audio.get(timeout=0.5))
+                        except queue.Empty: break
+                    heard = self._said_name(np.concatenate(list(recent)[-28:]))
+                    if not heard:
+                        self.wake.reset()
+                        continue
+                pre_roll = list(recent)
+            else:
                 continue
             self._manual.clear()
-            source = "hotkey" if manual else "wake"
+            self._woke()
             if speak.stop():   # "Hey Jarvis" while he's talking: he stops and listens
                 log.info("Cut in with the wake word.")
             _beep(880)
@@ -248,13 +282,15 @@ class VoiceListener:
             self._cancel.clear()
             self._active.set()
             noise = float(np.percentile([_rms(c) for c in recent], 20))
-            # the wake word is at the end of the pre-roll; with the shortcut there's no wake word to skip
-            self.skip = len(recent) * CHUNK if source == "wake" else 0
-            audio = self._record(list(recent), noise)
+            # the wake word is at the end of the pre-roll; with the shortcut there's no wake word to skip. A plain
+            # "Jarvis, ..." can be followed by the command in the same breath, so nothing is skipped there.
+            self.skip = len(pre_roll) * CHUNK if source == "wake" and spotted is None else 0
+            audio = self._record(pre_roll, noise, spoke=spotted is not None)
             self._active.clear()
             self.wake.reset()
             recent.clear()
             _drain(self.audio)
+            self._woke()
             if self._cancel.is_set():   # stopped by the shortcut or the X button
                 log.info("Listening cancelled.")
                 if self.on_idle:
@@ -321,7 +357,79 @@ class VoiceListener:
         finally:
             self._barge_busy = False
 
-    def _record(self, pre_roll: list[np.ndarray], noise: float) -> np.ndarray:
+    # ------------------------------------------------------------ making sure it was really his name
+    def _on_gpu(self) -> bool:
+        try:
+            return getattr(self.whisper.model, "device", "cpu") == "cuda"
+        except Exception:
+            return False
+
+    def _words(self, audio: np.ndarray) -> str:
+        """A quick, plain pass over a couple of seconds: no prompt, so Whisper isn't nudged towards hearing "Jarvis"."""
+        samples = audio.astype(np.float32) / 32768.0
+        lang = "en" if model_for(self.loaded_for or "en").endswith(".en") else None
+        segments, _ = self.whisper.transcribe(samples, language=lang, beam_size=1, condition_on_previous_text=False,
+                                              without_timestamps=True)
+        return " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.7).strip()
+
+    def _said_name(self, audio: np.ndarray) -> bool:
+        """The fast model thinks it heard "Hey Jarvis": did it? (Videos and songs fool it; Whisper they don't.)"""
+        try:
+            said = self._words(audio)
+        except Exception:
+            log.debug("couldn't double-check the wake word", exc_info=True)
+            return True   # better to wake by mistake than not at all
+        if NAME.search(said):
+            return True
+        log.info("Something like the wake word, but not his name; ignored.")
+        log.debug("  it was: %r", said)
+        return False
+
+    def _woke(self) -> None:
+        """A wake-up started or ended: anything still being checked for his name belongs to before it."""
+        self._gen += 1
+        self._spotted, self._utter_from = None, None
+
+    def spotted_audio(self, start: int) -> list[np.ndarray]:
+        """Everything from where "Jarvis, ..." started up to now (the command may already be in it)."""
+        return [c for n, c in self._tape if n >= start]
+
+    def _listen_for_name(self, chunk: np.ndarray, recent) -> None:
+        """Mark where each thing you say starts (after a pause) and have Whisper check its first 2.5 s, off-thread,
+        for "Jarvis" / "Джарвис" at the start. Only the start of what you say is checked, so a long conversation in
+        the room costs one quick check per sentence, not a running transcription."""
+        step = CHUNK / RATE
+        self._n += 1
+        self._tape.append((self._n, chunk))
+        noise = float(np.percentile([_rms(c) for c in recent], 20))
+        loud = _rms(chunk) > max(noise * 2.2, 220.0)
+        quiet_before, self._quiet_for = self._quiet_for, 0.0 if loud else self._quiet_for + step
+        if self._utter_from is None:
+            if loud and quiet_before >= .35:   # the start of something new, after a pause
+                self._utter_from = self._n - 3   # with the moment before, so the first sound is whole
+            return
+        length = (self._n - self._utter_from + 1) * step
+        if self._quiet_for >= .4 or length >= 2.5:
+            start, self._utter_from = self._utter_from, None
+            if length - self._quiet_for >= .3:   # a word, not a click
+                try:
+                    self._to_check.put_nowait((self._gen, start, np.concatenate(self.spotted_audio(start))))
+                except queue.Full:
+                    pass
+
+    def _check_names(self) -> None:
+        while True:
+            gen, start, audio = self._to_check.get()
+            try:
+                said = self._words(audio)
+            except Exception:
+                log.debug("couldn't check for his name", exc_info=True)
+                continue
+            if gen == self._gen and NAME_FIRST.search(said) and not self._active.is_set():
+                log.info("Heard his name on its own.")
+                self._spotted = start
+
+    def _record(self, pre_roll: list[np.ndarray], noise: float, spoke: bool = False) -> np.ndarray:
         """Collect audio until the speaker has been quiet for silence_seconds, emitting live partial
         transcriptions (word-by-word feel) while they talk. Stops early if cancelled or the mic changes."""
         silence_stop = settings["silence_seconds"]
@@ -329,7 +437,7 @@ class VoiceListener:
         no_speech = settings["no_speech_seconds"]
         speech_level = max(noise * 2.2, 280.0)   # a bit lower, so softer speech still registers
         chunks = list(pre_roll)
-        heard_speech, quiet, total = False, 0.0, 0.0
+        heard_speech, quiet, total = spoke, 0.0, 0.0   # spoke: the pre-roll already has you talking in it
         step = CHUNK / RATE
         last_partial, busy = 0.0, [False]
 
