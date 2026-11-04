@@ -64,6 +64,7 @@
 | 🔵 **Voice mode** | A glowing orb, or a 3D head, that listens, thinks and talks back. Hands-free, like a phone call. |
 | 🗣️ **Siri** | “Hey Siri, Ask Jarvis” works too, and so does the Share button in any app. |
 | 🌐 **Website jobs, out of sight** | Checking Windy, sending an Instagram message, filling in a form: done in his own hidden browser, so your screen and mouse stay yours. |
+| 🏫 **Your school diary** | Grades, homework, the timetable and absences from Shkolo, in Bulgarian or English, and a message when a new grade comes in. |
 | 🔔 **Messages you first** | A morning briefing, an evening recap, reminders, scheduled tasks, and a heads-up when an important email arrives. |
 | 📄 **Finds your files** | “Send me the PDF I downloaded yesterday” lands on your phone in a second. |
 | 🧠 **Remembers** | What you talked about, and the facts you tell him (“remember that Ana's email is…”). |
@@ -148,6 +149,9 @@ The first start downloads the speech models (a few hundred MB, plus about 1.6 GB
 | | “What's using all the space on my D: drive?” | Shows the biggest folders and what's safe to clean |
 | **Websites** | “What's the wind like in Botevgrad on Windy?” | Checks the site in his hidden browser and tells you |
 | | “Send Ana a message on Instagram that I'm on my way” | Sends it, without touching your screen |
+| **School** | “Какви оценки имам?” / “What are my grades?” | Your grades this term from Shkolo, the average and the latest one |
+| | “Какви часове имам утре?” / “What classes do I have tomorrow?” | Tomorrow's lessons, times and rooms (holidays too) |
+| | “Имам ли домашно?” / “Колко отсъствия имам?” | Recent homework, or your absences and which are unexcused |
 | **Email** | “Check my email” | Unread mail, sorted into important and not important |
 | | “Reply to Anna and say I'll be there” | Writes the reply and sends it |
 | **Time** | “Remind me in 20 minutes to take the pizza out” | A reminder on your phone and PC |

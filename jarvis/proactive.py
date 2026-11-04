@@ -230,6 +230,14 @@ def _check_mail() -> None:
              + "\n".join(f"- {who(m)}: {m['subject']}" for m in important[:5]))
 
 
+def _school_news() -> None:
+    """New grades, homework or absences in Shkolo: one message (it reads ~10 s, so off the loop's thread)."""
+    from . import shkolo
+    lines = shkolo.news()
+    if lines:
+        _say("\n".join(lines))
+
+
 def _due(now: dt.datetime, switch: str, at: str, default: str, done_key: str) -> bool:
     """Once a day at the time in `at`, while `switch` is on. Up to 3 hours late (the PC was off), never later."""
     if not settings.get(switch, True) or _state.get(done_key) == now.date().isoformat():
@@ -296,6 +304,13 @@ def _loop() -> None:
             log.exception("Evening recap failed")
         if level() == "off":
             continue
+        try:
+            from . import shkolo
+            if shkolo.check_due(now):
+                shkolo.mark_checked()
+                threading.Thread(target=_school_news, daemon=True, name="shkolo").start()
+        except Exception:
+            log.exception("Checking Shkolo failed")
         if time.time() >= next_mail and settings.get("email_address"):
             try:
                 _check_mail()

@@ -77,6 +77,23 @@ TOOLS = [
         },
     },
     {
+        "name": "school",
+        "description": "The user's school e-diary (Shkolo, app.shkolo.bg), read live in your hidden browser where "
+                       "they're logged in: grades per subject (with the term grade and the average), homework, "
+                       "the timetable for a day (lessons, times, rooms, teachers, holidays) and absences. Use it for "
+                       "anything about school: grades/оценки, homework/домашни, timetable/програма/часове, "
+                       "absences/отсъствия. If it says logged out, use open_login_window with https://app.shkolo.bg/.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "what": {"type": "string", "enum": ["grades", "homework", "timetable", "absences", "everything"]},
+                "day": {"type": "string", "description": "for the timetable: today, tomorrow or YYYY-MM-DD"},
+                "subject": {"type": "string", "description": "for grades: only this subject (part of its name)"},
+            },
+            "required": ["what"],
+        },
+    },
+    {
         "name": "list_windows",
         "description": "List open windows with their id, app, title and current monitor.",
         "input_schema": {"type": "object", "properties": {}},
@@ -697,6 +714,9 @@ def run(name: str, args: dict) -> str:
     if name == "open_login_window":
         from .hidden_browser import login_window
         return login_window(args.get("url", ""))
+    if name == "school":
+        from . import shkolo
+        return shkolo.tool(args)
     if name == "list_windows":
         return "\n".join(w.describe() for w in win.list_windows()) or "No windows open."
     if name == "arrange_windows":

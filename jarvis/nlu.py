@@ -458,6 +458,83 @@ def _find_file(m, text):
 
 # ---------------------------------------------------------------- entry point
 
+# ---------------------------------------------------------------- school (Shkolo): straight from the diary
+
+_DAY_WORDS = {"днес": 0, "today": 0, "утре": 1, "tomorrow": 1}
+_WEEKDAYS = {name: i for i, names in enumerate([
+    ("понеделник", "monday"), ("вторник", "tuesday"), ("сряда", "wednesday"), ("четвъртък", "thursday"),
+    ("петък", "friday"), ("събота", "saturday"), ("неделя", "sunday")]) for name in names}
+_WHEN = r"(\s+(за\s+|в\s+|on\s+|for\s+)?(?P<when>днес|утре|today|tomorrow|понеделник|вторник|сряда|четвъртък|петък|" \
+        r"събота|неделя|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?"
+
+
+def _school_day(m) -> "dt.date":
+    import datetime as dt
+    word = (m.groupdict().get("when") or "днес").lower()
+    today = dt.date.today()
+    if word in _DAY_WORDS:
+        return today + dt.timedelta(days=_DAY_WORDS[word])
+    return today + dt.timedelta(days=(_WEEKDAYS[word] - today.weekday()) % 7)
+
+
+def _school_ready() -> bool:
+    from . import shkolo
+    return shkolo.enabled()
+
+
+@simple(r"^((покажи|кажи|дай)( ми)? )?(какви |кои )?(са )?(ми |моите )?оценки(те)?( ми)?( имам)?"
+        r"( по (?P<subj>[^?.!]{2,40}))?[?.!]*$"
+        r"|^((show|tell|give) me )?(what are |what're )?(my )?(grades|marks)( in (?P<subj2>[^?.!]{2,40}))?( please)?[?.!]*$"
+        r"|^what (grades|marks) do i have( in (?P<subj3>[^?.!]{2,40}))?[?.!]*$|^how am i doing (at|in) school[?.!]*$")
+def _grades(m, text):
+    if not _school_ready():
+        return None
+    from . import shkolo
+    return shkolo.grades_text(text, (m.group("subj") or m.group("subj2") or m.group("subj3") or "").strip())
+
+
+@simple(r"^((какво|какви|имам ли|кажи ми|покажи ми|дай ми)\s+)?((е|са|ми|имам|за)\s+)*(някакв[ои]\s+)?"
+        r"домашн(о|и|ото|ите)( работа)?( ми)?" + _WHEN + r"[?.!]*$")
+@simple(r"^((what('s| is| are)|do i have|show me|tell me|any)\s+)?((any|my|the)\s+)*homework( do i have)?"
+        + _WHEN + r"( please)?[?.!]*$")
+@simple(r"^what homework do i have" + _WHEN + r"[?.!]*$")
+def _homework(m, text):
+    if not _school_ready():
+        return None
+    from . import shkolo
+    return shkolo.homework_text(text)
+
+
+@simple(r"^((какви|колко|кои)\s+)?(часове|часа)(\s+имам)?" + _WHEN + r"[?.!]*$")
+@simple(r"^((каква е|покажи( ми)?|кажи( ми)?)\s+)?(програмата|програма|разписанието|разписание)(\s+ми)?"
+        + _WHEN + r"[?.!]*$")
+@simple(r"^какво имам" + _WHEN + r"( в училище)?[?.!]*$")
+@simple(r"^((what('s| is)|show me|tell me)\s+)?(my\s+)?(timetable|classes|lessons)" + _WHEN + r"( please)?[?.!]*$")
+@simple(r"^what (classes|lessons) do i have" + _WHEN + r"[?.!]*$")
+def _timetable(m, text):
+    if not _school_ready():
+        return None
+    from . import shkolo
+    return shkolo.timetable_text(text, _school_day(m))
+
+
+@simple(r"^((колко|какви)\s+)?(отсъствия(та)?)(\s+имам)?(\s+ми)?[?.!]*$"
+        r"|^((how many|what are)\s+)?(my\s+)?absences( do i have)?[?.!]*$")
+def _absences(m, text):
+    if not _school_ready():
+        return None
+    from . import shkolo
+    return shkolo.absences_text(text)
+
+
+@simple(r"^(влез|логни се|log ?in|sign in)\s+(в|във|to|into)\s+(shkolo|школо)[?.!]*$")
+def _shkolo_login(m, text):
+    from . import hidden_browser, shkolo
+    hidden_browser.login_window(shkolo.LOGIN_URL)
+    return ("Отворих браузъра си на app.shkolo.bg. Влез сам и после затвори прозореца." if shkolo._bg(text) else
+            "I've opened my browser at app.shkolo.bg. Log in there yourself, then close the window.")
+
+
 def try_handle(text: str, progress=None) -> str | None:
     cmd = clean(text)
     if not cmd:

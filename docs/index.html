@@ -1342,9 +1342,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-04.2";   // bump together with version.json
+const VERSION = "2026-11-04.3";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv39", when: "Nov 4, 2026", title: "Your school diary", notes: [
+    "Jarvis reads Shkolo for you: “Какви оценки имам?”, “Какви часове имам утре?”, “Имам ли домашно?”, “Колко отсъствия имам?” (or in English).",
+    "The morning briefing has today's lessons, the evening recap tomorrow's, and you get a message when there's a new grade or homework.",
+    "Log in once: say “log in to Shkolo” and log in yourself in his browser.",
+  ]},
   { v: "JNIv38", when: "Nov 4, 2026", title: "More free brains", notes: [
     "Gemini is always the newest Flash model your key can use, and the next one down when that's busy or out of today's free uses.",
     "New: the free models from OpenRouter (a free key, run.bat --keys on the PC). DeepSeek whenever it's free there, otherwise the strongest free model, like NVIDIA's Nemotron 3 Ultra.",

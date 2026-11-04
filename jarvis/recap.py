@@ -53,11 +53,19 @@ def _tomorrow(day: dt.date) -> str | None:
     return "📅 Tomorrow: " + "; ".join(things) + "." if things else None
 
 
+def _school(day: dt.date) -> str | None:
+    try:
+        from . import shkolo
+        return shkolo.tomorrow_line(day)
+    except Exception:
+        return None
+
+
 def compose(now: dt.datetime | None = None) -> str:
     now = now or dt.datetime.now()
     today, tomorrow = now.date(), now.date() + dt.timedelta(days=1)
     lines = [f"🌙 Your {now:%A}, {now.day} {now:%B}."]
-    for part in (_did(today), _apps(today), _tomorrow(tomorrow), briefing.forecast(1)):
+    for part in (_did(today), _apps(today), _tomorrow(tomorrow), _school(tomorrow), briefing.forecast(1)):
         if part:
             lines.append(part)
     lines.append("Tomorrow's the weekend. Sleep in." if tomorrow.weekday() == 5 else "Good night.")

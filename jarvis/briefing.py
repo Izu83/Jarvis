@@ -311,6 +311,13 @@ def compose(now: dt.datetime | None = None) -> str:
     rem = reminders(day)
     if rem:
         lines.append("⏰ " + "; ".join(rem))
+    try:
+        from . import shkolo
+        school = shkolo.briefing_line(day)
+        if school:
+            lines.append(school)
+    except Exception:
+        log.debug("couldn't add the timetable", exc_info=True)
     mail_line = email_line()
     if mail_line:
         lines.append(f"📬 {mail_line}")

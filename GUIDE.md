@@ -385,6 +385,28 @@ than words ("Кой сити" for "Кой си ти"). Without a usable graphics
 command counts as English only when Whisper is sure it's English, otherwise Bulgarian. Replies written in Cyrillic
 are spoken with `edge_voice_bg` (bg-BG-KalinaNeural). Phone dictation follows the same setting.
 
+## School: your Shkolo e-diary
+
+Jarvis reads your Shkolo diary (app.shkolo.bg) in his hidden browser: grades per subject (the term grade and the
+average), homework, this week's and next week's timetable (times, rooms, teachers, holidays) and absences. Log in
+once: say "log in to Shkolo" (or tray › **Log in to a site for Jarvis…** and go to app.shkolo.bg), log in yourself
+and close the window.
+
+- Ask in Bulgarian or English: "Какви оценки имам?", "Какви часове имам утре?", "Програмата за петък", "Имам ли
+  домашно?", "Колко отсъствия имам?", "What are my grades?", "What classes do I have tomorrow?". Those wordings are
+  answered straight from the diary, with no AI; anything else about school goes to a brain, which uses the `school`
+  tool.
+- The morning briefing has today's lessons, and the evening recap tomorrow's (or "No school tomorrow: Есенна
+  ваканция").
+- Every 2 hours from 7:00 to 21:00 he looks for anything new and messages you: "📚 Нова оценка: 6 по Математика
+  (Контролна, 04.11)", new homework, more absences. `shkolo_alerts: false` turns that off; `shkolo: false` turns all
+  of it off.
+
+`jarvis/shkolo_read.js` does the reading (Playwright with the hidden browser's profile, about 10 seconds); it only
+opens pages and reads them, never changes anything. `jarvis/shkolo.py` keeps a reading for 20 minutes (in
+`.brain/shkolo.json`, with what's been seen, so news is only news once) and puts it into words. If Shkolo logs him
+out, he tells you once.
+
 ## Website jobs in a hidden browser
 
 Checking Windy, sending an Instagram message, filling in a form: Jarvis does these in his own hidden Chrome
@@ -542,6 +564,7 @@ a notification first).
 | `jarvis/voice.py`, `speak.py` | Wake word, recording and transcription (also for the phone's Voice mode); spoken replies |
 | `jarvis/overlay.py`, `tray.py`, `hotkey.py` | The pop-up, the tray icon and the talk shortcut |
 | `jarvis/hidden_browser.py` | Jarvis's own hidden Chrome for website jobs, and its log-in window |
+| `jarvis/shkolo.py`, `shkolo_read.js` | Your Shkolo e-diary: grades, homework, timetable, absences, and news about them |
 | `jarvis/location.py` | Where you are: the device's GPS position as an address, for the model |
 | `jarvis/router.py`, `cloud.py` | Picking the model for each message; Gemini, ChatGPT and Grok through their APIs |
 | `jarvis/desktop.py` | The desktop app: the page in a window, connected to Jarvis on this PC, and its shortcuts |

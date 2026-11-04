@@ -63,6 +63,10 @@ DEFAULTS = {
     "gemini_price": [0, 0],
     # OpenRouter's free models (a free key from openrouter.ai, run.bat --keys): DeepSeek whenever one of its models is
     # free there, otherwise the strongest free ones. "" = picked for you; a name = try that one first.
+    # Your Shkolo e-diary (shkolo.py): grades, homework, timetable, absences, read in the hidden browser once you've
+    # logged in there ("log in to Shkolo"). shkolo_alerts: a message when there's a new grade, homework or absence.
+    "shkolo": True,
+    "shkolo_alerts": True,
     "use_openrouter": True,
     "openrouter_model": "",
     "openrouter_price": [0, 0],

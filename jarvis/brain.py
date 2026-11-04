@@ -149,6 +149,9 @@ STEP_LABELS = {
     "find_folder": lambda a: f"Looking for “{a.get('name', '')}”…",
     "open_target": lambda a: "Opening it…",
     "open_login_window": lambda a: "Opening my browser for you to log in…",
+    "school": lambda a: {"grades": "Checking your grades in Shkolo…", "homework": "Checking your homework in Shkolo…",
+                         "timetable": "Checking your timetable in Shkolo…", "absences": "Checking your absences…"}.get(
+                             a.get("what"), "Opening Shkolo…"),
     "list_windows": lambda a: "Checking what's open…",
     "arrange_windows": lambda a: f"Arranging windows on monitor {a.get('monitor', '')}…",
     "window_action": lambda a: f"{str(a.get('action', '')).title()} {a.get('window', '')}…",
@@ -230,6 +233,7 @@ STEP_KINDS = {
     "Message": ("send_message", "message_user"),
     "Email": ("check_email", "read_email", "reply_email", "send_email"),
     "Memory": ("remember", "forget"),
+    "School": ("school",),
     "Web": ("WebSearch", "WebFetch"),
 }
 # the hidden browser (hidden_browser.py): what each of its actions looks like on the phone
