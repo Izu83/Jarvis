@@ -134,6 +134,17 @@
 .row.dev .dev-pick { text-align: left; min-height: 50px; display: flex; flex-direction: column; justify-content: center; }
 .row.dev .dev-act { font-size: 14px; color: var(--blue); padding: 6px 2px; }
 .row.dev .dev-act.danger { color: var(--red); }
+.add-how { margin: 2px 22px 16px; color: var(--label2); font-size: 15px; line-height: 20px; }
+.add-how b { color: var(--label); font-weight: 600; }
+.scan { position: relative; margin: 0 16px 14px; border-radius: 22px; overflow: hidden; background: #000; aspect-ratio: 1; }
+.scan video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan .frame { position: absolute; inset: 16%; border: 3px solid rgba(255,255,255,.92); border-radius: 24px; box-shadow: 0 0 0 999px rgba(0,0,0,.32); }
+.scan .hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; color: #fff; font-size: 14px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,.7); }
+#addLink { width: 100%; border: 0; outline: 0; resize: none; background: transparent; color: var(--label); font: 16px/21px ui-monospace, "SF Mono", Menlo, monospace; padding: 12px 0; min-height: 84px; word-break: break-all; }
+.add-msg { margin: 10px 22px 14px; min-height: 20px; font-size: 14px; line-height: 19px; color: var(--label2); }
+.add-msg.ok { color: var(--green); }
+.add-msg.bad { color: var(--red); }
+#addGo:disabled { opacity: .4; }
   .swatches { display: flex; gap: 11px; flex-wrap: wrap; }
   .swatch { position: relative; flex: none; cursor: pointer; box-shadow: inset 0 0 0 1px var(--rim-lo); transition: transform .35s var(--spring), box-shadow .25s var(--ease); }
   .swatch:not(.acc) { width: 54px; height: 54px; border-radius: 16px; }
@@ -1239,6 +1250,26 @@
   </div>
 </div>
 
+<!-- Add a Computer: scan the other computer's QR code right here (no clipboard), or paste its link -->
+<div class="sheet-wrap" id="addSheet" hidden>
+  <div class="sheet glass strong" role="dialog" aria-label="Add a computer">
+    <div class="grabber"></div>
+    <div class="sheet-head"><span style="width:32px"></span><h3>Add a Computer</h3><button class="x-btn press" id="addClose" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-body" style="padding-bottom:24px">
+      <p class="add-how">On the other computer (your laptop), right-click the Jarvis icon in the taskbar tray › <b>Pair your phone</b>. Then scan the code it shows.</p>
+      <div class="scan" id="scanBox" hidden><video id="scanVideo" playsinline muted autoplay></video><div class="frame"></div><div class="hint">Point at the QR code</div></div>
+      <div class="group"><button class="row btn" id="scanBtn">Scan Its QR Code</button></div>
+      <div class="group-title">Or paste its pairing link</div>
+      <div class="group">
+        <div class="row"><textarea id="addLink" placeholder="https://…#t=…&amp;k=…" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea></div>
+        <button class="row btn" id="addPaste">Paste</button>
+      </div>
+      <div class="add-msg" id="addMsg"></div>
+      <div class="group"><button class="row btn" id="addGo" disabled>Add Computer</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- What's New sheet (from the version badge) -->
 <div class="sheet-wrap" id="newsSheet" hidden>
   <div class="sheet glass strong tall" role="dialog" aria-label="What's New">
@@ -1356,9 +1387,13 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-05.1";   // bump together with version.json
+const VERSION = "2026-11-05.2";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv41", when: "Nov 5, 2026", title: "Scan to add a computer", notes: [
+    "Settings › Your computers › Add a Computer now scans the other computer's QR code right in Jarvis. No copying and pasting.",
+    "Pasting still works, and it says why when a link won't do (like your PC's own link).",
+  ]},
   { v: "JNIv40", when: "Nov 5, 2026", title: "Your PC and your laptop", notes: [
     "Jarvis can run on more than one computer. Pair your laptop too, then pick which one you're talking to at the top of Control Center (the computer tab).",
     "Each computer keeps its own chats, and the tab shows which one you're on.",
@@ -3242,6 +3277,7 @@ function hideAnimated(el, done) {   // play the closing animation, then hide
   setTimeout(end, 420);
 }
 function closeSheets() {
+  Scanner.stop();
   const fromPc = $("widget").closest("#pcSheet");
   document.querySelectorAll(".sheet-wrap[id]").forEach(s => hideAnimated(s, () => {
     if (s.id === "pcSheet" && fromPc && $("widget").closest("#pcSheet")) ($("home") || $("park")).append($("widget"));
@@ -5059,10 +5095,98 @@ function renameDevice() {
   if (!name) return;
   post({ type: "set", key: "device_name", value: name, id: newId() }).then(() => toast("Renamed", "check"), () => toast("Can't reach it right now.", "x", "var(--red)"));
 }
-function addDevice() {
-  if (!confirm("Add another computer (like your laptop)?\n\n1. Start Jarvis on it.\n2. Right-click its tray icon › Pair your phone and copy the link.\n3. Come back here and tap OK.")) return;
-  relink();
-}
+function addDevice() { AddPc.open(); }
+
+// ================= adding a computer: scan its QR code here, or paste its link =================
+// Scanning needs no clipboard: iOS often won't hand a link copied from the Camera to a web page as text, and the
+// clipboard may still hold this computer's own old link. Every outcome says what happened.
+const AddPc = {
+  p: null,
+  open() { $("addLink").value = ""; this.check(); openSheet("addSheet"); },
+  close() { Scanner.stop(); hideAnimated($("addSheet")); },
+  say(text, cls = "") { $("addMsg").textContent = text; $("addMsg").className = "add-msg " + cls; },
+  check() {
+    const text = $("addLink").value.trim(), p = parsePairing(text);
+    const known = p && Devices.list.find(d => d.id === p.topic);
+    this.p = null;
+    if (!text) this.say("");
+    else if (!p) this.say("That isn't a pairing link. It's the long link under the QR code, with #t= in it.", "bad");
+    else if (known && known === Devices.active) this.say(`That's the link for ${Devices.name(known)}, the computer you're on now. Use the code from the other computer.`, "bad");
+    else { this.p = p; this.say(known ? `${Devices.name(known)} is already added.` : `Found ${p.name || (p.kind === "laptop" ? "a laptop" : "a computer")}.`, "ok"); }
+    $("addGo").disabled = !this.p;
+    $("addGo").textContent = known && this.p ? "Switch to It" : "Add Computer";
+  },
+  async paste() {
+    let text = "";
+    try { text = await navigator.clipboard.readText(); } catch {}
+    if (!text.trim()) {
+      this.say("Your iPhone didn't hand over the link. Press and hold in the box above, then tap Paste. Or scan the QR code.", "bad");
+      $("addLink").focus(); return;
+    }
+    $("addLink").value = text.trim(); this.check();
+  },
+  async go() {
+    const p = this.p;
+    if (!p) return;
+    try { await crypto.subtle.importKey("raw", b64d(p.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
+    catch { this.say("That link is damaged. Copy it again.", "bad"); return; }
+    Scanner.stop();
+    this.say(`Adding ${p.name || "it"}…`, "ok");
+    Devices.use(Devices.add(p));   // a fresh start on that computer, with its own chats
+  },
+};
+const Scanner = {
+  stream: null, timer: null,
+  async start() {
+    if (this.stream) { this.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { AddPc.say("The camera can't be used here. Paste the link instead.", "bad"); return; }
+    $("scanBtn").textContent = "Starting the Camera…";
+    try {
+      if (!window.jsQR) await new Promise((ok, no) => {   // the QR reader, only when you scan
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"; s.onload = ok; s.onerror = no;
+        document.head.append(s);
+      });
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
+    } catch (e) {
+      this.stop();
+      AddPc.say(e?.name === "NotAllowedError" ? "Jarvis isn't allowed to use the camera. Allow it when asked (or in iPhone Settings › Safari › Camera), or paste the link." : "Couldn't start the camera. Paste the link instead.", "bad");
+      return;
+    }
+    const v = $("scanVideo");
+    v.srcObject = this.stream; $("scanBox").hidden = false; $("scanBtn").textContent = "Stop Scanning";
+    AddPc.say("");
+    try { await v.play(); } catch {}
+    const c = document.createElement("canvas"), ctx = c.getContext("2d", { willReadFrequently: true });
+    const tick = () => {
+      if (!this.stream) return;
+      if (v.videoWidth) {   // the middle square of the picture, at most 800 px: enough for the dense pairing code
+        const side = Math.min(v.videoWidth, v.videoHeight), n = Math.min(side, 800);
+        c.width = c.height = n;
+        ctx.drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, n, n);
+        const code = window.jsQR(ctx.getImageData(0, 0, n, n).data, n, n, { inversionAttempts: "attemptBoth" });
+        if (code?.data) {
+          $("addLink").value = code.data; AddPc.check();
+          if (parsePairing(code.data)) { navigator.vibrate?.(30); this.stop(); if (AddPc.p) AddPc.go(); return; }
+        }
+      }
+      this.timer = setTimeout(tick, 150);
+    };
+    tick();
+  },
+  stop() {
+    clearTimeout(this.timer);
+    this.stream?.getTracks().forEach(t => t.stop());
+    this.stream = null;
+    $("scanVideo").srcObject = null; $("scanBox").hidden = true; $("scanBtn").textContent = "Scan Its QR Code";
+  },
+};
+$("scanBtn").onclick = () => Scanner.start();
+$("addPaste").onclick = () => AddPc.paste();
+$("addLink").oninput = () => AddPc.check();
+$("addGo").onclick = () => AddPc.go();
+$("addClose").onclick = () => AddPc.close();
+document.addEventListener("visibilitychange", () => { if (document.hidden) Scanner.stop(); });
 function showLost() {
   if ($("lostCard")) return;
   const card = document.createElement("div");

@@ -569,8 +569,8 @@ class SetupForm : Form
         Panel(g, 32, 280, 456, 262);
         Str(g, "Connect your phone", fBold, Ink, 52, 298);
         string[] lines = {
-            "A window with a QR code just opened. Point your iPhone camera at it.",
-            "Jarvis in Safari: tap the link. On the Home Screen: long-press it, Copy Link, then in Jarvis open Settings, Your computers, Add a Computer.",
+            "A window with a QR code just opened on this computer.",
+            "In Jarvis on your iPhone: Settings, Your computers, Add a Computer, then Scan Its QR Code and point it at that code.",
             "Pick which computer you're talking to at the top of Control Center (the computer tab).",
         };
         float[] ys = { 334, 390, 462 };

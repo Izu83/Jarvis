@@ -223,10 +223,8 @@ Say "done" $Folder
 if (-not $Gui) {
     Write-Host ""
     Write-Host "   Last step, on your iPhone:" -ForegroundColor Cyan
-    Write-Host "   - Point the Camera at the QR code that just opened."
-    Write-Host "   - Jarvis in Safari: tap the link. It adds this computer."
-    Write-Host "   - Jarvis on the Home Screen: long-press the link > Copy Link, then in Jarvis:"
-    Write-Host "     Settings > Your computers > Add a Computer."
+    Write-Host "   - In Jarvis: Settings > Your computers > Add a Computer > Scan Its QR Code,"
+    Write-Host "     and point it at the QR code that just opened here."
     Write-Host "   Switch computers at the top of Control Center (the computer tab)."
     Write-Host ""
     Write-Host "   Done." -ForegroundColor Green

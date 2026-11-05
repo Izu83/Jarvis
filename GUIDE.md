@@ -66,7 +66,9 @@ The exe is built from `setup/setup.ps1` by `tools/make_setup.py`: rebuild it aft
    `run.bat --keys`. Start it with `Jarvis.vbs`. It makes its **own** pairing key the first time, so the two
    computers never share one.
 2. Right-click the laptop's tray icon › **Pair your phone**, copy the link.
-3. On the phone: **Settings › Your computers › Add a Computer** (it reads the link from the clipboard).
+3. On the phone: **Settings › Your computers › Add a Computer › Scan Its QR Code** and point it at the code (or paste
+   the link into the box there). Scanning needs no clipboard: iOS often won't hand a link copied from the Camera
+   to a web page.
 
 Then pick which one you're talking to at the top of **Control Center** (the computer tab) or in Settings › Your
 computers. The tab shows the one you're on. Each computer keeps its own chats on the phone, because each Jarvis has
