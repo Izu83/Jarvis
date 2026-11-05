@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#04070d" media="(prefers-color-scheme: dark)">
+<title>Download Jarvis</title>
+<link rel="icon" href="../favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --dim: #6e6e73; --line: rgb(0 0 0 / .09);
+    --accent: #0071e3; --accent-text: #fff; --glow: 0 113 227; --ok: #248a3d;
+    --ios: cubic-bezier(.25, 1, .5, 1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #04070d; --card: #11141c; --text: #f5f5f7; --dim: #9a9aa3; --line: rgb(255 255 255 / .1);
+            --accent: #2997ff; --glow: 70 215 255; --ok: #30d158; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 17px/1.47 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left));
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 64px 0 48px; }
+
+  .hero { text-align: center; position: relative; }
+  .hero::before {   /* the orb's glow behind the icon */
+    content: ""; position: absolute; left: 50%; top: 48px; width: 420px; height: 300px; max-width: 100vw;
+    transform: translate(-50%, -50%); pointer-events: none; z-index: -1;
+    background: radial-gradient(closest-side, rgb(var(--glow) / .22), rgb(var(--glow) / 0));
+  }
+  .icon { width: 104px; height: 104px; border-radius: 23px; box-shadow: 0 8px 30px rgb(0 0 0 / .25); }
+  h1 { font-size: clamp(2.2rem, 7vw, 3.5rem); line-height: 1.07; letter-spacing: -.015em; font-weight: 700; margin: 24px 0 8px; }
+  .lede { font-size: clamp(1.15rem, 3.4vw, 1.4rem); line-height: 1.3; color: var(--dim); margin: 0 auto 32px; max-width: 30ch; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 50px; padding: 0 28px; border-radius: 980px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; font-size: 17px;
+    text-decoration: none; transition: transform .18s var(--ios), filter .18s var(--ios);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(.97); transition-duration: .08s; }
+  .btn:focus-visible { outline: 3px solid rgb(var(--glow) / .6); outline-offset: 3px; }
+  .btn.plain { background: transparent; color: var(--accent); padding: 0 12px; }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .meta { color: var(--dim); font-size: 14px; margin: 12px 0 0; }
+  .elsewhere { display: none; }
+  body.mobile .here { display: none; }
+  body.mobile .elsewhere { display: block; }
+  .elsewhere p { color: var(--dim); margin: 0 auto 20px; max-width: 34ch; }
+
+  section { margin-top: 56px; }
+  h2 { font-size: 24px; line-height: 1.17; letter-spacing: .005em; font-weight: 700; margin: 0 0 16px; }
+  .card { background: var(--card); border-radius: 18px; padding: 8px 20px; border: 1px solid var(--line); }
+
+  ol.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 32px 1fr; gap: 14px; padding: 16px 0; }
+  ol.steps li + li { border-top: 1px solid var(--line); }
+  ol.steps li::before {
+    content: counter(s); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 15px; font-weight: 600; background: rgb(var(--glow) / .16); color: var(--accent); margin-top: 1px;
+  }
+  ol.steps b { display: block; font-weight: 600; }
+  ol.steps span { color: var(--dim); font-size: 15px; }
+  .path { white-space: nowrap; font-weight: 600; color: var(--text); }
+
+  ul.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  ul.list li { padding: 14px 0; display: flex; gap: 12px; align-items: baseline; border-top: 1px solid var(--line); margin-top: -1px; }
+  ul.list li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; transform: translateY(-1px); }
+  ul.list small { display: block; color: var(--dim); font-size: 14px; }
+  .note { color: var(--dim); font-size: 15px; margin: 14px 4px 0; }
+
+  footer { margin-top: 56px; text-align: center; color: var(--dim); font-size: 13px; }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 980px; font-size: 15px; font-weight: 500;
+    opacity: 0; pointer-events: none; transition: opacity .25s var(--ios), transform .35s var(--ios);
+  }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .started .next { animation: pulse 1.2s var(--ios) 1; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(var(--glow) / .45); } 100% { box-shadow: 0 0 0 14px rgb(var(--glow) / 0); } }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .toast { transition: opacity .2s ease; }
+    .btn:active { transform: none; }
+    .toast, .toast.on { transform: translate(-50%, 0); }
+    .started .next { animation: none; }
+  }
+  @media (prefers-contrast: more) { .card { border-color: var(--text); } }
+</style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <img class="icon" src="../icon-192.png" alt="" width="104" height="104">
+    <h1>Jarvis for Windows</h1>
+    <p class="lede">Put Jarvis on another computer. One installer does everything.</p>
+
+    <div class="here">
+      <a class="btn" id="get" href="../jarvis-setup.exe" download="jarvis-setup.exe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+        Download
+      </a>
+      <p class="meta" id="meta">jarvis-setup.exe · Windows 10 and 11</p>
+    </div>
+
+    <div class="elsewhere">
+      <p>The installer runs on a Windows computer. Open this page there, or send it the link.</p>
+      <button class="btn" id="share" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0L8 7m4-4 4 4M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg>
+        Send Link
+      </button>
+      <p class="meta"><a class="btn plain" href="../">Open Jarvis</a></p>
+    </div>
+  </div>
+
+  <section class="next" id="next" aria-labelledby="h-steps">
+    <h2 id="h-steps">After it downloads</h2>
+    <div class="card">
+      <ol class="steps">
+        <li><div><b>Open jarvis-setup.exe</b><span>It's in your Downloads folder.</span></div></li>
+        <li><div><b>If Windows protects your PC</b><span>The installer isn't signed, so Windows may warn you. Choose <span class="path">More info › Run anyway</span>.</span></div></li>
+        <li><div><b>Choose a folder and click Install</b><span>It suggests a drive with room. Each step shows its progress; most installs take 10 to 20 minutes.</span></div></li>
+        <li><div><b>Log in to Claude</b><span>A window opens once. Jarvis then starts by itself and shows a QR code.</span></div></li>
+        <li><div><b>Connect your iPhone</b><span>In Jarvis, open <span class="path">Settings › Your computers › Add a Computer</span> and scan the QR code.</span></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-what">
+    <h2 id="h-what">What it installs</h2>
+    <div class="card">
+      <ul class="list">
+        <li><div>Git<small>To download and update Jarvis</small></div></li>
+        <li><div>Python 3.13<small>With the Visual C++ runtime</small></div></li>
+        <li><div>Node.js<small>For the hidden browser</small></div></li>
+        <li><div>Google Chrome<small>For website jobs</small></div></li>
+        <li><div>Claude Code<small>Jarvis's brain</small></div></li>
+        <li><div>cloudflared<small>So your phone can reach him</small></div></li>
+        <li><div>Python packages<small>Voice, camera and the rest</small></div></li>
+        <li><div>Jarvis<small>Started for you at the end</small></div></li>
+      </ul>
+    </div>
+    <p class="note">Anything already there is skipped. Run it again any time to update Jarvis.</p>
+  </section>
+
+  <footer>Jarvis · <a href="https://github.com/Izu83/Jarvis">Source on GitHub</a></footer>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+                 (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (mobile) document.body.classList.add("mobile");
+
+  function toast(text) {
+    const t = document.getElementById("toast");
+    t.textContent = text; t.classList.add("on");
+    clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("on"), 2200);
+  }
+
+  // The size and date come from the file itself, so they stay right after every rebuild.
+  fetch("../jarvis-setup.exe", { method: "HEAD", cache: "no-store" }).then(r => {
+    if (!r.ok) return;
+    const bytes = +r.headers.get("content-length"), when = r.headers.get("last-modified");
+    const parts = ["jarvis-setup.exe"];
+    if (bytes) parts.push(bytes < 1048576 ? Math.round(bytes / 1024) + " KB" : (bytes / 1048576).toFixed(1) + " MB");
+    parts.push("Windows 10 and 11");
+    if (when) parts.push("Updated " + new Date(when).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }));
+    document.getElementById("meta").textContent = parts.join(" · ");
+  }).catch(() => {});
+
+  document.getElementById("get").addEventListener("click", () => {
+    document.body.classList.add("started");
+    toast("Downloading jarvis-setup.exe");
+    setTimeout(() => document.getElementById("next").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 400);
+  });
+
+  document.getElementById("share").addEventListener("click", async () => {
+    const url = location.href.split("#")[0];
+    try {
+      if (navigator.share) { await navigator.share({ title: "Download Jarvis", url }); return; }
+    } catch (e) { if (e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(url); toast("Link copied"); }
+    catch { prompt("Copy this link:", url); }
+  });
+</script>
+</body>
+</html>

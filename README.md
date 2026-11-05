@@ -186,7 +186,7 @@ The phone app is a web app on GitHub Pages ([izu83.github.io/Jarvis](https://izu
       2. Scan the code with your iPhone camera and open the link in <b>Safari</b>.<br>
       3. Tap <b>Share › Add to Home Screen</b>. Jarvis now opens like a normal app.<br><br>
       <b>Siri:</b> in the app, open <b>Settings › Siri &amp; Share</b> and follow the steps once. Then say <i>“Hey Siri, Ask Jarvis”</i>, or pick <b>Ask Jarvis</b> under any app's Share button.<br><br>
-      <b>Your laptop too:</b> run <a href="https://izu83.github.io/Jarvis/jarvis-setup.exe"><b>jarvis-setup.exe</b></a> on it (it installs everything and shows the QR code), then in the app tap <b>Settings › Your computers › Add a Computer</b> and scan the laptop's QR code. Switch between them at the top of Control Center (the computer tab). Each keeps its own chats.
+      <b>Your laptop too:</b> on it, open <a href="https://izu83.github.io/Jarvis/download/"><b>izu83.github.io/Jarvis/download</b></a> and run <b>jarvis-setup.exe</b> (it installs everything and shows the QR code), then in the app tap <b>Settings › Your computers › Add a Computer</b> and scan the laptop's QR code. Switch between them at the top of Control Center (the computer tab). Each keeps its own chats.
     </td>
   </tr>
 </table>

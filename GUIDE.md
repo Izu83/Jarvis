@@ -49,7 +49,7 @@ the page and code contain no secrets. Your key lives only in `.env` (git-ignored
 
 Jarvis can run on more than one computer, and one phone talks to all of them.
 
-**The easy way:** on the laptop, download and run **[jarvis-setup.exe](https://izu83.github.io/Jarvis/jarvis-setup.exe)**.
+**The easy way:** on the laptop, open **[izu83.github.io/Jarvis/download](https://izu83.github.io/Jarvis/download/)** and run the **jarvis-setup.exe** it downloads.
 A window lets you pick the folder (it suggests one with enough room) and the extras, then shows each step with its
 progress (**Details** shows everything it ran). It installs Git, Python 3.13 (with the Visual C++ runtime), Node.js, Google Chrome and Claude Code (through winget,
 and npm if Claude's own installer fails) if they're missing, downloads Jarvis into
