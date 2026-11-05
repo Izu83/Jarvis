@@ -87,6 +87,15 @@ if (HasPython) { Ok "Already installed" } elseif ($Check) { Todo "Would install 
     if (-not (HasPython)) { Fail "Python 3.13 didn't install." }
     Ok "Installed"
 }
+# Jarvis's speech parts (onnxruntime, ctranslate2) need Microsoft's C++ runtime. Most PCs have it from some game or
+# app; without it Jarvis would quit the moment he starts, without a word.
+$vcrt = Test-Path (Join-Path $env:WINDIR "System32\msvcp140.dll")
+if (-not $vcrt) {
+    if ($Check) { Todo "Would install the Microsoft Visual C++ runtime" } else {
+        Winget "Microsoft.VCRedist.2015+.x64" "the Microsoft Visual C++ runtime"
+        Ok "Installed, with the Visual C++ runtime"
+    }
+}
 
 Step 3 "Claude Code"
 if (Has "claude") { Ok "Already installed" } elseif ($Check) { Todo "Would install Claude Code" } else {
@@ -203,20 +212,34 @@ if ($Check) { Todo "Would offer: free AI keys, start at login, a Desktop shortcu
 Step 10 "Start Jarvis"
 if ($Check) { Todo "Would start Jarvis and open the 'Pair your phone' window"; exit 0 }
 $log = Join-Path $Folder "jarvis.log"
+# First: can he start at all? A missing DLL would otherwise only show as "nothing happens".
+Info "Checking that Jarvis can start..."
+$probe = @(Run $Py -c "import onnxruntime, ctranslate2, sounddevice, websockets, cryptography, jarvis.remote; print('jarvis-ok')")
+if (-not ($probe -contains "jarvis-ok")) {   # a line of its own: an error message quotes the command too
+    $why = ($probe | Where-Object { $_ -match "Error|error" } | Select-Object -Last 1)
+    Fail "Jarvis can't start: $(if ($why) { $why } else { $probe[-1] })"
+}
 $before = if (Test-Path $log) { (Get-Content $log).Count } else { 0 }
 Start-Process wscript.exe -ArgumentList "`"$(Join-Path $Folder 'Jarvis.vbs')`""
 Info "Starting. The first time he downloads his speech models (a few hundred MB)..."
-$ready = $false
-for ($i = 0; $i -lt 150 -and -not $ready; $i++) {
+# Ready means the phone can reach him: the tunnel is up and its address went out ("Told your phone").
+$state = ""
+for ($i = 0; $i -lt 150 -and -not $state; $i++) {
     Start-Sleep -Seconds 2
-    if (Test-Path $log) {
-        $new = @(Get-Content $log | Select-Object -Skip $before)
-        $ready = [bool]($new | Select-String "Told your phone|Phone server on")
-        if (-not $ready -and $new.Count) { $last = $new[-1] -replace '^\d\d:\d\d:\d\d \S+: ', ''; if ($last.Length -gt 90) { $last = $last.Substring(0, 90) + "..." }; Info $last }
-    }
+    $new = @(if (Test-Path $log) { Get-Content $log | Select-Object -Skip $before })
+    if ($new -match "Told your phone the new address|already running") { $state = "ready" }
+    elseif ($new -match "cloudflared isn't installed|cloudflared didn't give an address") { $state = "tunnel" }
+    elseif ($new -match "Couldn't (post|announce|tell)") { $state = "relay" }
+    elseif ($i -ge 10 -and -not (Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -match '-m jarvis\s*$' })) { $state = "died" }
+    elseif ($new.Count) { $last = $new[-1] -replace '^\d\d:\d\d:\d\d \S+: ', ''; if ($last.Length -gt 90) { $last = $last.Substring(0, 90) + "..." }; Info $last }
 }
-if ($ready) { Start-Sleep -Seconds 5; Ok "Running. His icon is under the ^ arrow in the taskbar" }
-else { Ok "Still starting. His icon appears under the ^ arrow in the taskbar when he's ready" }
+switch ($state) {
+    "ready"  { Ok "Running, and your phone can reach him. His icon is under the ^ arrow in the taskbar" }
+    "tunnel" { Fail "Jarvis runs, but his connection for the phone (cloudflared) didn't start. Run setup again; if it keeps failing, a firewall or antivirus may be blocking cloudflared.exe." }
+    "relay"  { Fail "Jarvis runs, but couldn't send his address to your phone (the relay didn't answer). Check the internet connection, then right-click his tray icon > Restart." }
+    "died"   { Fail "Jarvis stopped right after starting. In $Folder run 'run.bat --console' to see why." }
+    default  { Ok "Still starting. When his icon shows under the ^ arrow in the taskbar, your phone can find him" }
+}
 Start-Process $Pyw -ArgumentList "-m jarvis.pairing" -WorkingDirectory $Folder
 Say "done" $Folder
 
