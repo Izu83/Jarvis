@@ -24,6 +24,7 @@ send2trash
 pywebpush
 py-vapid
 mss
+opencv-python-headless>=4.10,<5   # webcam photos (camera.py)
 icalendar
 recurring-ical-events
 pywebview

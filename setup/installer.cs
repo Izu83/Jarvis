@@ -39,8 +39,10 @@ class SetupForm : Form
     static readonly Color Bg = C("0A101C"), Card = C("121A2B"), Edge = C("1E2A40"), Hi = C("17223A"), HoverCard = C("1A2640"),
         Ink = C("EAF2FF"), Sub = C("8FA0BA"), Dim = C("56647D"), Accent = C("5FE3FF"), AccentHover = C("8BEBFF"),
         OnAccent = C("03141C"), Green = C("4ADE80"), Red = C("F87171"), Amber = C("FBBF24"), Off = C("2A3550");
-    static readonly string[] Titles = { "Git", "Python 3.13", "Claude Code", "Download Jarvis", "Python packages",
-        "Tunnel for your phone", "Settings", "Log in to Claude", "Extras", "Start Jarvis" };
+    static readonly string[] Titles = { "Git", "Python 3.13", "Node.js and Chrome", "Claude Code", "Download Jarvis",
+        "Python packages", "Hidden browser", "Tunnel for your phone", "Settings", "Log in to Claude", "Extras", "Start Jarvis" };
+    const int N = 12;          // steps (setup.ps1 has the same list)
+    const float ROW = 36, BY = 640;   // a step's height; where the buttons sit
     // the lines worth showing under a step while it works (pip, git)
     static readonly Regex Live = new Regex(@"^\s*(Collecting|Downloading|Installing collected|Building|Successfully installed|" +
         @"Requirement already satisfied|Receiving objects|Resolving deltas|Cloning|Updating|Fast-forward|Already up to date)",
@@ -53,7 +55,7 @@ class SetupForm : Form
     double freeGb, needGb;
     int cur;
     float spin;
-    readonly StepInfo[] steps = new StepInfo[10];
+    readonly StepInfo[] steps = new StepInfo[N];
     readonly List<Hit> hits = new List<Hit>();
     Process proc;
     readonly TextBox log;
@@ -71,7 +73,7 @@ class SetupForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.None;
-        ClientSize = new Size(D(520), D(700));
+        ClientSize = new Size(D(520), D(716));
         KeyPreview = true;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
@@ -82,13 +84,13 @@ class SetupForm : Form
         fBody = new Font("Segoe UI", 14 * S, GraphicsUnit.Pixel);
         fBold = new Font("Segoe UI Semibold", 14 * S, GraphicsUnit.Pixel);
         fSmall = new Font("Segoe UI", 13 * S, GraphicsUnit.Pixel);
-        for (int i = 0; i < 10; i++) steps[i] = new StepInfo { Title = Titles[i] };
+        for (int i = 0; i < N; i++) steps[i] = new StepInfo { Title = Titles[i] };
 
         log = new TextBox();
         log.Multiline = true; log.ReadOnly = true; log.ScrollBars = ScrollBars.Vertical; log.WordWrap = true;
         log.BorderStyle = BorderStyle.None; log.BackColor = Card; log.ForeColor = Sub;
         log.Font = new Font("Consolas", 12 * S, GraphicsUnit.Pixel);
-        log.Bounds = Rectangle.Round(R(48, 126, 424, 404));
+        log.Bounds = Rectangle.Round(R(48, 126, 424, 418));
         log.Visible = false;
         Controls.Add(log);
 
@@ -106,10 +108,10 @@ class SetupForm : Form
             if (args[pv + 1] == "done") page = "done";
             else
             {
-                page = "run"; exited = true; cur = 5;
-                for (int i = 0; i < 4; i++) { steps[i].State = DONE; steps[i].Sub = "Already installed"; }
+                page = "run"; exited = true; cur = 6;
+                for (int i = 0; i < 5; i++) { steps[i].State = DONE; steps[i].Sub = "Already installed"; }
                 failText = "Installing the packages failed. Details shows why.";
-                steps[4].State = FAILED; steps[4].Sub = failText;
+                steps[5].State = FAILED; steps[5].Sub = failText;
             }
         }
     }
@@ -234,7 +236,7 @@ class SetupForm : Form
             {
                 string[] q = text.Split(new char[] { '|' }, 2);
                 int n;
-                if (int.TryParse(q[0], out n) && n >= 1 && n <= 10)
+                if (int.TryParse(q[0], out n) && n >= 1 && n <= N)
                 {
                     if (cur > 0 && (steps[cur - 1].State == RUNNING || steps[cur - 1].State == WAITING)) steps[cur - 1].State = DONE;
                     cur = n;
@@ -501,56 +503,56 @@ class SetupForm : Form
         ToggleRow(g, 2, "shortcut", "Desktop shortcut", "Jarvis on the Desktop and in the Start menu", optShortcut, delegate { optShortcut = !optShortcut; });
 
         StrBox(g, (nvidia ? "NVIDIA graphics found: speech runs on it. " : "No NVIDIA graphics: speech runs on the processor. ") +
-            "Takes 5 to 15 minutes. Windows may ask you to allow Git, Python and Claude Code, and a Claude window opens for you to log in.",
+            "Takes 5 to 15 minutes. Windows may ask you to allow Git, Python, Node.js, Chrome and Claude Code, and a Claude window opens for you to log in.",
             fSmall, Sub, R(34, 456, 452, 80), StringAlignment.Near, StringAlignment.Near);
 
-        Btn(g, "cancel", "Cancel", false, true, 216, 624, 120, 44, Close);
-        Btn(g, "go", check ? "Check" : updating ? "Update" : "Install", true, !folderBad, 348, 624, 140, 44, StartInstall);
+        Btn(g, "cancel", "Cancel", false, true, 216, BY, 120, 44, Close);
+        Btn(g, "go", check ? "Check" : updating ? "Update" : "Install", true, !folderBad, 348, BY, 140, 44, StartInstall);
     }
 
     void Running(Graphics g)
     {
         if (!showLog)
         {
-            Panel(g, 32, 112, 456, 432);
-            for (int i = 0; i < 10; i++)
+            Panel(g, 32, 112, 456, 446);
+            for (int i = 0; i < N; i++)
             {
-                float y = 118 + i * 42;
+                float y = 117 + i * ROW;
                 StepInfo s = steps[i];
-                if (s.State == RUNNING || s.State == WAITING || (s.State == FAILED && failText != null)) Fill(g, R(38, y, 444, 42), 10, Hi);
-                StepIcon(g, 60, y + 21, s.State);
-                if (s.Sub == "") Str(g, s.Title, fBold, s.State == PENDING ? Dim : Ink, 84, y + 11);
+                if (s.State == RUNNING || s.State == WAITING || (s.State == FAILED && failText != null)) Fill(g, R(38, y, 444, ROW), 10, Hi);
+                StepIcon(g, 60, y + ROW / 2, s.State);
+                if (s.Sub == "") Str(g, s.Title, fBold, s.State == PENDING ? Dim : Ink, 84, y + 8);
                 else
                 {
-                    Str(g, s.Title, fBold, s.State == PENDING ? Dim : Ink, 84, y + 3);
-                    StrFit(g, s.Sub, fSmall, s.State == WAITING ? Amber : s.State == FAILED ? Red : Sub, 84, y + 21, 388);
+                    Str(g, s.Title, fBold, s.State == PENDING ? Dim : Ink, 84, y + 1);
+                    StrFit(g, s.Sub, fSmall, s.State == WAITING ? Amber : s.State == FAILED ? Red : Sub, 84, y + 18, 388);
                 }
             }
         }
-        else Panel(g, 32, 112, 456, 432);
+        else Panel(g, 32, 112, 456, 446);
         if (log.Visible != showLog) log.Visible = showLog;
 
         int done = 0; bool busy = false;
         foreach (StepInfo s in steps) { if (s.State == DONE) done++; if (s.State == RUNNING || s.State == WAITING) busy = true; }
-        float frac = Math.Min(1f, (done + (busy ? 0.5f : 0f)) / 10f);
+        float frac = Math.Min(1f, (done + (busy ? 0.5f : 0f)) / (float)N);
         string label; Color lc = Sub;
         if (failText != null) { label = "Stopped at step " + cur + ". Fix that, then Try again: it carries on from there."; lc = Red; }
         else if (exited) label = check ? "Check finished. Nothing was changed." : "Finished.";
-        else if (cur > 0) label = "Step " + cur + " of 10   ·   " + steps[cur - 1].Title;
+        else if (cur > 0) label = "Step " + cur + " of " + N + "   ·   " + steps[cur - 1].Title;
         else label = "Starting...";
-        StrFit(g, label, fSmall, lc, 32, 558, 400);
-        StrBox(g, (int)(frac * 100) + "%", fSmall, Sub, R(408, 558, 80, 20), StringAlignment.Far, StringAlignment.Near);
-        Fill(g, R(32, 586, 456, 6), 3, Edge);
-        if (frac > 0) Fill(g, R(32, 586, Math.Max(6, 456 * frac), 6), 3, failText != null ? Red : Accent);
+        StrFit(g, label, fSmall, lc, 32, 574, 400);
+        StrBox(g, (int)(frac * 100) + "%", fSmall, Sub, R(408, 574, 80, 20), StringAlignment.Far, StringAlignment.Near);
+        Fill(g, R(32, 602, 456, 6), 3, Edge);
+        if (frac > 0) Fill(g, R(32, 602, Math.Max(6, 456 * frac), 6), 3, failText != null ? Red : Accent);
 
-        Btn(g, "log", showLog ? "Steps" : "Details", false, true, 32, 624, 120, 44, delegate { showLog = !showLog; if (showLog) { log.SelectionStart = log.TextLength; log.ScrollToCaret(); } });
-        if (!exited) Btn(g, "cancel", "Cancel", false, true, 368, 624, 120, 44, CancelInstall);
+        Btn(g, "log", showLog ? "Steps" : "Details", false, true, 32, BY, 120, 44, delegate { showLog = !showLog; if (showLog) { log.SelectionStart = log.TextLength; log.ScrollToCaret(); } });
+        if (!exited) Btn(g, "cancel", "Cancel", false, true, 368, BY, 120, 44, CancelInstall);
         else if (failText != null)
         {
-            Btn(g, "close", "Close", false, true, 216, 624, 120, 44, Close);
-            Btn(g, "again", "Try again", true, true, 348, 624, 140, 44, StartInstall);
+            Btn(g, "close", "Close", false, true, 216, BY, 120, 44, Close);
+            Btn(g, "again", "Try again", true, true, 348, BY, 140, 44, StartInstall);
         }
-        else Btn(g, "close", "Close", true, true, 368, 624, 120, 44, Close);
+        else Btn(g, "close", "Close", true, true, 368, BY, 120, 44, Close);
     }
 
     void Done(Graphics g)
@@ -582,8 +584,8 @@ class SetupForm : Form
             StrBox(g, lines[i], fBody, Sub, R(88, ys[i] + 2, 384, 84), StringAlignment.Near, StringAlignment.Near);
         }
 
-        Btn(g, "qr", "Show QR code", false, true, 32, 624, 160, 44, ShowQr);
-        Btn(g, "finish", "Finish", true, true, 368, 624, 120, 44, Close);
+        Btn(g, "qr", "Show QR code", false, true, 32, BY, 160, 44, ShowQr);
+        Btn(g, "finish", "Finish", true, true, 368, BY, 120, 44, Close);
     }
 
     // ------------------------------------------------------------------ mouse, keys, title bar

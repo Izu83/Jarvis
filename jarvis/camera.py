@@ -1,11 +1,13 @@
 """Grab one photo from the PC's webcam as JPEG bytes. Never sent to Claude, so it costs no tokens.
 
-The main Jarvis venv has no OpenCV, but the Gesture-App's Python does, so we borrow it (the same trick as
-gesture.py) to snap a single frame in a short-lived subprocess, then read the file back.
+OpenCV (opencv-python-headless, in requirements.txt) snaps a single frame in a short-lived subprocess: Jarvis's own
+Python, or (on an older install without it) the Gesture-App's Python, the same trick as gesture.py. Then the file is
+read back. A subprocess keeps OpenCV's DLLs out of Jarvis's process.
 """
 import ctypes
 import logging
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -92,10 +94,23 @@ _SNAP = (
 _exe: str | None = None   # cache the cv2-capable Python so we don't re-probe (an extra cv2 import) every photo
 
 
+def _own_python() -> str | None:
+    """Jarvis's own Python (python.exe even when he runs hidden under pythonw), if it has OpenCV."""
+    exe = Path(sys.executable).with_name("python.exe")
+    if not exe.exists():
+        return None
+    try:
+        r = subprocess.run([str(exe), "-c", "import cv2"], capture_output=True, timeout=25,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        return str(exe) if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def _python() -> str | None:
     global _exe
     if _exe is None:
-        _exe = gesture._python() or ""   # "" = probed and none found; don't keep re-probing
+        _exe = _own_python() or gesture._python() or ""   # "" = probed and none found; don't keep re-probing
     return _exe or None
 
 
@@ -107,7 +122,8 @@ def capture(index: int = 0) -> bytes:
     """One JPEG from the webcam. Raises RuntimeError if no camera/OpenCV is available or the grab fails."""
     exe = _python()
     if not exe:
-        raise RuntimeError("no camera library found (install opencv-python in your Python 3.13)")
+        raise RuntimeError("the camera library (OpenCV) isn't installed: run jarvis-setup.exe again, or "
+                           "`.venv\\Scripts\\pip install -r requirements.txt`")
     out = Path(tempfile.gettempdir()) / "jarvis_cam.jpg"
     out.unlink(missing_ok=True)
     try:

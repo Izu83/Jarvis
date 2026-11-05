@@ -51,9 +51,10 @@ Jarvis can run on more than one computer, and one phone talks to all of them.
 
 **The easy way:** on the laptop, download and run **[jarvis-setup.exe](https://izu83.github.io/Jarvis/jarvis-setup.exe)**.
 A window lets you pick the folder (it suggests one with enough room) and the extras, then shows each step with its
-progress (**Details** shows everything it ran). It installs Git, Python 3.13 and Claude Code (through winget) if they're missing, downloads Jarvis into
+progress (**Details** shows everything it ran). It installs Git, Python 3.13 (with the Visual C++ runtime), Node.js, Google Chrome and Claude Code (through winget,
+and npm if Claude's own installer fails) if they're missing, downloads Jarvis into
 `%USERPROFILE%\Jarvis`, installs the Python packages (it skips the 1.5 GB of NVIDIA ones when there's no NVIDIA card),
-gets cloudflared, has you log in to Claude, offers the free AI keys, start-at-login and a Desktop shortcut, starts Jarvis
+installs the hidden browser (Playwright, for website jobs and Shkolo), gets cloudflared, has you log in to Claude, offers the free AI keys, start-at-login and a Desktop shortcut, starts Jarvis
 and opens the QR code for the phone. Run it again any time to update. `jarvis-setup.exe --check` only says what it
 would do. Windows may warn that it's from an unknown publisher (it isn't signed): **More info › Run anyway**.
 The exe is built from `setup/setup.ps1` by `tools/make_setup.py`: rebuild it after changing the script.

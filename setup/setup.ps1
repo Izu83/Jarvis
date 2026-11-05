@@ -18,7 +18,7 @@ $env:PYTHONUTF8 = "1"
 $Repo = "https://github.com/Izu83/Jarvis.git"
 $Page = "https://izu83.github.io/Jarvis/"
 $TunnelUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-$Steps = 10
+$Steps = 12
 if (-not $Gui) { try { $Host.UI.RawUI.WindowTitle = "Jarvis setup" } catch {} }
 
 function Say($kind, $text) { if ($Gui) { [Console]::Out.WriteLine("@@$kind|$text"); [Console]::Out.Flush() } }
@@ -73,7 +73,7 @@ if (-not $Gui) {
 }
 RefreshPath
 
-# 1-3: the programs Jarvis runs on
+# 1-4: the programs Jarvis runs on
 Step 1 "Git"
 if (Has "git") { Ok "Already installed" } elseif ($Check) { Todo "Would install Git" } else {
     Winget "Git.Git" "Git"
@@ -97,17 +97,38 @@ if (-not $vcrt) {
     }
 }
 
-Step 3 "Claude Code"
+# Website jobs (the hidden browser, Shkolo) drive Google Chrome through Node.js. Node is also the backup way to
+# install Claude Code.
+Step 3 "Node.js and Chrome"
+$ChromeExe = @((Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
+               (Join-Path ${env:ProgramFiles(x86)} "Google\Chrome\Application\chrome.exe"),
+               (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+$missing = @()
+if (-not (Has "node")) { $missing += "Node.js" }
+if (-not $ChromeExe) { $missing += "Chrome" }
+if (-not $missing) { Ok "Already installed" } elseif ($Check) { Todo ("Would install " + ($missing -join " and ")) } else {
+    if (-not (Has "node")) { Winget "OpenJS.NodeJS.LTS" "Node.js" }
+    if (-not $ChromeExe) { Winget "Google.Chrome" "Google Chrome" }
+    if (-not (Has "node")) { Fail "Node.js didn't install." }
+    Ok "Installed"
+}
+
+Step 4 "Claude Code"
 if (Has "claude") { Ok "Already installed" } elseif ($Check) { Todo "Would install Claude Code" } else {
     Info "Installing Claude Code..."
     try { Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression 2>&1 | ForEach-Object { "$_" } } catch { "$_" }
     RefreshPath
-    if (-not (Has "claude")) { Fail "Claude Code didn't install." }
+    if (-not (Has "claude") -and (Has "npm")) {   # the official installer didn't work: Anthropic's npm package
+        Info "Trying the other way (npm)..."
+        Run npm install -g @anthropic-ai/claude-code
+        $env:Path += ";" + (Join-Path $env:APPDATA "npm")
+    }
+    if (-not (Has "claude")) { Fail "Claude Code didn't install. Install it from claude.com/claude-code, then run setup again." }
     Ok "Installed"
 }
 
-# 4: where Jarvis goes
-Step 4 "Download Jarvis"
+# 5: where Jarvis goes
+Step 5 "Download Jarvis"
 if (-not $Folder) {
     $Folder = Join-Path $HOME "Jarvis"
     if (-not $Check -and -not $Gui -and -not (Test-Path (Join-Path $Folder ".git"))) {
@@ -137,9 +158,9 @@ Set-Location $Folder
 $Py = Join-Path $Folder ".venv\Scripts\python.exe"
 $Pyw = Join-Path $Folder ".venv\Scripts\pythonw.exe"
 
-# 5: Python packages. The NVIDIA ones (about 1.5 GB) only where there's an NVIDIA card to use them. No pip cache:
+# 6: Python packages. The NVIDIA ones (about 1.5 GB) only where there's an NVIDIA card to use them. No pip cache:
 # one left by another pip version only gives a "Cache entry deserialization failed" warning per package.
-Step 5 "Python packages"
+Step 6 "Python packages"
 $nvidia = [bool](Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match "NVIDIA" })
 if ($Check) { Todo $(if (Test-Path $Py) { "Would update the packages" } else { "Would install the packages" }) } else {
     if (-not (Test-Path $Py)) {
@@ -158,8 +179,19 @@ if ($Check) { Todo $(if (Test-Path $Py) { "Would update the packages" } else { "
     Ok "Installed"
 }
 
-# 6: the tunnel, so your phone can reach this computer from anywhere
-Step 6 "Tunnel for your phone"
+# 7: the hidden browser for website jobs and Shkolo: Microsoft's Playwright MCP, in .brain/browser-mcp
+Step 7 "Hidden browser"
+$Mcp = Join-Path $Folder ".brain\browser-mcp\node_modules\@playwright\mcp\cli.js"
+if (Test-Path $Mcp) { Ok "Already installed" } elseif ($Check) { Todo "Would install the hidden browser (Playwright, about 10 MB)" } else {
+    if (-not (Has "npm")) { Fail "npm (part of Node.js) is missing. Run setup again." }
+    Info "Installing Playwright..."
+    Run npm install --prefix (Join-Path $Folder ".brain\browser-mcp") "@playwright/mcp@0.0.83"
+    if (-not (Test-Path $Mcp)) { Fail "The hidden browser didn't install. Details shows why." }
+    Ok "Installed"
+}
+
+# 8: the tunnel, so your phone can reach this computer from anywhere
+Step 8 "Tunnel for your phone"
 $Tunnel = Join-Path $Folder "bin\cloudflared.exe"
 if (Test-Path $Tunnel) { Ok "Already installed" } elseif ($Check) { Todo "Would download cloudflared (about 40 MB)" } else {
     New-Item -ItemType Directory -Force (Split-Path $Tunnel) | Out-Null
@@ -168,8 +200,8 @@ if (Test-Path $Tunnel) { Ok "Already installed" } elseif ($Check) { Todo "Would 
     Ok "Installed"
 }
 
-# 7: settings (the rest are defaults; your pairing key is made fresh on this computer the first time Jarvis runs)
-Step 7 "Settings"
+# 9: settings (the rest are defaults; your pairing key is made fresh on this computer the first time Jarvis runs)
+Step 9 "Settings"
 $Config = Join-Path $Folder "config.json"
 if (Test-Path $Config) { Ok "Keeping your settings" }
 elseif ($Check) { Todo "Would create config.json" }
@@ -178,8 +210,8 @@ else {
     Ok "Created"
 }
 
-# 8: Claude login
-Step 8 "Log in to Claude"
+# 10: Claude login
+Step 10 "Log in to Claude"
 $creds = Join-Path $HOME ".claude\.credentials.json"
 if (Test-Path $creds) { Ok "Already logged in" } elseif ($Check) { Todo "Would open Claude to log in" } else {
     if ($Gui) {
@@ -193,8 +225,8 @@ if (Test-Path $creds) { Ok "Already logged in" } elseif ($Check) { Todo "Would o
     if (Test-Path $creds) { Ok "Logged in" } else { Ok "Skipped: log in later with 'claude' then /login" }
 }
 
-# 9: optional bits
-Step 9 "Extras"
+# 11: optional bits
+Step 11 "Extras"
 if ($Check) { Todo "Would offer: free AI keys, start at login, a Desktop shortcut" } else {
     $done = @()
     if (Ask "Add your free Gemini / OpenRouter keys now? (the same keys as on your PC are fine)" $Keys) {
@@ -208,13 +240,13 @@ if ($Check) { Todo "Would offer: free AI keys, start at login, a Desktop shortcu
     Ok $(if ($t) { $t.Substring(0, 1).ToUpper() + $t.Substring(1) } else { "None picked" })
 }
 
-# 10: start him and show the QR code for the phone
-Step 10 "Start Jarvis"
+# 12: start him and show the QR code for the phone
+Step 12 "Start Jarvis"
 if ($Check) { Todo "Would start Jarvis and open the 'Pair your phone' window"; exit 0 }
 $log = Join-Path $Folder "jarvis.log"
 # First: can he start at all? A missing DLL would otherwise only show as "nothing happens".
 Info "Checking that Jarvis can start..."
-$probe = @(Run $Py -c "import onnxruntime, ctranslate2, sounddevice, websockets, cryptography, jarvis.remote; print('jarvis-ok')")
+$probe = @(Run $Py -c "import onnxruntime, ctranslate2, sounddevice, websockets, cryptography, cv2, jarvis.remote; print('jarvis-ok')")
 if (-not ($probe -contains "jarvis-ok")) {   # a line of its own: an error message quotes the command too
     $why = ($probe | Where-Object { $_ -match "Error|error" } | Select-Object -Last 1)
     Fail "Jarvis can't start: $(if ($why) { $why } else { $probe[-1] })"
