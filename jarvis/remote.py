@@ -99,6 +99,10 @@ class PhoneChannel:
         self.clients: set = set()
         self.desktops: set = set()   # the desktop app's connections (also in clients)
         self.phone_seen = 0.0         # when a phone was last connected (the desktop app shows it)
+        # what each remote connection says it is ({"name": "iPhone", "kind": "phone"}, or your laptop's Jarvis app),
+        # so the desktop app can say "Laptop connected" instead of calling everything a phone; and the last one to leave
+        self.client_info: dict = {}
+        self.last_client: dict | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.tunnel = Tunnel(self.port, self._announce)
         self.watch_until = 0.0
@@ -271,7 +275,10 @@ class PhoneChannel:
                        "model_id": RUNNING["model"],
                        # the desktop app's "is the phone connected?" card
                        "devices": {"phones": len(self.clients) - len(self.desktops), "desktops": len(self.desktops),
-                                   "phone_seen": self.phone_seen, "tunnel": bool(last_url())},
+                                   "phone_seen": self.phone_seen, "tunnel": bool(last_url()),
+                                   "others": [self.client_info.get(ws, {"name": "A phone", "kind": "phone"})
+                                              for ws in list(self.clients) if ws not in self.desktops],
+                                   "last": self.last_client},
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
@@ -924,6 +931,12 @@ class PhoneChannel:
             async for message in ws:
                 if isinstance(message, str):
                     data = self._decrypt(message)
+                    if data and not is_desktop and data.get("type") == "sync" and isinstance(data.get("client"), dict):
+                        info = self._client_label(data["client"])
+                        if self.client_info.get(ws) != info:
+                            self.client_info[ws] = info
+                            log.info("That connection is %s.", info["name"])
+                            self.soon("state", 0.3, self.send_state)
                     if data:   # run off the event loop so slow work never blocks other messages
                         data["_desktop"] = is_desktop   # set here, never taken from the message
                         self.loop.run_in_executor(None, self._safe_handle, data)
@@ -932,10 +945,19 @@ class PhoneChannel:
         finally:
             self.clients.discard(ws)
             self.desktops.discard(ws)
+            info = self.client_info.pop(ws, None)
             if not is_desktop:
                 self.phone_seen = time.time()
+                self.last_client = {**(info or {"name": "A phone", "kind": "phone"}), "at": self.phone_seen}
             log.info("%s disconnected (%d open).", "Desktop app" if is_desktop else "Phone", len(self.clients))
             self.soon("state", 0.3, self.send_state)
+
+    @staticmethod
+    def _client_label(c: dict) -> dict:
+        """What a connection says it is, tidied: a short name and phone / tablet / computer."""
+        kind = c.get("kind") if c.get("kind") in ("phone", "tablet", "computer") else "phone"
+        name = " ".join(str(c.get("name") or "").split())[:24] or {"phone": "A phone", "tablet": "A tablet"}.get(kind, "A computer")
+        return {"name": name, "kind": kind}
 
     def _safe_handle(self, data: dict) -> None:
         try:

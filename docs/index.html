@@ -677,7 +677,9 @@
   html.mode-voice .dock .bar, html.mode-voice .dock .cmds, html.mode-voice .dock .attach, html.mode-voice .dock::before { display: none; }
   #voiceView { position: fixed; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; color: #fff; text-align: center;
     padding: calc(env(safe-area-inset-top) + 52px) 22px calc(var(--dock-h, 120px) - 4px);
-    background: radial-gradient(80% 55% at 50% 40%, #0a1c2c, #04070d 70%), #04070d; }
+    /* the glow behind the orb is the orb's own colour, centred on it (Orb.tintBackground sets --orb and --orb-at) */
+    --orb: 70 215 255; --orb-at: 50% 40%;
+    background: radial-gradient(min(90vw, 760px) min(70vh, 560px) at var(--orb-at), rgb(var(--orb) / .2), rgb(var(--orb) / .07) 42%, rgb(var(--orb) / 0) 72%), #04070d; }
   #voiceView .v-stage { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* the clock at the top of both modes: where your PC is, its local time to the second, and the date. In the chat it
      works like an iPhone large title: --cp goes 0 → 1 as you scroll, the big clock slides up and fades out, and a
@@ -856,6 +858,39 @@
   .link-card svg.i { width: 22px; height: 22px; color: var(--label2); flex: none; }
   .link-card.on svg.i { color: var(--green, #34c759); }
   .link-card button { flex: none; height: 28px; padding: 0 11px; border-radius: 14px; font-size: 13px; font-weight: 600; color: #fff; background: var(--accent-grad); }
+
+  /* ---------- Apple's details ----------
+     Type: on Apple devices the system font (SF) brings its own tracking for every size (tighter at large sizes,
+     looser at small ones). One fixed letter-spacing fights that, so there it's left to the font. */
+  @supports (font: -apple-system-body) {
+    body, body * { letter-spacing: normal !important; }
+  }
+  /* Press feedback: instant on touch-down, and back without overshoot (a bounce is for things you flick, not tap) */
+  .press { transition: transform .3s var(--ios), filter .2s, opacity .2s; }
+  .press:active { transform: scale(.96); transition-duration: .08s; }
+  /* Messages arrive often: a short rise, no bounce */
+  .bubble { animation: rise .32s var(--ios) both; }
+  /* Sheets follow your finger from the grabber or the title (the script handles the drag) */
+  .sheet .grabber, .sheet .sheet-head { touch-action: none; }
+  /* Reduce Motion: things fade instead of sliding or springing */
+  @media (prefers-reduced-motion: reduce) {
+    .sheet, .actions-sheet, .drawer, .bubble, .pills, .lost, .toast, .alert, .msg-actions { animation-name: fadeOnly !important; animation-duration: .2s !important; }
+    .sheet-wrap.closing .sheet, .drawer.closing, .toast.out { animation-name: fadeAway !important; animation-duration: .2s !important; }
+    .press:active { transform: none; }
+  }
+  @keyframes fadeOnly { from { opacity: 0; } }
+  @keyframes fadeAway { to { opacity: 0; } }
+  /* Reduce Transparency and Increase Contrast: solid surfaces instead of glass, and a clear edge */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass, .glass.strong, .as-group, .alert, .top-fade { -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+      background: color-mix(in srgb, var(--base) 96%, var(--label) 4%) !important; }
+    .glass::after { display: none; }
+  }
+  @media (prefers-contrast: more) {
+    .glass, .glass.strong { -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+      background: var(--base) !important; box-shadow: 0 0 0 1.5px var(--label3) !important; }
+    .group { box-shadow: inset 0 0 0 1.5px var(--label3); }
+  }
 </style>
 </head>
 <body>
@@ -1389,9 +1424,16 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-05.3";   // bump together with version.json
+const VERSION = "2026-11-05.4";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv42", when: "Nov 5, 2026", title: "Closer to iOS", notes: [
+    "Sheets follow your finger: flick one down to close it, or let go and it settles back.",
+    "Voice mode's glow takes the orb's colour: blue, green while he listens, purple while he works.",
+    "The computer tab shows the computer's name; whether it's online shows in the dot.",
+    "On iPhone the text uses the system font's own spacing, and Reduce Motion, Reduce Transparency and Increase Contrast are respected.",
+    "On the PC, the desktop app says what's connected: iPhone, your laptop, or both.",
+  ]},
   { v: "JNIv41", when: "Nov 5, 2026", title: "Scan to add a computer", notes: [
     "Settings › Your computers › Add a Computer now scans the other computer's QR code right in Jarvis. No copying and pasting.",
     "Pasting still works, and it says why when a link won't do (like your PC's own link).",
@@ -2288,10 +2330,18 @@ addEventListener("resize", () => Models.close());
 const PhoneLink = {
   state(d) {
     if (!d.devices) return;
-    const n = d.devices.phones || 0, seen = d.devices.phone_seen;
+    // what's connected, by name: "iPhone connected", "iPhone and Laptop connected"
+    const others = d.devices.others || Array(d.devices.phones || 0).fill({ name: "A phone", kind: "phone" });
+    const names = [...new Set(others.map(o => o.name))], n = others.length, last = d.devices.last;
+    const and = a => a.length < 2 ? a[0] || "" : a.slice(0, -1).join(", ") + " and " + a.at(-1);
+    const ago = t => { const r = relTime(t * 1000); return r === "now" ? "just now" : r + " ago"; };
+    const kind = (n ? others[0] : last)?.kind;
     $("linkCard").classList.toggle("on", n > 0);
-    $("linkTitle").textContent = n > 0 ? (n > 1 ? `${n} phones connected` : "Phone connected") : "Phone not connected";
-    $("linkSub").textContent = n > 0 ? "Chats on it stay on it" : seen ? "Last seen " + relTime(seen * 1000) + (relTime(seen * 1000) === "now" ? "" : " ago") : (d.devices.tunnel ? "Open Jarvis on your phone" : "Starting the link…");
+    $("linkCard").querySelector("use").setAttribute("href", kind === "computer" ? "#i-laptop" : "#i-phone");
+    $("linkTitle").textContent = n ? `${and(names)} connected` : "Nothing connected";
+    $("linkSub").textContent = n ? (n > 1 ? "Each keeps its own chats" : "Its chats stay on it")
+      : last ? `Last: ${last.name}, ${ago(last.at)}` : d.devices.phone_seen ? "Last seen " + ago(d.devices.phone_seen)
+      : d.devices.tunnel ? "Open Jarvis on your phone" : "Starting the link…";
     $("linkPair").textContent = n > 0 ? "Pair another" : "Pair";
   },
 };
@@ -2756,7 +2806,17 @@ function onPartial(data) {
   p.el.innerHTML = rich(data.text);
   if (atEnd) scrollDown(false);
 }
-function sync() { post({ type: "sync", id: newId() }).catch(() => {}); }
+// What this device is, so the PC's desktop app can say "iPhone connected" or "Laptop connected" (your laptop's
+// Jarvis app, when it talks to this PC) instead of calling everything a phone.
+function whoAmI() {
+  const ua = navigator.userAgent, touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  const kind = /iPad/.test(ua) || touchMac ? "tablet" : /iPhone|Android.+Mobile|Mobile/.test(ua) ? "phone" : "computer";
+  const here = Devices.list.find(d => /^https?:\/\/127\.0\.0\.1[:/]/.test(d.url || ""));   // the computer this app runs on
+  const name = kind === "computer" ? (desktop && here ? Devices.name(here) : "A browser")
+    : /iPhone/.test(ua) ? "iPhone" : kind === "tablet" ? "iPad" : /Android/.test(ua) ? "Android phone" : "A phone";
+  return { kind, name };
+}
+function sync() { post({ type: "sync", id: newId(), client: whoAmI() }).catch(() => {}); }
 // The socket can look open while it's actually dead (iOS freezes it in the background). After coming back, ask for
 // the state and reconnect if nothing arrives.
 function probe() {
@@ -2901,8 +2961,11 @@ function renderStatus(relayOk = true) {
   const seen = lastSeenText();
   const many = Devices.list.length > 1, nm = many ? Devices.name() : "PC";
   const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : (seen ? nm + " offline · " + seen : "Finding " + Devices.label() + "…"), "warn"] : pcOnline ? [nm + " online", "ok"] : [seen ? nm + " offline · " + seen : nm + " offline", "bad"];
-  $("status").textContent = cls === "ok" ? (many ? nm : "Your PC") : cls === "warn" ? "Connecting…" : "Offline";   // short: it's a tab label
-  $("titlePill").setAttribute("aria-label", (many ? nm : "Your PC") + ": " + text);
+  // A tab label names the section and stays put (Apple: "single words"): the computer's name. Whether it's online
+  // shows in the dot beside it, in its spoken label, and in Control Center.
+  $("status").textContent = Devices.name();
+  $("titlePill").setAttribute("aria-label", Devices.name() + ", " + text);
+  $("titlePill").title = text;
   for (const id of ["dot", "pcDot", "meDot", "profDot"]) { const el = $(id); if (el) el.className = "dot " + cls; }
   $("pcState").textContent = pcOnline && pc ? "Up " + uptime(pc.uptime) : text;
   const where = (host ? host + " · " : "") + text;
@@ -3291,18 +3354,51 @@ function closeSheets() {
 }
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = closeSheets);
 document.querySelectorAll(".sheet-wrap[id]").forEach(w => w.addEventListener("click", e => { if (e.target === w) closeSheets(); }));
-// drag a sheet down by its grabber/header to close it
+// Drag a sheet by its grabber or title, like iOS: it follows the finger 1:1 from where you grabbed it, resists if
+// pulled up (rubber band), and on release goes where the flick was heading (momentum projected the way iOS scrolls):
+// closed, at the flick's own speed, or back up, settling without a bounce. The scrim lightens as it goes down.
 document.querySelectorAll(".sheet").forEach(sheet => {
-  let y0 = null;
-  const head = [sheet.querySelector(".grabber"), sheet.querySelector(".sheet-head")];
-  head.forEach(h => h?.addEventListener("touchstart", e => { y0 = e.touches[0].clientY; sheet.style.transition = "none"; }, { passive: true }));
-  sheet.addEventListener("touchmove", e => { if (y0 === null) return; const dy = Math.max(0, e.touches[0].clientY - y0); sheet.style.transform = `translateY(${dy}px)`; }, { passive: true });
-  sheet.addEventListener("touchend", e => {
-    if (y0 === null) return;
-    const dy = e.changedTouches[0].clientY - y0; y0 = null;
-    sheet.style.transition = "transform .35s var(--ease)"; sheet.style.transform = "";
-    if (dy > 110) closeSheets();
-  });
+  const wrap = sheet.closest(".sheet-wrap");
+  if (!wrap) return;
+  const close = () => wrap.id === "addSheet" ? AddPc.close() : closeSheets();
+  const rubber = (x, d) => (x * d * .55) / (d + .55 * Math.abs(x));
+  const IOS = [.32, .72];   // --ios: its starting slope (y1/x1) lets the close continue at the finger's speed
+  let drag = null;
+  for (const h of [sheet.querySelector(".grabber"), sheet.querySelector(".sheet-head")].filter(Boolean)) {
+    h.addEventListener("pointerdown", e => {
+      if (desktop || e.button !== 0 || e.target.closest("button, a, input, textarea")) return;   // a Mac-style dialog on desktop
+      drag = { id: e.pointerId, y0: e.clientY, h: sheet.offsetHeight, hist: [[e.timeStamp, 0]] };
+      try { h.setPointerCapture(e.pointerId); } catch {}
+      sheet.style.transition = "none"; wrap.style.transition = "none";
+    });
+    h.addEventListener("pointermove", e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const raw = e.clientY - drag.y0, dy = raw < 0 ? rubber(raw, drag.h) : raw;
+      sheet.style.transform = `translateY(${dy}px)`;
+      wrap.style.background = `rgba(0,0,0,${(.28 * (1 - Math.max(0, dy) / drag.h)).toFixed(3)})`;
+      drag.hist.push([e.timeStamp, raw]);
+      if (drag.hist.length > 5) drag.hist.shift();
+    });
+    const end = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag; drag = null;
+      const raw = e.clientY - d.y0, [t0, r0] = d.hist[0];
+      const v = (raw - r0) / Math.max(8, e.timeStamp - t0) * 1000;            // px/s over the last few moves
+      const projected = Math.max(0, raw) + (v / 1000) * .998 / (1 - .998);    // where the flick was heading
+      if (raw > 4 && (projected > d.h * .5 || v > 1000) && v > -100) {
+        const left = d.h * 1.05 - Math.max(0, raw);
+        const t = Math.min(.38, Math.max(.16, (IOS[1] / IOS[0]) * left / Math.max(v, 1)));
+        sheet.style.animationDuration = t + "s";
+        close();
+        setTimeout(() => { sheet.style.transform = ""; sheet.style.animationDuration = ""; wrap.style.background = ""; wrap.style.transition = ""; }, t * 1000 + 140);
+      } else {
+        sheet.style.transition = "transform .45s cubic-bezier(.25,1,.5,1)"; sheet.style.transform = "";
+        wrap.style.transition = "background .45s"; wrap.style.background = "";
+      }
+    };
+    h.addEventListener("pointerup", end);
+    h.addEventListener("pointercancel", end);
+  }
 });
 
 // ================= composer + dictation =================
@@ -4063,12 +4159,28 @@ const Orb = {
     this.state = state; this.beat = 0;
   },
   ring(strength) { if (this.rings.length < 8) this.rings.push({ t: this.t, s: strength, col: [...this.look.col] }); },
+  // The voice view's background glow takes the orb's colour (cyan, green while listening, purple while working…)
+  // and sits right behind it. A few times a second, and only when something changed: it's a full-screen paint.
+  tintBackground(now) {
+    if (now - (this.tintAt || 0) < 120) return;
+    this.tintAt = now;
+    const view = $("voiceView");
+    if (!view || view.hidden) return;
+    const col = this.look.col.map(Math.round).join(" ");
+    const o = this.cv.getBoundingClientRect(), v = view.getBoundingClientRect();
+    const at = o.width ? `${Math.round(o.left + o.width / 2 - v.left)}px ${Math.round(o.top + o.height / 2 - v.top)}px` : "";
+    if (col === this.tintCol && at === this.tintPos) return;
+    this.tintCol = col; this.tintPos = at;
+    view.style.setProperty("--orb", col);
+    if (at) view.style.setProperty("--orb-at", at);
+  },
   frame(now) {
     this.raf = requestAnimationFrame(t => this.frame(t));
     const dt = this.last ? Math.max(0, Math.min(.05, (now - this.last) / 1000)) : .016; this.last = now; this.t += dt;
     const calm = this.calm.matches ? .35 : 1, L = this.look, to = this.LOOKS[this.state] || this.LOOKS.idle, k = Math.min(1, dt * 3);
     for (const key of ["spin", "breathe", "amp", "think", "heart"]) L[key] += (to[key] - L[key]) * k;
     for (let i = 0; i < 3; i++) L.col[i] += (to.col[i] - L.col[i]) * k;
+    this.tintBackground(now);
     const want = Math.max(0, Math.min(1, this.source() || 0));
     this.lv += (want - this.lv) * (want > this.lv ? .45 : .1);   // quick to swell, slow to settle
     // rings: a heartbeat while it waits for you, and the louder moments of a voice

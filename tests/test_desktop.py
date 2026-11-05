@@ -22,6 +22,14 @@ def test_pairing_link_names_the_computer(monkeypatch):
     assert remote.pairing_link().endswith("&n=My%20Laptop&d=laptop")
 
 
+def test_connections_say_what_they_are():
+    label = remote.PhoneChannel._client_label
+    assert label({"name": "  Laptop ", "kind": "computer"}) == {"name": "Laptop", "kind": "computer"}
+    assert label({"name": "iPhone", "kind": "phone"}) == {"name": "iPhone", "kind": "phone"}
+    assert label({"kind": "toaster"}) == {"name": "A phone", "kind": "phone"}   # unknown kinds count as a phone
+    assert len(label({"name": "x" * 99, "kind": "tablet"})["name"]) == 24
+
+
 def test_renaming_the_computer_from_the_phone(monkeypatch):
     saved = {}
     monkeypatch.setattr(remote, "set_setting", lambda k, v: saved.__setitem__(k, v))
