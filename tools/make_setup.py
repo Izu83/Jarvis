@@ -1,6 +1,6 @@
 """Build docs/jarvis-setup.exe: the installer window (setup/installer.cs) with setup/setup.ps1 and the logo built in,
 compiled with the C# compiler that ships with Windows (.NET Framework 4), with the Jarvis icon. It's in docs/ so GitHub Pages serves it:
-https://izu83.github.io/Jarvis/jarvis-setup.exe (the page people open is https://izu83.github.io/Jarvis/download/)
+https://izu83.github.io/Jarvis/jarvis-setup.exe (the page people open is https://izu83.github.io/Jarvis/download/, and /info/ says what Jarvis does)
 
     .venv\\Scripts\\python tools\\make_setup.py
 """

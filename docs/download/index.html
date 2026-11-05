@@ -71,9 +71,9 @@
   }
   ol.steps b { display: block; font-weight: 600; }
   ol.steps span { color: var(--dim); font-size: 15px; }
-  .path { white-space: nowrap; font-weight: 600; color: var(--text); }
+  .path { font-weight: 600; color: var(--text); }
 
-  ul.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  ul.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); }
   ul.list li { padding: 14px 0; display: flex; gap: 12px; align-items: baseline; border-top: 1px solid var(--line); margin-top: -1px; }
   ul.list li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; transform: translateY(-1px); }
   ul.list small { display: block; color: var(--dim); font-size: 14px; }
@@ -105,6 +105,7 @@
     <img class="icon" src="../icon-192.png" alt="" width="104" height="104">
     <h1>Jarvis for Windows</h1>
     <p class="lede">Put Jarvis on another computer. One installer does everything.</p>
+    <p class="meta" style="margin:-20px 0 28px"><a href="../info/" style="color:var(--accent);text-decoration:none">What can Jarvis do? ›</a></p>
 
     <div class="here">
       <a class="btn" id="get" href="../jarvis-setup.exe" download="jarvis-setup.exe">
@@ -154,7 +155,7 @@
     <p class="note">Anything already there is skipped. Run it again any time to update Jarvis.</p>
   </section>
 
-  <footer>Jarvis · <a href="https://github.com/Izu83/Jarvis">Source on GitHub</a></footer>
+  <footer><a href="../info/">What Jarvis can do</a> · <a href="https://github.com/Izu83/Jarvis">Source on GitHub</a></footer>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

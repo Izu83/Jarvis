@@ -20,3 +20,12 @@ def test_the_download_page_links_the_installer():   # https://izu83.github.io/Ja
     assert 'href="../jarvis-setup.exe"' in page
     for asset in ("../icon-192.png", "../favicon.png"):
         assert asset in page and (ROOT / "docs" / asset[3:]).exists()
+
+
+def test_the_info_page_has_its_pictures():   # https://izu83.github.io/Jarvis/info/
+    import re
+    folder = ROOT / "docs" / "info"
+    page = (folder / "index.html").read_text(encoding="utf-8")
+    assert 'href="../download/"' in page
+    for src in re.findall(r'src="([^"]+)"', page):
+        assert (folder / src).resolve().exists(), src

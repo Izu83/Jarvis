@@ -175,7 +175,7 @@ Make or change modes just by asking: *“Jarvis, make a gaming mode with Discord
 
 <h2><a name="on-your-iphone"></a><img src="assets/readme/headers/on-your-iphone.svg" alt="On your iPhone" width="100%"></h2>
 
-The phone app is a web app on GitHub Pages ([izu83.github.io/Jarvis](https://izu83.github.io/Jarvis/)), so there's no App Store and nothing to pay for.
+The phone app is a web app on GitHub Pages ([izu83.github.io/Jarvis](https://izu83.github.io/Jarvis/); [/info](https://izu83.github.io/Jarvis/info/) shows what it can do), so there's no App Store and nothing to pay for.
 
 <table>
   <tr>
