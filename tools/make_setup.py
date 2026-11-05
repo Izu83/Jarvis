@@ -1,5 +1,5 @@
-"""Build docs/jarvis-setup.exe: a tiny launcher (setup/launcher.cs) with setup/setup.ps1 built in, compiled with the
-C# compiler that ships with Windows (.NET Framework 4), with the Jarvis icon. It's in docs/ so GitHub Pages serves it:
+"""Build docs/jarvis-setup.exe: the installer window (setup/installer.cs) with setup/setup.ps1 and the logo built in,
+compiled with the C# compiler that ships with Windows (.NET Framework 4), with the Jarvis icon. It's in docs/ so GitHub Pages serves it:
 https://izu83.github.io/Jarvis/jarvis-setup.exe
 
     .venv\\Scripts\\python tools\\make_setup.py
@@ -26,9 +26,11 @@ def main() -> int:
         ico = Path(tmp) / "jarvis.ico"
         Image.open(ROOT / "docs" / "icon-192.png").convert("RGBA").save(
             ico, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128)])
-        cmd = [str(CSC), "/nologo", "/optimize+", "/target:exe", "/platform:anycpu",
+        cmd = [str(CSC), "/nologo", "/optimize+", "/target:winexe", "/platform:anycpu",
+               "/r:System.Windows.Forms.dll", "/r:System.Drawing.dll", "/r:System.Management.dll",
                f"/out:{OUT}", f"/win32icon:{ico}", f"/win32manifest:{SETUP / 'launcher.manifest'}",
-               f"/resource:{SETUP / 'setup.ps1'},setup.ps1", str(SETUP / "launcher.cs")]
+               f"/resource:{SETUP / 'setup.ps1'},setup.ps1", f"/resource:{ROOT / 'docs' / 'icon-192.png'},logo.png",
+               str(SETUP / "installer.cs")]
         result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout.strip() or f"Built {OUT} ({OUT.stat().st_size // 1024} KB)")
     return result.returncode
