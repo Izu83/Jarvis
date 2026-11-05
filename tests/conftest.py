@@ -59,6 +59,8 @@ sys.modules["jarvis.apps"] = apps
 
 pc = types.ModuleType("jarvis.pc")
 pc.now_playing = lambda: None   # "can't tell" unless a test says otherwise
+pc.kind = lambda: "desktop"
+pc.device_name = lambda: "PC"
 sys.modules["jarvis.pc"] = pc
 
 

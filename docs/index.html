@@ -125,6 +125,15 @@
   .segment button { flex: 1; height: 36px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--label2); display: flex; align-items: center; justify-content: center; gap: 7px; transition: color .2s, background .25s var(--ease); }
   .segment button svg.i { width: 16px; height: 16px; stroke-width: 2.1; }
   .segment button.sel { background: var(--glass-strong); color: var(--label); box-shadow: 0 1px 4px rgba(0,0,0,.22), inset 0 0 0 .5px var(--rim-lo); }
+/* which computer: Control Center's switcher and Settings › Your computers */
+.segment.devs { margin: 2px 16px 4px; }
+.segment.devs button { min-width: 0; }
+.segment.devs button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.segment.devs button.add { flex: 0 0 44px; }
+.row.dev > svg.i { width: 22px; height: 22px; color: var(--label2); flex: none; }
+.row.dev .dev-pick { text-align: left; min-height: 50px; display: flex; flex-direction: column; justify-content: center; }
+.row.dev .dev-act { font-size: 14px; color: var(--blue); padding: 6px 2px; }
+.row.dev .dev-act.danger { color: var(--red); }
   .swatches { display: flex; gap: 11px; flex-wrap: wrap; }
   .swatch { position: relative; flex: none; cursor: pointer; box-shadow: inset 0 0 0 1px var(--rim-lo); transition: transform .35s var(--spring), box-shadow .25s var(--ease); }
   .swatch:not(.acc) { width: 54px; height: 54px; border-radius: 16px; }
@@ -851,6 +860,7 @@
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z"/></symbol>
   <symbol id="i-house" viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
   <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="10.5" rx="2"/><path d="M2 19h20"/></symbol>
   <symbol id="i-display" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2.5"/><path d="M9 20.5h6M12 16.5v4"/></symbol>
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M5.5 7.5h1.6l1-1.7a1.4 1.4 0 0 1 1.2-.7h3.4a1.4 1.4 0 0 1 1.2.7l1 1.7h1.6A2.5 2.5 0 0 1 20 10v6.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V10a2.5 2.5 0 0 1 1.5-2.5z"/><circle cx="12" cy="13" r="3.2"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -1203,6 +1213,9 @@
         <button class="row btn" id="notifyTest">Send a Test Notification</button>
       </div>
       <div class="group-foot" id="notifyHint" hidden></div>
+      <div class="group-title">Your computers</div>
+      <div class="group" id="devList"></div>
+      <div class="group-foot">Jarvis can run on more than one computer, like your PC and your laptop. Each has its own chats here; pick one in Control Center (the computer tab) or above. Messages from the other one wait until you switch to it.</div>
       <div class="group-title">Connection</div>
       <div class="group">
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
@@ -1220,7 +1233,8 @@
 <div class="sheet-wrap" id="pcSheet" hidden>
   <div class="sheet glass strong" role="dialog" aria-label="Control Center">
     <div class="grabber"></div>
-    <div class="sheet-head"><span style="width:32px"></span><h3>Your PC</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="sheet-head"><span style="width:32px"></span><h3 id="pcSheetTitle">Your PC</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="segment devs" id="devSwitch" aria-label="Which computer"></div>
     <div class="sheet-body" id="pcSheetBody" style="padding:8px 14px 24px"></div>
   </div>
 </div>
@@ -1342,9 +1356,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-04.3";   // bump together with version.json
+const VERSION = "2026-11-05.1";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv40", when: "Nov 5, 2026", title: "Your PC and your laptop", notes: [
+    "Jarvis can run on more than one computer. Pair your laptop too, then pick which one you're talking to at the top of Control Center (the computer tab).",
+    "Each computer keeps its own chats, and the tab shows which one you're on.",
+    "Rename or remove them in Settings › Your computers.",
+  ]},
   { v: "JNIv39", when: "Nov 4, 2026", title: "Your school diary", notes: [
     "Jarvis reads Shkolo for you: “Какви оценки имам?”, “Какви часове имам утре?”, “Имам ли домашно?”, “Колко отсъствия имам?” (or in English).",
     "The morning briefing has today's lessons, the evening recap tomorrow's, and you get a message when there's a new grade or homework.",
@@ -1589,7 +1608,57 @@ const SUGGESTIONS = [
   ["Windows", "Put Spotify on the vertical monitor"],
   ["Music", "Play something and turn the volume up"],
 ];
-const DB_KEY = "jarvis.db", MODES_KEY = "jarvis.modes";
+// ================= your computers: one page, several Jarvises (your PC, your laptop) =================
+// Each computer runs its own Jarvis with its own key, so each is paired on its own and keeps its own chats. The
+// first one keeps the plain storage names (nothing moves for it); the others get "@<its id>" on theirs.
+const PER_DEVICE = ["jarvis.db", "jarvis.modes", "jarvis.awaiting", "jarvis.lastUrl", "jarvis.lastSeen", "jarvis.gotFiles", "jarvis.gotMsgs"];
+const Devices = (() => {
+  let list = [];
+  try { list = JSON.parse(load("jarvis.devices")) || []; } catch {}
+  if (!list.length) {   // paired before there was a list: that pairing becomes the first computer
+    try { const p = JSON.parse(load("jarvis.pairing")); if (p?.topic) list = [{ ...p, id: p.topic, legacy: true }]; } catch {}
+  }
+  let active = load("jarvis.device");
+  const D = {
+    get list() { return list; },
+    get active() { return list.find(d => d.id === active) || list[0] || null; },
+    save() { store("jarvis.devices", JSON.stringify(list)); store("jarvis.device", D.active?.id); store("jarvis.pairing"); },
+    // From a pairing link: a new computer joins the list, a known one gets its new key/address. Returns its id.
+    add(p) {
+      let d = list.find(x => x.id === p.topic);
+      if (!d) { d = { id: p.topic, legacy: !list.length }; list.push(d); }
+      Object.assign(d, { topic: p.topic, key: p.key, server: p.server, url: p.url || d.url || null });
+      if (p.kind) d.kind = p.kind;
+      if (p.name) d.name = p.name;
+      D.save();
+      return d.id;
+    },
+    k: name => { const d = D.active; return d && !d.legacy ? `${name}@${d.id}` : name; },   // this computer's storage name
+    name: d => (d = d || D.active) ? d.name || (d.kind === "laptop" ? "Laptop" : "PC") : "PC",
+    label: () => list.length > 1 ? D.name() : "your PC",
+    use(id) { active = id; D.save(); location.reload(); },   // a fresh start keeps the two computers' chats apart
+    remove(id) {
+      const d = list.find(x => x.id === id);
+      if (!d) return;
+      // its chats go with it, unless it's the only one (unpairing keeps your chats, as it always did)
+      for (const name of list.length > 1 ? PER_DEVICE : ["jarvis.modes", "jarvis.lastUrl"]) store(d.legacy ? name : `${name}@${d.id}`);
+      list = list.filter(x => x !== d);
+      if (active === id) active = list[0]?.id || null;
+      D.save(); location.reload();
+    },
+    seen(pcInfo) {   // the computer says what it's called (renamed on it, or on another phone)
+      const d = D.active;
+      if (!d || !pcInfo?.name || (d.name === pcInfo.name && d.kind === pcInfo.kind)) return;
+      d.name = pcInfo.name; if (pcInfo.kind) d.kind = pcInfo.kind;
+      D.save(); renderDevices();
+    },
+  };
+  const fromHash = parsePairing(location.hash.slice(1));   // a pairing link was just opened: that computer, now
+  if (fromHash) { active = D.add(fromHash); window.history.replaceState(null, "", location.pathname + location.search); }
+  else if (list.length) D.save();
+  return D;
+})();
+const DB_KEY = Devices.k("jarvis.db"), MODES_KEY = Devices.k("jarvis.modes");
 let cfg = null, key = null, ws = null, modes = [], pc = null, pcSeen = 0, host = "";
 // message id -> { chatId, kind, el, step, tile, ... }. Every change re-checks the send button: while a command
 // runs in the chat on screen (and nothing is typed) it's a stop button.
@@ -1649,7 +1718,8 @@ function parsePairing(text) {
   const hash = text.includes("#") ? text.slice(text.indexOf("#") + 1) : text;
   const p = new URLSearchParams(hash.trim());
   if (!p.get("t") || !p.get("k")) return null;
-  return { topic: p.get("t"), key: p.get("k"), server: (p.get("s") || "https://ntfy.sh").replace(/\/$/, ""), url: p.get("u") || null };
+  return { topic: p.get("t"), key: p.get("k"), server: (p.get("s") || "https://ntfy.sh").replace(/\/$/, ""), url: p.get("u") || null,
+           name: (p.get("n") || "").slice(0, 30), kind: p.get("d") === "laptop" ? "laptop" : p.get("d") ? "desktop" : "" };
 }
 async function seal(bytes, aad) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -2387,7 +2457,7 @@ function track(id, entry) {
 }
 // Commands still waiting for an answer survive the app being closed or reloaded (iOS does that a lot), so the
 // answer is never silently dropped: on the next start we pick them up again and ask the PC for what we missed.
-const AWAIT_KEY = "jarvis.awaiting";
+const AWAIT_KEY = Devices.k("jarvis.awaiting");
 const awaiting = (() => { try { return JSON.parse(load(AWAIT_KEY)) || {}; } catch { return {}; } })();
 function setAwaiting(id, info) { if (info) awaiting[id] = info; else delete awaiting[id]; store(AWAIT_KEY, JSON.stringify(awaiting)); }
 function saveSteps(chat, p, failed = false) {
@@ -2529,7 +2599,8 @@ async function connect() {
   connecting = true; clearTimeout(retryTimer);
   renderStatus(false);
   // the desktop app is on the PC itself: straight to Jarvis, never through the internet
-  const candidates = desktop ? [cfg.url] : [...new Set([load("jarvis.lastUrl"), await discover(), cfg.url].filter(Boolean))];
+  const here = desktop && /^https?:\/\/127\.0\.0\.1[:/]/.test(cfg.url || "");   // this PC, not your other computer
+  const candidates = here ? [cfg.url] : [...new Set([load(Devices.k("jarvis.lastUrl")), await discover(), cfg.url].filter(Boolean))];
   for (const url of candidates) if (await openSocket(url)) { connecting = false; return; }
   connecting = false;
   if (!pcSeen || !candidates.length) showLost();
@@ -2542,7 +2613,7 @@ function openSocket(url) {
     const giveUp = setTimeout(() => { if (!opened) { sock.close(); resolve(false); } }, 8000);
     sock.onopen = () => {
       opened = true; clearTimeout(giveUp); ws = sock; retryDelay = 2000;
-      store("jarvis.lastUrl", url); renderStatus(true); sync(); $("lostCard")?.remove();
+      store(Devices.k("jarvis.lastUrl"), url); renderStatus(true); sync(); $("lostCard")?.remove();
       if (!$("sysSheet").hidden) watch();
       resolve(true);
     };
@@ -2777,7 +2848,7 @@ $("actAll").onclick = openActivity;
 
 // ================= live PC status =================
 function lastSeenText() {
-  const t = Number(load("jarvis.lastSeen")) || 0;
+  const t = Number(load(Devices.k("jarvis.lastSeen"))) || 0;
   if (!t) return "";
   const mins = Math.floor((Date.now() - t) / 60000);
   if (mins < 1) return ""; if (mins < 60) return `last seen ${mins}m ago`;
@@ -2787,9 +2858,10 @@ function lastSeenText() {
 function renderStatus(relayOk = true) {
   const pcOnline = Date.now() - pcSeen < 45000;
   const seen = lastSeenText();
-  const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : (seen ? "PC offline · " + seen : "Finding your PC…"), "warn"] : pcOnline ? ["PC online", "ok"] : [seen ? "PC offline · " + seen : "PC offline", "bad"];
-  $("status").textContent = cls === "ok" ? "Your PC" : cls === "warn" ? "Connecting…" : "Offline";   // short: it's a tab label
-  $("titlePill").setAttribute("aria-label", "Your PC: " + text);
+  const many = Devices.list.length > 1, nm = many ? Devices.name() : "PC";
+  const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : (seen ? nm + " offline · " + seen : "Finding " + Devices.label() + "…"), "warn"] : pcOnline ? [nm + " online", "ok"] : [seen ? nm + " offline · " + seen : nm + " offline", "bad"];
+  $("status").textContent = cls === "ok" ? (many ? nm : "Your PC") : cls === "warn" ? "Connecting…" : "Offline";   // short: it's a tab label
+  $("titlePill").setAttribute("aria-label", (many ? nm : "Your PC") + ": " + text);
   for (const id of ["dot", "pcDot", "meDot", "profDot"]) { const el = $(id); if (el) el.className = "dot " + cls; }
   $("pcState").textContent = pcOnline && pc ? "Up " + uptime(pc.uptime) : text;
   const where = (host ? host + " · " : "") + text;
@@ -2852,7 +2924,7 @@ function onState(data) {
   if (data.activity || data.watches) onActivity(data.activity, data.watches);
   if (typeof data.notify === "boolean") refreshNotifyToggle(data.notify);
   if (!data.pc) return;
-  pc = data.pc; pcSeen = Date.now(); host = pc.host || host; store("jarvis.lastSeen", String(pcSeen));
+  pc = data.pc; pcSeen = Date.now(); host = pc.host || host; Devices.seen(pc); store(Devices.k("jarvis.lastSeen"), String(pcSeen));
   ring($("cpuRing"), pc.cpu); $("cpuVal").textContent = pc.cpu + "%";
   ring($("ramRing"), pc.ram); $("ramVal").textContent = pc.ram + "%";
   $("topApp").innerHTML = pc.top ? `Busiest app: <b>${esc(pc.top.name)}</b> · ${Math.round(pc.top.cpu)}% CPU` : "";
@@ -3759,8 +3831,10 @@ $("hotkeyToggle").onchange = e => { post({ type: "set", key: "hotkey_enabled", v
 $("usageReset").onclick = () => { post({ type: "usage_reset", id: newId() }).catch(() => {}); toast("Usage counter reset", "check", "var(--green)"); };
 $("deleteAllBtn").onclick = () => { if (!confirm("Delete all chats and groups?")) return; db = { chats: [], groups: [], current: null }; saveDb(); closeSheets(); renderChat(); updateBadges(); };
 $("unpair").onclick = () => {
-  if (!confirm("Unpair this phone? You'll need to scan the QR code on your PC again.")) return;
-  store("jarvis.pairing"); store(MODES_KEY); location.reload();
+  const many = Devices.list.length > 1;
+  if (!confirm(many ? `Remove ${Devices.name()} from this phone? Its chats here go too. To add it back, pair it again from its tray icon.`
+                    : "Unpair this phone? You'll need to scan the QR code on your PC again.")) return;
+  Devices.remove(Devices.active?.id);
 };
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !cfg) return;
@@ -4682,7 +4756,7 @@ async function fileStore(mode, fn) {
 }
 async function receiveFile(data) {
   const ack = () => post({ type: "got_file", id: newId(), fid: data.fid }).catch(() => {});
-  const seen = new Set(JSON.parse(load("jarvis.gotFiles") || "[]"));
+  const seen = new Set(JSON.parse(load(Devices.k("jarvis.gotFiles")) || "[]"));
   if (seen.has(data.fid)) { ack(); return; }   // the PC sent it again before it heard our confirmation
   const type = data.mime || MEDIA_TYPES[(data.name.split(".").pop() || "").toLowerCase()] || "";
   const blob = new Blob([b64bytes(data.data)], type ? { type } : {});
@@ -4691,7 +4765,7 @@ async function receiveFile(data) {
     const all = await fileStore("readonly", st => st.getAll());
     all.sort((a, b) => b.ts - a.ts).slice(FILES_KEPT).forEach(f => fileStore("readwrite", st => st.delete(f.fid)).catch(() => {}));
   } catch { fileUrls.set(data.fid, URL.createObjectURL(blob)); }   // no storage (private mode): keep it for now
-  store("jarvis.gotFiles", JSON.stringify([...seen, data.fid].slice(-100)));
+  store(Devices.k("jarvis.gotFiles"), JSON.stringify([...seen, data.fid].slice(-100)));
   ack();
   const chat = chatById(data.chat) || current();
   const m = { who: "file", fid: data.fid, name: data.name, size: data.size || blob.size, mime: type, ts: Date.now() };
@@ -4705,10 +4779,10 @@ async function receiveFile(data) {
 const gotMsgs = new Set();   // also kept in memory, for when storage is off (private mode)
 function receiveMsg(data) {
   post({ type: "got_msg", id: newId(), mid: data.mid }).catch(() => {});
-  const seen = JSON.parse(load("jarvis.gotMsgs") || "[]");
+  const seen = JSON.parse(load(Devices.k("jarvis.gotMsgs")) || "[]");
   if (gotMsgs.has(data.mid) || seen.includes(data.mid)) return;   // the PC sent it again before it heard our OK
   gotMsgs.add(data.mid);
-  store("jarvis.gotMsgs", JSON.stringify([...seen, data.mid].slice(-200)));
+  store(Devices.k("jarvis.gotMsgs"), JSON.stringify([...seen, data.mid].slice(-200)));
   const p = data.reply_to ? pending.get(data.reply_to) : null;
   const chat = chatById(p?.chatId || data.chat) || current();
   const ts = Math.min(data.ts || Date.now(), Date.now());
@@ -4937,21 +5011,64 @@ async function relink() {
   if (!parsePairing(text || "")) text = prompt("Paste the pairing link from your PC (tray icon › Pair your phone):") || "";
   const p = parsePairing(text);
   if (!p) { if (text.trim()) toast("That isn't a pairing link", "x", "var(--red)"); return; }
-  try { key = await crypto.subtle.importKey("raw", b64d(p.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
+  let k2;
+  try { k2 = await crypto.subtle.importKey("raw", b64d(p.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
   catch { toast("That link is damaged", "x", "var(--red)"); return; }
-  store("jarvis.pairing", JSON.stringify(p)); store("jarvis.lastUrl");
-  cfg = p; closeSheets(); $("lostCard")?.remove();
+  const id = Devices.add(p);
+  if (id !== Devices.active?.id) { toast("Adding " + Devices.name(Devices.list.find(d => d.id === id)) + "…", "sparkles", "var(--blue)"); Devices.use(id); return; }
+  key = k2; store(Devices.k("jarvis.lastUrl"));
+  cfg = Devices.active; closeSheets(); $("lostCard")?.remove();
   const old = ws; ws = null; old?.close();
   connecting = false; retryDelay = 2000; clearTimeout(retryTimer);
-  toast("Connecting to your PC…", "sparkles", "var(--blue)");
+  toast("Connecting to " + Devices.label() + "…", "sparkles", "var(--blue)");
   connect();
 }
 $("relinkBtn").onclick = relink;
+
+// ================= the device switcher: Control Center (top) and Settings › Your computers =================
+const devIcon = d => icon(d?.kind === "laptop" ? "laptop" : "display");
+function renderDevices() {
+  const cur = Devices.active, many = Devices.list.length > 1;
+  const sw = $("devSwitch");
+  if (sw) {
+    sw.innerHTML = Devices.list.map(d => `<button class="press${d === cur ? " sel" : ""}" data-dev="${esc(d.id)}">${devIcon(d)}<span>${esc(Devices.name(d))}</span></button>`).join("")
+      + `<button class="press add" data-dev-add aria-label="Add a computer">${icon("plus")}</button>`;
+    sw.querySelectorAll("[data-dev]").forEach(b => b.onclick = () => { if (b.dataset.dev !== cur?.id) Devices.use(b.dataset.dev); });
+    sw.querySelector("[data-dev-add]").onclick = addDevice;
+  }
+  if ($("pcSheetTitle")) $("pcSheetTitle").textContent = many ? Devices.name() : "Your PC";
+  const list = $("devList");
+  if (list) {
+    list.innerHTML = Devices.list.map(d => `<div class="row dev">${devIcon(d)}
+        <button class="grow dev-pick" data-dev="${esc(d.id)}">${esc(Devices.name(d))}<span class="sub">${d === cur ? "Using now" : "Tap to switch"}</span></button>
+        ${d === cur ? `<button class="press dev-act" data-rename aria-label="Rename">Rename</button>` : `<button class="press dev-act danger" data-remove="${esc(d.id)}" aria-label="Remove">Remove</button>`}
+      </div>`).join("") + `<button class="row btn" id="devAdd">Add a Computer</button>`;
+    list.querySelectorAll(".dev-pick").forEach(b => b.onclick = () => { if (b.dataset.dev !== cur?.id) Devices.use(b.dataset.dev); });
+    list.querySelector("[data-rename]")?.addEventListener("click", renameDevice);
+    list.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => {
+      const d = Devices.list.find(x => x.id === b.dataset.remove);
+      if (d && confirm(`Remove ${Devices.name(d)} from this phone? Its chats here go too.`)) Devices.remove(d.id);
+    });
+    $("devAdd").onclick = addDevice;
+  }
+  if ($("unpair")) $("unpair").textContent = many ? `Remove ${Devices.name()} From This Phone` : "Unpair This Phone";
+}
+function renameDevice() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { toast("Connect to it first", "x", "var(--red)"); return; }
+  const name = (prompt("What should this computer be called?", Devices.name()) || "").trim().slice(0, 30);
+  if (!name) return;
+  post({ type: "set", key: "device_name", value: name, id: newId() }).then(() => toast("Renamed", "check"), () => toast("Can't reach it right now.", "x", "var(--red)"));
+}
+function addDevice() {
+  if (!confirm("Add another computer (like your laptop)?\n\n1. Start Jarvis on it.\n2. Right-click its tray icon › Pair your phone and copy the link.\n3. Come back here and tap OK.")) return;
+  relink();
+}
 function showLost() {
   if ($("lostCard")) return;
   const card = document.createElement("div");
   card.className = "lost glass strong"; card.id = "lostCard";
-  card.innerHTML = '<b><span class="dot"></span>Can\'t find your PC</b><p>Make sure Jarvis is running on your PC. Then right-click its tray icon › Pair your phone, copy the link, and tap below.</p><button class="press">Paste Pairing Link</button>';
+  const where = esc(Devices.label());
+  card.innerHTML = `<b><span class="dot"></span>Can't find ${where}</b><p>Make sure Jarvis is running on ${where}.` + (Devices.list.length > 1 ? " To use your other computer, switch in Control Center." : "") + ' Then right-click its tray icon › Pair your phone, copy the link, and tap below.</p><button class="press">Paste Pairing Link</button>';
   card.querySelector("button").onclick = relink;
   document.body.append(card);
 }
@@ -4960,18 +5077,17 @@ function showLost() {
 $("pairBtn").onclick = async () => {
   const p = parsePairing($("pairLink").value);
   if (!p) { $("pairErr").textContent = "That doesn't look like a pairing link."; $("pairErr").hidden = false; return; }
-  store("jarvis.pairing", JSON.stringify(p));
-  await start();
+  Devices.use(Devices.add(p));
 };
 async function start() {
-  // The pairing link carries the secrets in the #fragment, which browsers never send to any server.
-  const fromHash = parsePairing(location.hash.slice(1));
-  if (fromHash) { store("jarvis.pairing", JSON.stringify(fromHash)); window.history.replaceState(null, "", location.pathname); }
-  try { cfg = JSON.parse(load("jarvis.pairing")); } catch { cfg = null; }
+  // The pairing link carries the secrets in the #fragment, which browsers never send to any server. Devices took it
+  // (and every computer paired before) when the page loaded.
+  cfg = Devices.active;
   if (cfg) {
     try { key = await crypto.subtle.importKey("raw", b64d(cfg.key), "AES-GCM", false, ["encrypt", "decrypt"]); }
-    catch { store("jarvis.pairing"); cfg = null; }
+    catch { cfg = null; }
   }
+  renderDevices();
   for (const id of ["log", "dock", "modeSwitch", "bgClock", "clockPill"]) $(id).hidden = !cfg;
   if (desktop && cfg) openDrawer();
   if (cfg) Clock.start();
@@ -4995,7 +5111,10 @@ renderLang();
 checkForUpdate();
 ensureSW();
 navigator.serviceWorker?.addEventListener("message", e => { if (e.data?.type === "call" && cfg) Call.open(true, ""); });
-window.addEventListener("hashchange", start);
+window.addEventListener("hashchange", () => {   // a pairing link opened while the page was open
+  const p = parsePairing(location.hash.slice(1));
+  if (p) Devices.use(Devices.add(p));
+});
 start();
 </script>
 </body>

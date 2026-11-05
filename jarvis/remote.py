@@ -15,6 +15,7 @@ import logging
 import secrets
 import threading
 import time
+from urllib.parse import quote
 
 import requests
 from cryptography.exceptions import InvalidTag
@@ -73,6 +74,8 @@ def pairing_link() -> str:
     topic, key = ensure_keys()
     base = settings["phone_page_url"] or "https://<your-github-name>.github.io/jarvis/"
     link = f"{base}#t={topic}&k={b64e(key)}&s={settings['ntfy_server']}"
+    # which computer this is, so a phone paired with several (your PC and your laptop) can tell them apart
+    link += f"&n={quote(pc.device_name())}&d={pc.kind()}"
     url = last_url()   # lets the phone connect right away, even before it hears an announcement
     return link + (f"&u={url}" if url else "")
 
@@ -766,6 +769,9 @@ class PhoneChannel:
                 log.info("Voice language set to %s from the phone.", data["value"])
                 from . import voice
                 voice.language_changed()
+            elif key == "device_name" and isinstance(data.get("value"), str):   # renamed in the device switcher
+                set_setting("device_name", data["value"].strip()[:30])
+                log.info("This computer is now called %s on the phone.", pc.device_name())
             elif key == "edge_voice":
                 from . import speak
                 if data.get("value") in speak.VOICES:

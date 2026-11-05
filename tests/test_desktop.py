@@ -9,6 +9,26 @@ def test_desktop_page_talks_to_jarvis_locally(monkeypatch):
     url = desktop.page_url()
     assert url.startswith("http://127.0.0.1:8788/index.html#t=topic1&k=")   # the secrets stay in the #fragment
     assert url.endswith("&u=http://127.0.0.1:8787/desktop")                 # straight to Jarvis, not the tunnel
+    assert "&n=PC&d=desktop" in url   # which computer, for the device switcher
+
+
+def test_pairing_link_names_the_computer(monkeypatch):
+    monkeypatch.setattr(remote, "ensure_keys", lambda: ("topic1", b"\x01" * 32))
+    monkeypatch.setattr(remote, "last_url", lambda: "")
+    monkeypatch.setitem(remote.settings, "phone_page_url", "https://example.github.io/Jarvis/")
+    monkeypatch.setitem(remote.settings, "ntfy_server", "https://ntfy.sh")
+    monkeypatch.setattr(remote.pc, "device_name", lambda: "My Laptop")
+    monkeypatch.setattr(remote.pc, "kind", lambda: "laptop")
+    assert remote.pairing_link().endswith("&n=My%20Laptop&d=laptop")
+
+
+def test_renaming_the_computer_from_the_phone(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(remote, "set_setting", lambda k, v: saved.__setitem__(k, v))
+    phone = remote.PhoneChannel.__new__(remote.PhoneChannel)
+    phone.send_state = lambda: None
+    phone._handle({"type": "set", "key": "device_name", "value": "  Gaming PC  ", "id": "x"})
+    assert saved == {"device_name": "Gaming PC"}
 
 
 def test_model_picker(monkeypatch):

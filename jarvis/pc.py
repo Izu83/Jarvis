@@ -23,9 +23,31 @@ def now_playing() -> dict | None:
     return None
 
 
+_KIND = None
+
+
+def kind() -> str:
+    """"laptop" when this computer has a battery, else "desktop" (for the phone's device switcher)."""
+    global _KIND
+    if _KIND is None:
+        try:
+            _KIND = "laptop" if psutil.sensors_battery() is not None else "desktop"
+        except Exception:
+            _KIND = "desktop"
+    return _KIND
+
+
+def device_name() -> str:
+    """What the phone calls this computer: the device_name setting, else "Laptop" or "PC"."""
+    from .config import settings
+    return (settings.get("device_name") or "").strip() or ("Laptop" if kind() == "laptop" else "PC")
+
+
 def status() -> dict:
     return {
         "host": platform.node(),
+        "name": device_name(),
+        "kind": kind(),
         "cpu": sysinfo.cpu_now(),
         "ram": round(psutil.virtual_memory().percent),
         "uptime": int(time.time() - psutil.boot_time()),

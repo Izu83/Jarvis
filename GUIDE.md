@@ -45,6 +45,23 @@ Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─�
 GitHub Pages on a *private* repo needs a paid GitHub plan; on a free account the repo has to be public. That's safe:
 the page and code contain no secrets. Your key lives only in `.env` (git-ignored) and on your phone.
 
+### A second computer (your laptop)
+
+Jarvis can run on more than one computer, and one phone talks to all of them.
+
+1. On the laptop: `git clone https://github.com/Izu83/Jarvis`, then steps 1–2 above (Claude login, `.venv`,
+   `pip install -r requirements.txt`), copy `config.json` over if you want the same settings, and add keys with
+   `run.bat --keys`. Start it with `Jarvis.vbs`. It makes its **own** pairing key the first time, so the two
+   computers never share one.
+2. Right-click the laptop's tray icon › **Pair your phone**, copy the link.
+3. On the phone: **Settings › Your computers › Add a Computer** (it reads the link from the clipboard).
+
+Then pick which one you're talking to at the top of **Control Center** (the computer tab) or in Settings › Your
+computers. The tab shows the one you're on. Each computer keeps its own chats on the phone, because each Jarvis has
+its own memory. Messages and files from the other one wait on it until you switch. A computer with a battery calls itself
+"Laptop", otherwise "PC"; rename it there (or `"device_name"` in its `config.json`). Without an NVIDIA GPU the
+laptop runs Whisper on the CPU, so "Jarvis" on its own (without "Hey") is off there (`wake_name_alone: "auto"`).
+
 ## Running
 
 ```

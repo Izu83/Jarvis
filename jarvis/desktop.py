@@ -37,10 +37,13 @@ log = logging.getLogger("jarvis.desktop")
 
 def page_url() -> str:
     """The page, with this PC's pairing in the #fragment (never sent to the web server) pointing at Jarvis locally."""
+    from urllib.parse import quote
+    from jarvis import pc
     from jarvis.remote import b64e, ensure_keys
     topic, key = ensure_keys()
     local = f"http://127.0.0.1:{int(settings.get('phone_port', 8787))}/desktop"
-    return f"http://127.0.0.1:{PORT}/index.html#t={topic}&k={b64e(key)}&s={settings['ntfy_server']}&u={local}"
+    return (f"http://127.0.0.1:{PORT}/index.html#t={topic}&k={b64e(key)}&s={settings['ntfy_server']}"
+            f"&n={quote(pc.device_name())}&d={pc.kind()}&u={local}")
 
 
 def ensure_icon() -> Path:

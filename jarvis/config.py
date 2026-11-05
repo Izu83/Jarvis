@@ -142,6 +142,9 @@ DEFAULTS = {
     "gesture_app": "D:\\Projects\\Gesture-App",
     "gesture_python": "",
     "phone_page_url": "",  # e.g. https://<you>.github.io/jarvis/
+    # What the phone calls this computer when you have Jarvis on more than one (your PC and your laptop). Empty:
+    # "Laptop" when it has a battery, otherwise "PC". You can rename it on the phone too.
+    "device_name": "",
     # Email: your address here + an app password in .env (EMAIL_APP_PASSWORD). Servers are worked out from the
     # address (Gmail, Outlook, Yahoo, iCloud); set the hosts only for another provider.
     "email_address": "",
