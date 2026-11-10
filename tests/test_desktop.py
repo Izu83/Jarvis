@@ -56,3 +56,19 @@ def test_a_new_model_means_a_new_session(monkeypatch):
     before = brain._wanted()
     monkeypatch.setitem(brain.settings, "claude_code_model", "haiku")
     assert brain._wanted() != before == ("sonnet", "medium")
+
+
+def test_your_name_and_photo_from_the_phone(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(remote, "set_setting", lambda k, v: saved.__setitem__(k, v))
+    monkeypatch.setitem(remote.settings, "user_name", "x")
+    phone = remote.PhoneChannel.__new__(remote.PhoneChannel)
+    phone.send_state = lambda: None
+    photo = "data:image/jpeg;base64," + "A" * 100
+    for key, value in (("user_name", "  Niko   R  "), ("user_photo", photo),
+                       ("user_name", "   "), ("user_photo", "https://evil.example/x.png"),   # these two are refused
+                       ("user_photo", "data:image/jpeg;base64," + "A" * remote.PHOTO_MAX)):   # and so is a huge one
+        phone._handle({"type": "set", "key": key, "value": value, "id": "x"})
+    assert saved == {"user_name": "Niko R", "user_photo": photo}
+    phone._handle({"type": "set", "key": "user_photo", "value": "", "id": "x"})   # removed: the app shows initials
+    assert saved["user_photo"] == ""

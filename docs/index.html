@@ -587,6 +587,19 @@
   .profile { text-align: center; padding: 8px 16px 4px; }
   .profile .ring { width: 96px; height: 96px; border-radius: 50%; padding: 3px; margin: 0 auto 10px; background: conic-gradient(from 200deg, #5ac8fa, #0a84ff, #bf5af2, #5ac8fa); }
   .profile .ring img { width: 90px; height: 90px; border: 3px solid var(--base); }
+  /* tap the photo or the name to change them */
+  .profile button.ring { display: block; position: relative; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .profile button.ring:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+  .profile .ring .cam { position: absolute; right: -2px; bottom: -2px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+                        background: var(--blue); color: #fff; border: 3px solid var(--base); }
+  .profile .ring .cam svg.i { width: 15px; height: 15px; stroke-width: 2.2; }
+  .profile .ring.busy img { opacity: .45; }
+  .profile .name-edit { display: block; width: min(100%, 300px); margin: 0 auto; padding: 2px 10px; border: 0; border-radius: 12px; background: transparent;
+                        font: inherit; font-size: 26px; font-weight: 700; letter-spacing: .3px; color: var(--label); text-align: center; text-overflow: ellipsis;
+                        transition: background-color .2s ease; }
+  .profile .name-edit:hover, .profile .name-edit:focus { background: var(--fill); outline: none; }
+  .profile .name-edit:focus-visible { box-shadow: 0 0 0 2px var(--blue); }
+  .profile .name-edit::placeholder { color: var(--label3, var(--label2)); }
   .profile h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: .3px; }
   .profile a { color: var(--blue); font-size: 15px; text-decoration: none; }
   .profile .pc-line { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 12px; border-radius: 14px; background: var(--fill); font-size: 13px; color: var(--label2); }
@@ -1082,7 +1095,7 @@
     <button class="tab press" id="titlePill" aria-label="Your PC"><span class="ti"><svg class="i"><use href="#i-display"/></svg><span class="dot" id="dot"></span></span><span class="tl" id="status">Connecting…</span></button>
     <button class="tab press" id="newBtn" aria-label="New chat"><span class="ti"><svg class="i"><use href="#i-compose"/></svg></span><span class="tl">New</span></button>
     <button class="tab press" id="actTab" aria-label="Activity"><span class="ti"><svg class="i"><use href="#i-clock"/></svg><span class="badge-dot live" id="actBadge" hidden></span></span><span class="tl">Activity</span></button>
-    <button class="tab press" id="profileBtn" aria-label="Profile and settings"><span class="ti"><img class="avatar" src="avatar.jpg" alt=""></span><span class="tl">You</span></button>
+    <button class="tab press" id="profileBtn" aria-label="Profile and settings"><span class="ti"><img class="avatar me-pic" src="avatar.jpg" alt=""></span><span class="tl">You</span></button>
   </nav>
 </footer>
 
@@ -1102,8 +1115,8 @@
   <nav class="chats" id="chatList"></nav>
   <div class="link-card" id="linkCard"><svg class="i"><use href="#i-phone"/></svg><span class="t"><b id="linkTitle">Your phone</b><small id="linkSub">Checking…</small></span><button class="press" id="linkPair">Pair</button></div>
   <button class="me-row glass press" id="meRow">
-    <img class="avatar" src="avatar.jpg" alt="">
-    <span class="t"><b>Izu83</b><small><span class="dot" id="meDot"></span><span id="meHost">Jarvis</span></small></span>
+    <img class="avatar me-pic" src="avatar.jpg" alt="">
+    <span class="t"><b class="me-name">Izu83</b><small><span class="dot" id="meDot"></span><span id="meHost">Jarvis</span></small></span>
     <svg class="i"><use href="#i-right"/></svg>
   </button>
 </aside>
@@ -1115,8 +1128,9 @@
     <div class="sheet-head"><span style="width:32px"></span><h3>Profile</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
     <div class="sheet-body">
       <div class="profile">
-        <div class="ring"><img class="avatar" src="avatar.jpg" alt=""></div>
-        <h2>Izu83</h2>
+        <button class="ring press" id="photoBtn" type="button" aria-label="Change your photo"><img class="avatar me-pic" src="avatar.jpg" alt=""><span class="cam" aria-hidden="true"><svg class="i"><use href="#i-camera"/></svg></span></button>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <input class="name-edit me-name-input" id="nameInput" value="Izu83" maxlength="30" placeholder="Your name" aria-label="Your name" autocomplete="name" autocapitalize="words" spellcheck="false" enterkeyhint="done">
         <a href="https://github.com/Izu83" target="_blank" rel="noopener">github.com/Izu83</a><br>
         <span class="pc-line"><span class="dot" id="profDot"></span><span id="profPc">Jarvis</span></span>
       </div>
@@ -1424,9 +1438,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-05.4";   // bump together with version.json
+const VERSION = "2026-11-10.1";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv43", when: "Nov 10, 2026", title: "Your name and photo", notes: [
+    "Tap your name in Profile to change it. The greeting, the Chats list and the tab bar use the new one.",
+    "Tap your photo to choose a new one from your library or camera, or remove it to show your initials.",
+    "Your PC keeps both, so your other phones and the desktop app show the same name and photo.",
+  ]},
   { v: "JNIv42", when: "Nov 5, 2026", title: "Closer to iOS", notes: [
     "Sheets follow your finger: flick one down to close it, or let go and it settles back.",
     "Voice mode's glow takes the orb's colour: blue, green while he listens, purple while he works.",
@@ -1750,6 +1769,59 @@ const shotsCache = new Map();    // screenshot message id -> { url, monitors } (
 
 function store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+// Your name and photo (Profile). Kept on the PC too, so every phone and the desktop app show the same ones.
+// The photo is null until you choose one (the built-in picture), "" once removed (your initials), else a small JPEG.
+const Me = {
+  name: load("jarvis.name") || "Izu83",
+  pic: load("jarvis.photo"),
+  get photo() { return this.pic === null ? "avatar.jpg" : this.pic || this.initials(); },
+  initials() {
+    const w = this.name.trim().split(/\s+/).filter(Boolean);
+    const letters = (w.length > 1 ? [...w[0]][0] + [...w.at(-1)][0] : [...(w[0] || "?")][0]).toUpperCase();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="#a6acb9"/><stop offset="1" stop-color="#858994"/></linearGradient></defs>` +
+      `<rect width="100" height="100" fill="url(#g)"/><text x="50" y="50" dy=".35em" text-anchor="middle" fill="#fff" ` +
+      `font-family="-apple-system,BlinkMacSystemFont,Segoe UI,system-ui,sans-serif" font-size="42" font-weight="600">` +
+      `${esc(letters)}</text></svg>`;
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+  },
+  apply() {
+    const src = this.photo;
+    for (const img of document.querySelectorAll(".me-pic")) if (img.getAttribute("src") !== src) img.src = src;
+    for (const el of document.querySelectorAll(".me-name")) el.textContent = this.name;
+    const input = document.getElementById("nameInput");
+    if (input && document.activeElement !== input) input.value = this.name;
+  },
+  keep(name, pic) {   // on this device
+    if (name !== undefined) { this.name = name; store("jarvis.name", name); }
+    if (pic !== undefined) { this.pic = pic; store("jarvis.photo", pic === null ? undefined : pic); }
+    this.apply();
+  },
+  // A change made here goes to the PC; if it can't be reached it's sent the next time it is.
+  async change(name, pic) {
+    this.keep(name, pic);
+    store("jarvis.meDirty", "1");
+    this.settling = Date.now() + 4000;   // a status already on its way still has the old ones
+    return this.push();
+  },
+  async push() {
+    this.pushing = true;
+    try {
+      const sends = [post({ type: "set", key: "user_name", value: this.name, id: newId() })];
+      if (this.pic !== null) sends.push(post({ type: "set", key: "user_photo", value: this.pic, id: newId() }));
+      await Promise.all(sends);
+      store("jarvis.meDirty");
+    } finally { this.pushing = false; }
+  },
+  fromPc(me) {   // the PC's copy wins, unless this device has a change it hasn't sent yet
+    if (this.pushing || Date.now() < (this.settling || 0)) return;
+    if (load("jarvis.meDirty")) { this.push().catch(() => {}); return; }
+    const name = typeof me.name === "string" && me.name ? me.name : undefined;
+    const pic = typeof me.photo === "string" ? me.photo : undefined;
+    if ((name !== undefined && name !== this.name) || (pic !== undefined && pic !== this.pic)) this.keep(name, pic);
+  },
+};
 const icon = (name, cls = "i") => `<svg class="${cls}"><use href="#i-${name}"/></svg>`;
 const b64e = b => {   // in slices: spreading a whole voice recording into one call overflows the stack
   const u = new Uint8Array(b); let s = "";
@@ -2117,7 +2189,7 @@ function renderHome() {
   home.className = "home"; home.id = "home";
   const h = new Date().getHours();
   const greeting = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  home.innerHTML = `<div class="hello"><div class="ring"><img class="avatar" src="avatar.jpg" alt=""></div><div><h1>${greeting},<br>Izu83</h1><p>What should Jarvis do? <button class="jni-tag press" id="jniTag" aria-label="What's new">${JNI}<span class="nd" id="jniDot" hidden></span></button></p></div></div><div class="suggest" id="suggest"></div>`;
+  home.innerHTML = `<div class="hello"><div class="ring"><img class="avatar me-pic" src="${esc(Me.photo)}" alt=""></div><div><h1>${greeting},<br><span class="me-name">${esc(Me.name)}</span></h1><p>What should Jarvis do? <button class="jni-tag press" id="jniTag" aria-label="What's new">${JNI}<span class="nd" id="jniDot" hidden></span></button></p></div></div><div class="suggest" id="suggest"></div>`;
   home.querySelector("#jniTag").onclick = openNews;
   for (const [title, cmd] of SUGGESTIONS) {
     const b = document.createElement("button");
@@ -3005,6 +3077,7 @@ function onState(data) {
   Models.state(data);
   if (desktop) PhoneLink.state(data);
   if (data.voice && data.voice !== jarvisVoice) { jarvisVoice = data.voice; store("jarvis.voice", data.voice); renderVoices(); }
+  if (data.me) Me.fromPc(data.me);
   if (data.where) Clock.set(data.where);
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
   if (typeof data.away === "boolean" && (data.away !== awayOn || data.away_since !== awaySince)) {
@@ -3749,6 +3822,46 @@ $("drawerNewBtn").onclick = () => newChat();
 $("newGroupBtn").onclick = createGroup;
 $("search").oninput = renderSidebar;
 const openProfile = () => { openSheet("sheet"); post({ type: "memory_get", id: newId() }).catch(() => {}); };
+
+// Profile: tap your name to rename yourself, tap your photo to choose a new one.
+const saidMe = p => p.then(() => toast("Saved", "check"), () => toast("Saved here. Your PC gets it when it's connected.", "check", "var(--orange)"));
+$("nameInput").onkeydown = e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { e.target.value = Me.name; e.target.blur(); } };
+$("nameInput").onchange = e => {
+  const name = e.target.value.split(/\s+/).filter(Boolean).join(" ").slice(0, 30);
+  if (!name) { e.target.value = Me.name; return; }   // a name can't be empty
+  if (name !== Me.name) saidMe(Me.change(name));
+  e.target.value = name;
+};
+$("photoBtn").onclick = () => actionSheet("", [
+  { label: Me.pic === null || Me.pic ? "Choose New Photo" : "Choose Photo", run: () => $("photoInput").click() },
+  ...(Me.pic === "" ? [] : [{ label: "Remove Photo", danger: true, run: () => saidMe(Me.change(undefined, "")) }]),
+]);
+// Cropped to a square from the middle and shrunk to 256 px, so it's small enough to keep and send (about 20-30 KB).
+async function squarePhoto(file, size = 256) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+    return c.toDataURL("image/jpeg", 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
+$("photoInput").onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = "";   // choosing the same picture again still counts
+  if (!file) return;
+  $("photoBtn").classList.add("busy");
+  try { saidMe(Me.change(undefined, await squarePhoto(file))); }
+  catch { toast("Couldn't open that picture. Try another one.", "x", "var(--red)"); }
+  finally { $("photoBtn").classList.remove("busy"); }
+};
+Me.apply();
 $("profileBtn").onclick = openProfile;
 $("meRow").onclick = () => { closeDrawer(); openProfile(); };
 $("titlePill").onclick = openControl;

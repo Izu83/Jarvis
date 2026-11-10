@@ -36,6 +36,7 @@ FRAME_AAD = b"jarvis-frame"   # live-screen pictures: binary WebSocket messages 
 WATCH_INTERVAL = 3          # seconds between live stats while the System page is open
 ANNOUNCE_EVERY = 4 * 3600   # re-announce the address before the relay forgets it (12 h)
 MAX_AGE_MS = 120_000
+PHOTO_MAX = 120_000   # your profile photo, as a data URL: the app shrinks it to about 30 KB
 
 
 def b64e(data: bytes) -> str:
@@ -282,6 +283,8 @@ class PhoneChannel:
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
                        "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
+                       # your name and photo, so every phone and the desktop app show the same (None = never set)
+                       "me": {"name": settings.get("user_name"), "photo": settings.get("user_photo")},
                        "away": away.is_on(), "away_since": away.since(), "faceid": faceid.enabled(),
                        "ask_permission": bool(settings.get("ask_permission", True)),
                        "nap": nap.is_on(), "nap_since": nap.since(),
@@ -779,6 +782,14 @@ class PhoneChannel:
             elif key == "device_name" and isinstance(data.get("value"), str):   # renamed in the device switcher
                 set_setting("device_name", data["value"].strip()[:30])
                 log.info("This computer is now called %s on the phone.", pc.device_name())
+            elif key == "user_name" and isinstance(data.get("value"), str) and data["value"].strip():   # Profile: your name
+                set_setting("user_name", " ".join(data["value"].split())[:30])
+                log.info("Your name in the app is now %s.", settings["user_name"])
+            elif key == "user_photo" and isinstance(data.get("value"), str):   # Profile: your photo ("" = initials)
+                photo = data["value"]
+                if photo == "" or (photo.startswith("data:image/jpeg;base64,") and len(photo) <= PHOTO_MAX):
+                    set_setting("user_photo", photo)
+                    log.info("Your photo in the app was %s.", "changed" if photo else "removed")
             elif key == "edge_voice":
                 from . import speak
                 if data.get("value") in speak.VOICES:
