@@ -35,6 +35,10 @@ DEFAULTS = {
     # for, like reminders and scheduled tasks), "normal" (+ a heads-up about new important email) or "chatty"
     # (+ a heads-up about every new email). During quiet_hours [from, to] they arrive without a notification.
     "proactive": "normal",
+    # Check-ins (checkin.py): now and then he asks what you're up to. "off", "sometimes" or "often";
+    # check_in_aloud also says them out loud when you're at the PC.
+    "check_ins": "sometimes",
+    "check_in_aloud": False,
     "morning_time": "08:30",
     # The morning briefing at morning_time: weather, calendar, reminders, email, PC (no tokens). briefing_speak also
     # reads it out on the PC. weather_city "" = work it out from your internet connection.

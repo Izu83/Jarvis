@@ -594,6 +594,27 @@
                         background: var(--blue); color: #fff; border: 3px solid var(--base); }
   .profile .ring .cam svg.i { width: 15px; height: 15px; stroke-width: 2.2; }
   .profile .ring.busy img { opacity: .45; }
+  /* dragging pictures or files over the app: a frame says they can be dropped */
+  body.dropping::after { content: "Drop to add to your message"; position: fixed; inset: 12px; z-index: 90; display: grid; place-items: center;
+    border: 2px dashed var(--blue); border-radius: 24px; background: color-mix(in srgb, var(--base) 70%, transparent);
+    font-size: 17px; font-weight: 600; color: var(--blue); pointer-events: none; }
+  /* Move and Scale: the photo under a dark veil with a clear circle, like iOS */
+  .crop { position: fixed; inset: 0; z-index: 80; background: #000; color: #fff; outline: none; overflow: hidden;
+          --d: min(calc(100vw - 48px), calc(100dvh - 260px), 380px); }
+  .crop[hidden] { display: none; }
+  .crop-stage { position: absolute; inset: 0; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .crop-stage:active { cursor: grabbing; }
+  .crop-stage img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; will-change: transform; pointer-events: none; -webkit-user-drag: none; }
+  .crop-mask { position: absolute; left: 50%; top: 50%; width: var(--d); height: var(--d); transform: translate(-50%, -50%);
+               border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 200vmax rgba(0,0,0,.62), inset 0 0 0 1px rgba(255,255,255,.55); }
+  .crop-top { position: absolute; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top) + 18px) 20px 0; text-align: center; pointer-events: none; }
+  .crop-top b { display: block; font-size: 17px; font-weight: 600; }
+  .crop-top small { display: block; margin-top: 4px; font-size: 13px; color: rgba(255,255,255,.65); }
+  .crop-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between;
+              padding: 14px max(20px, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 18px); }
+  .crop-bar button { font: inherit; font-size: 17px; color: #fff; padding: 10px 6px; min-height: 44px; background: none; border: 0; cursor: pointer; }
+  .crop-bar button.strong { font-weight: 600; color: #ffd60a; }
+  .crop-bar button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 8px; }
   .profile .name-edit { display: block; width: min(100%, 300px); margin: 0 auto; padding: 2px 10px; border: 0; border-radius: 12px; background: transparent;
                         font: inherit; font-size: 26px; font-weight: 700; letter-spacing: .3px; color: var(--label); text-align: center; text-overflow: ellipsis;
                         transition: background-color .2s ease; }
@@ -1131,6 +1152,14 @@
   </button>
 </aside>
 
+<!-- your photo: Move and Scale -->
+<div class="crop" id="crop" role="dialog" aria-modal="true" aria-label="Move and scale your photo" tabindex="-1" hidden>
+  <div class="crop-stage" id="cropStage"><img id="cropImg" alt="" draggable="false"></div>
+  <div class="crop-mask" id="cropMask" aria-hidden="true"></div>
+  <div class="crop-top"><b>Move and Scale</b><small>Drag to move. Pinch, scroll or double-tap to zoom.</small></div>
+  <div class="crop-bar"><button class="press" id="cropCancel" type="button">Cancel</button><button class="press strong" id="cropOk" type="button">Choose</button></div>
+</div>
+
 <!-- profile + settings -->
 <div class="sheet-wrap" id="sheet" hidden>
   <div class="sheet glass strong" role="dialog" aria-label="Profile">
@@ -1168,6 +1197,10 @@
         <div class="opt-label" style="margin-top: 17px;">Messages you on his own</div>
         <div class="segment" id="proactiveSeg"></div>
         <div class="opt-note" id="proactiveNote"></div>
+        <div class="opt-label" style="margin-top: 17px;">Checks in on you</div>
+        <div class="segment" id="checkinSeg"></div>
+        <div class="opt-note" id="checkinNote"></div>
+        <label class="row" style="padding: 0; margin-top: 12px;"><span class="grow">Say it out loud at the PC<span class="sub">When you're at the computer, he asks out loud too.</span></span><span class="switch"><input type="checkbox" id="checkinAloud"><span></span></span></label>
       </div>
       <div class="group-title">Morning briefing</div>
       <div class="group">
@@ -1230,6 +1263,15 @@
             <li>Add <b>Get URLs from Input</b>.</li>
             <li>Add another <b>Get Contents of URL</b> (it uses those URLs). Tap <b>Show More</b> › <b>Headers</b> and add two:<br>
               <code>X-Jarvis-Key</code> = the <b>key</b> below<br><code>X-Jarvis-Ask</code> = the <b>URL Encoded Text</b> from step 3</li>
+            <li>Add <b>Show Result</b>.</li>
+          </ol>
+          <p style="margin-top:14px"><b>Photos and files too:</b> make a second shortcut, <b>Send to Jarvis</b>. Then share a photo, a PDF or any file and say what to do with it (“what plant is this?”, “put this on my PC”), or leave it empty and he says what it is.</p>
+          <ol>
+            <li>Tap <b>+</b>, name it <b>Send to Jarvis</b>, and in its details (ⓘ) turn on <b>Show in Share Sheet</b>. Let it receive <b>Images</b>, <b>Files</b>, <b>PDFs</b> and <b>Media</b>.</li>
+            <li>Add <b>Ask for Input</b> with the question <b>What should Jarvis do with it?</b></li>
+            <li>Add <b>URL Encode</b> (it uses the Provided Input).</li>
+            <li>Add <b>Get Contents of URL</b> and paste the <b>address link</b> below, then <b>Get URLs from Input</b>.</li>
+            <li>Add another <b>Get Contents of URL</b>. Under <b>Show More</b>, set <b>Method</b> to <b>POST</b>, add the same two headers as above (<code>X-Jarvis-Ask</code> = the <b>URL Encoded Text</b>), and set <b>Request Body</b> to <b>File</b> with the <b>Shortcut Input</b>.</li>
             <li>Add <b>Show Result</b>.</li>
           </ol>
           <div class="siri-copy"><span><small>Address link</small><code id="siriAddr">Waiting for your PC…</code></span><button class="mini" id="siriAddrCopy">Copy</button></div>
@@ -1448,9 +1490,16 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-12.2";   // bump together with version.json
+const VERSION = "2026-11-12.3";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv45", when: "Nov 12, 2026", title: "Chattier, and more ways to reach him", notes: [
+    "He checks in now and then: what you're up to, or help with what's on your screen. Settings › Memory › Checks in on you (Never, Sometimes, Often), and he can say it out loud at the PC.",
+    "Paste a picture into the message box, like a screenshot (Ctrl+V on the PC, Paste on the iPhone), or drop pictures and files on the chat.",
+    "Send to Jarvis: share a photo, PDF or file from any app on your iPhone. Settings › Siri & Share shows how to make the shortcut.",
+    "Wake your PC when it's asleep: Settings › Your computers › Wake, or Wake It on the “Can't find PC” card. Your laptop sends the signal, and “wake up my PC” works by voice there too.",
+    "Choosing a profile photo now lets you move and zoom it in a circle, like on iOS.",
+  ]},
   { v: "JNIv44", when: "Nov 12, 2026", title: "Logos in the model list", notes: [
     "Each AI in the model list has its logo in front of its name: Claude, Gemini, OpenRouter, ChatGPT, Grok, Hermes and Qwen.",
   ]},
@@ -1757,6 +1806,19 @@ const Devices = (() => {
       list = list.filter(x => x !== d);
       if (active === id) active = list[0]?.id || null;
       D.save(); location.reload();
+    },
+    // Its network card (sent by the computer), so another of your computers can wake it when it's asleep.
+    wakeInfo(w) {
+      const d = D.active;
+      if (!d || !w?.mac || JSON.stringify(d.wake) === JSON.stringify(w)) return;
+      d.wake = w; D.save(); renderDevices();
+    },
+    peers: () => list.filter(x => x !== D.active && x.wake?.mac).map(x => ({ name: D.name(x), ...x.wake })),
+    // Wake one of your other computers, through the one this phone is connected to now.
+    wake(d) {
+      if (!d?.wake?.mac) { toast("Open Jarvis on it once first, so I know its network card.", "x", "var(--orange)"); return; }
+      post({ type: "wake", mac: d.wake.mac, broadcast: d.wake.broadcast || "", name: D.name(d), id: newId() })
+        .then(() => toast(`Waking ${D.name(d)}…`, "sparkles", "var(--blue)"), () => toast(`Connect to ${D.name()} first.`, "x", "var(--red)"));
     },
     seen(pcInfo) {   // the computer says what it's called (renamed on it, or on another phone)
       const d = D.active;
@@ -3085,12 +3147,15 @@ function renderLang() {
   });
   $("langNote").textContent = LANG_NOTE[voiceLang];
 }
+$("checkinAloud").onchange = e => memSet({ check_in_aloud: e.target.checked }, "Saved");
 let awayOn = false, awaySince = 0, napOn = false, napSince = 0;
 function onState(data) {
   Models.state(data);
   if (desktop) PhoneLink.state(data);
   if (data.voice && data.voice !== jarvisVoice) { jarvisVoice = data.voice; store("jarvis.voice", data.voice); renderVoices(); }
   if (data.me) Me.fromPc(data.me);
+  if (data.wake) Devices.wakeInfo(data.wake);
+  WakeRelay.state();
   if (data.where) Clock.set(data.where);
   if (data.voice_language && data.voice_language !== voiceLang) { voiceLang = data.voice_language; store("jarvis.voiceLang", voiceLang); renderLang(); }
   if (typeof data.away === "boolean" && (data.away !== awayOn || data.away_since !== awaySince)) {
@@ -3849,30 +3914,195 @@ $("photoBtn").onclick = () => actionSheet("", [
   { label: Me.pic === null || Me.pic ? "Choose New Photo" : "Choose Photo", run: () => $("photoInput").click() },
   ...(Me.pic === "" ? [] : [{ label: "Remove Photo", danger: true, run: () => saidMe(Me.change(undefined, "")) }]),
 ]);
-// Cropped to a square from the middle and shrunk to 256 px, so it's small enough to keep and send (about 20-30 KB).
-async function squarePhoto(file, size = 256) {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const c = document.createElement("canvas");
-    c.width = c.height = size;
-    const g = c.getContext("2d");
+// Move and Scale, like iOS: drag the photo, pinch (or scroll, or double-tap) to zoom, inside a circle. It follows
+// your finger 1:1, stretches a little past the edges, and springs back when you let go; a flick keeps going.
+// The part in the circle becomes a 256 px JPEG (about 20-30 KB), small enough to keep and send.
+const Crop = {
+  SIZE: 256,
+  open(file) {
+    return new Promise(async (resolve, reject) => {
+      const url = URL.createObjectURL(file), img = $("cropImg");
+      try { img.src = url; await img.decode(); }
+      catch (e) { URL.revokeObjectURL(url); reject(e); return; }
+      this.done = data => { $("crop").hidden = true; document.removeEventListener("keydown", this.keys); URL.revokeObjectURL(url); resolve(data); };
+      $("crop").hidden = false;
+      $("crop").focus();
+      document.addEventListener("keydown", this.keys);
+      this.w = img.naturalWidth; this.h = img.naturalHeight;
+      this.layout();
+      this.fit();
+    });
+  },
+  layout() {   // the circle, in the stage's pixels
+    const r = $("cropMask").getBoundingClientRect(), st = $("cropStage").getBoundingClientRect();
+    this.c = { x: r.left - st.left, y: r.top - st.top, d: r.width };
+    this.min = this.c.d / Math.min(this.w, this.h);   // the photo always covers the circle
+    this.max = Math.max(this.min * 5, this.c.d / 200);
+  },
+  fit() {   // centred, just covering the circle
+    this.stop();
+    this.s = this.min;
+    this.x = this.c.x + (this.c.d - this.w * this.s) / 2;
+    this.y = this.c.y + (this.c.d - this.h * this.s) / 2;
+    this.paint();
+  },
+  paint() { $("cropImg").style.transform = `translate(${this.x}px, ${this.y}px) scale(${this.s})`; },
+  // where it may rest: covering the circle, between the zoom limits
+  bounds(s = this.s) {
+    s = Math.min(this.max, Math.max(this.min, s));
+    return { s, x0: this.c.x + this.c.d - this.w * s, x1: this.c.x, y0: this.c.y + this.c.d - this.h * s, y1: this.c.y };
+  },
+  rubber(over, dim) { return (over * dim * 0.55) / (dim + 0.55 * Math.abs(over)); },   // past the edge: less and less
+  soft(v, lo, hi, dim) { return v < lo ? lo - this.rubber(lo - v, dim) : v > hi ? hi + this.rubber(v - hi, dim) : v; },
+  // the finger's raw position (rx, ry, rs) -> what's shown, stretched softly past the limits
+  show() {
+    const s = this.rs < this.min ? this.min - this.rubber(this.min - this.rs, this.min) * 0.6
+            : this.rs > this.max ? this.max + this.rubber(this.rs - this.max, this.max) * 0.6 : this.rs;
+    const b = this.bounds(s);
+    this.s = s;
+    this.x = this.soft(this.rx, b.x0, b.x1, this.c.d);
+    this.y = this.soft(this.ry, b.y0, b.y1, this.c.d);
+    this.paint();
+  },
+  pts: new Map(), hist: [],
+  down(e) {
+    try { $("cropStage").setPointerCapture(e.pointerId); } catch {}
+    this.stop();   // grab it mid-flight: it stops where it is
+    this.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    this.rx = this.x; this.ry = this.y; this.rs = this.s;
+    this.hist = [];
+  },
+  move(e) {
+    const p = this.pts.get(e.pointerId);
+    if (!p) return;
+    const before = [...this.pts.values()].map(q => ({ ...q }));
+    p.x = e.clientX; p.y = e.clientY;
+    const after = [...this.pts.values()];
+    const mid = a => ({ x: a.reduce((t, q) => t + q.x, 0) / a.length, y: a.reduce((t, q) => t + q.y, 0) / a.length });
+    const m0 = mid(before), m1 = mid(after);
+    if (after.length >= 2) {   // pinch: zoom around the point between your fingers
+      const d = a => Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      const f = d(after) / (d(before) || 1), st = $("cropStage").getBoundingClientRect();
+      const ox = m0.x - st.left, oy = m0.y - st.top;
+      this.rx = ox - (ox - this.rx) * f; this.ry = oy - (oy - this.ry) * f; this.rs *= f;
+    }
+    this.rx += m1.x - m0.x; this.ry += m1.y - m0.y;
+    this.hist.push({ t: performance.now(), x: this.rx, y: this.ry });
+    if (this.hist.length > 6) this.hist.shift();
+    this.show();
+  },
+  up(e) {
+    this.pts.delete(e.pointerId);
+    if (this.pts.size) { this.rx = this.x; this.ry = this.y; this.rs = this.s; this.hist = []; return; }
+    // the finger's speed when it let go (px/s), from the last few moves
+    const h = this.hist, a = h[0], b = h[h.length - 1];
+    const dt = b && a && b.t - a.t > 10 && performance.now() - b.t < 80 ? (b.t - a.t) / 1000 : 0;
+    const vx = dt ? (b.x - a.x) / dt : 0, vy = dt ? (b.y - a.y) / dt : 0;
+    const project = v => (v / 1000) * 0.99 / (1 - 0.99);   // where a flick would coast to
+    this.settle(vx, vy, project(vx), project(vy));
+  },
+  settle(vx = 0, vy = 0, px = 0, py = 0) {
+    const b = this.bounds();
+    const tx = Math.min(b.x1, Math.max(b.x0, this.x + px)), ty = Math.min(b.y1, Math.max(b.y0, this.y + py));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { this.x = tx; this.y = ty; this.s = b.s; this.paint(); return; }
+    // zooming back into range keeps the circle's centre where it is
+    const cx = this.c.x + this.c.d / 2, cy = this.c.y + this.c.d / 2, f = b.s / this.s;
+    const zx = Math.min(b.x1, Math.max(b.x0, cx - (cx - tx) * f)), zy = Math.min(b.y1, Math.max(b.y0, cy - (cy - ty) * f));
+    this.spring({ x: zx, y: zy, s: b.s }, { x: vx, y: vy, s: 0 });
+  },
+  // A critically damped spring (no bounce), 0.4 s response, carrying the finger's speed into the motion.
+  spring(to, vel) {
+    this.stop();
+    const k = (2 * Math.PI / 0.4) ** 2, c = 2 * Math.sqrt(k);
+    const v = { ...vel };
+    let last = performance.now();
+    const step = now => {
+      const dt = Math.min(0.032, (now - last) / 1000); last = now;
+      let still = true;
+      for (const key of ["x", "y", "s"]) {
+        const scale = key === "s" ? this.min : 1;
+        const a = -k * (this[key] - to[key]) - c * v[key];
+        v[key] += a * dt; this[key] += v[key] * dt;
+        if (Math.abs(this[key] - to[key]) > 0.3 * scale / (key === "s" ? 100 : 1) || Math.abs(v[key]) > 2 * scale) still = false;
+      }
+      if (still) { Object.assign(this, to); this.paint(); this.raf = 0; return; }
+      this.paint();
+      this.raf = requestAnimationFrame(step);
+    };
+    this.raf = requestAnimationFrame(step);
+  },
+  stop() { if (this.raf) cancelAnimationFrame(this.raf); this.raf = 0; },
+  zoomAt(f, px, py) {   // by a factor, around a point on the stage
+    this.stop();
+    const s = Math.min(this.max * 1.15, Math.max(this.min * 0.85, this.s * f)), g = s / this.s;
+    this.x = px - (px - this.x) * g; this.y = py - (py - this.y) * g; this.s = s;
+    this.paint();
+    clearTimeout(this.wheelT); this.wheelT = setTimeout(() => this.settle(), 140);
+  },
+  wheel(e) {
+    e.preventDefault();
+    const st = $("cropStage").getBoundingClientRect();
+    if (e.ctrlKey || e.deltaMode === 1 || (Math.abs(e.deltaY) >= 40 && !e.deltaX)) {   // a trackpad pinch or a mouse wheel: zoom
+      this.zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)), e.clientX - st.left, e.clientY - st.top);
+      return;
+    }
+    this.stop();   // two fingers on a trackpad: move it
+    const b = this.bounds();
+    this.x = this.soft(this.x - e.deltaX, b.x0, b.x1, this.c.d); this.y = this.soft(this.y - e.deltaY, b.y0, b.y1, this.c.d);
+    this.paint();
+    clearTimeout(this.wheelT); this.wheelT = setTimeout(() => this.settle(), 140);
+  },
+  dbl(e) {   // double-tap: in to 2.5x where you tapped, or back out
+    const st = $("cropStage").getBoundingClientRect(), px = e.clientX - st.left, py = e.clientY - st.top;
+    const to = this.s > this.min * 1.5 ? this.min : this.min * 2.5, f = to / this.s;
+    const b = this.bounds(to);
+    const x = Math.min(b.x1, Math.max(b.x0, px - (px - this.x) * f)), y = Math.min(b.y1, Math.max(b.y0, py - (py - this.y) * f));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { Object.assign(this, { x, y, s: to }); this.paint(); return; }
+    this.spring({ x, y, s: to }, { x: 0, y: 0, s: 0 });
+  },
+  keys: e => {   // the keyboard works too: arrows move, + and - zoom, Return chooses, Escape cancels
+    const C = Crop, step = e.shiftKey ? 40 : 12;
+    if (e.key === "Escape") { e.preventDefault(); C.done(null); return; }
+    if (e.key === "Enter") { e.preventDefault(); C.done(C.result()); return; }
+    const mv = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
+    if (mv) { e.preventDefault(); C.stop(); C.x += mv[0]; C.y += mv[1]; C.settle(); return; }
+    if (e.key === "+" || e.key === "=" || e.key === "-") {
+      e.preventDefault();
+      C.zoomAt(e.key === "-" ? 1 / 1.2 : 1.2, C.c.x + C.c.d / 2, C.c.y + C.c.d / 2);
+    }
+  },
+  result() {
+    this.stop();
+    const b = this.bounds(); Object.assign(this, { s: b.s, x: Math.min(b.x1, Math.max(b.x0, this.x)), y: Math.min(b.y1, Math.max(b.y0, this.y)) });
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = this.SIZE;
+    const g = cv.getContext("2d");
     g.imageSmoothingQuality = "high";
-    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
-    return c.toDataURL("image/jpeg", 0.85);
-  } finally { URL.revokeObjectURL(url); }
+    const side = this.c.d / this.s;
+    g.drawImage($("cropImg"), (this.c.x - this.x) / this.s, (this.c.y - this.y) / this.s, side, side, 0, 0, this.SIZE, this.SIZE);
+    return cv.toDataURL("image/jpeg", 0.85);
+  },
+};
+{
+  const st = $("cropStage");
+  st.addEventListener("pointerdown", e => Crop.down(e));
+  st.addEventListener("pointermove", e => Crop.move(e));
+  st.addEventListener("pointerup", e => Crop.up(e));
+  st.addEventListener("pointercancel", e => Crop.up(e));
+  st.addEventListener("wheel", e => Crop.wheel(e), { passive: false });
+  st.addEventListener("dblclick", e => Crop.dbl(e));
+  $("cropCancel").onclick = () => Crop.done(null);
+  $("cropOk").onclick = () => Crop.done(Crop.result());
+  addEventListener("resize", () => { if (!$("crop").hidden) { Crop.layout(); Crop.settle(); } });
 }
 $("photoInput").onchange = async e => {
   const file = e.target.files[0];
   e.target.value = "";   // choosing the same picture again still counts
   if (!file) return;
-  $("photoBtn").classList.add("busy");
-  try { saidMe(Me.change(undefined, await squarePhoto(file))); }
-  catch { toast("Couldn't open that picture. Try another one.", "x", "var(--red)"); }
-  finally { $("photoBtn").classList.remove("busy"); }
+  let data = null;
+  try { data = await Crop.open(file); }
+  catch { toast("Couldn't open that picture. Try another one.", "x", "var(--red)"); return; }
+  if (data) saidMe(Me.change(undefined, data));
 };
 Me.apply();
 $("profileBtn").onclick = openProfile;
@@ -3974,6 +4204,12 @@ const PROACTIVE_NOTE = {
   normal: "Also tells you when an important email arrives. Quiet from 23:00 to 08:00.",
   chatty: "Tells you about every new email, not just the important ones. Quiet from 23:00 to 08:00.",
 };
+const CHECKINS = [["off", "Never"], ["sometimes", "Sometimes"], ["often", "Often"]];
+const CHECKIN_NOTE = {
+  off: "He only talks when you talk to him (and for the messages above).",
+  sometimes: "Now and then he asks what you're up to, or offers help with what's on your screen. Up to 4 times a day.",
+  often: "He checks in every hour or two, up to 8 times a day. Never in quiet hours, during a game or film, or when you've just talked.",
+};
 let mem = null;
 function segmentOf(box, items, sel, pick) {
   box.innerHTML = "";
@@ -4003,6 +4239,10 @@ function onMemory(d) {
   const pro = d.proactive || "normal";
   $("proactiveNote").textContent = PROACTIVE_NOTE[pro];
   segmentOf($("proactiveSeg"), PROACTIVE, pro, id => { $("proactiveNote").textContent = PROACTIVE_NOTE[id]; memSet({ proactive: id }, "Saved"); });
+  const ci = CHECKIN_NOTE[d.check_ins] ? d.check_ins : "sometimes";
+  $("checkinNote").textContent = CHECKIN_NOTE[ci];
+  segmentOf($("checkinSeg"), CHECKINS, ci, id => { $("checkinNote").textContent = CHECKIN_NOTE[id]; memSet({ check_ins: id }, "Saved"); });
+  $("checkinAloud").checked = !!d.check_in_aloud;
   renderBriefing(d.briefing);
   const list = $("factList"); list.innerHTML = "";
   if (!d.facts?.length) list.innerHTML = '<div class="row"><span class="grow sub-only">Nothing yet. Tell Jarvis “remember that…”, or add something below.</span></div>';
@@ -5176,6 +5416,37 @@ function pickAndUpload() {
   }
   input.click();
 }
+// Paste a picture into the message box (Ctrl+V, or Paste on the iPhone), or drop pictures and files on the chat:
+// they join the message like ones you picked. Copied text still pastes as text.
+function pastedName(f) {
+  if (f.name && !/^image\.\w+$/i.test(f.name)) return f;   // screenshots arrive as "image.png": give it a real name
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  const ext = (f.type.split("/")[1] || "png").replace("jpeg", "jpg").replace(/[^a-z0-9]/gi, "");
+  return new File([f], `Pasted image ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}.${ext}`, { type: f.type });
+}
+$("text").addEventListener("paste", e => {
+  const cd = e.clipboardData, files = [...(cd?.files || [])];
+  // Word and the like put a picture of the copied text on the clipboard too: then it's text you meant
+  if (!files.length || (cd.getData("text/plain") || "").trim()) return;
+  e.preventDefault();
+  files.forEach(f => uploadFile(pastedName(f)));
+  toast(files.length > 1 ? `${files.length} pictures added` : "Picture added", "check");
+});
+{
+  let depth = 0;
+  const hasFiles = e => [...(e.dataTransfer?.types || [])].includes("Files");
+  const show = on => document.body.classList.toggle("dropping", on);
+  addEventListener("dragenter", e => { if (!hasFiles(e)) return; e.preventDefault(); depth++; show(true); });
+  addEventListener("dragover", e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  addEventListener("dragleave", e => { if (!hasFiles(e)) return; if (--depth <= 0) { depth = 0; show(false); } });
+  addEventListener("drop", e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); depth = 0; show(false);
+    if (e.target.closest?.("#crop")) return;
+    [...e.dataTransfer.files].forEach(f => uploadFile(pastedName(f)));
+    $("text").focus();
+  });
+}
 // The pictures (or file names) you sent, shown at the top of your message bubble.
 function attBox(list) {
   const box = document.createElement("div"); box.className = "att";
@@ -5321,10 +5592,11 @@ function renderDevices() {
   if (list) {
     list.innerHTML = Devices.list.map(d => `<div class="row dev">${devIcon(d)}
         <button class="grow dev-pick" data-dev="${esc(d.id)}">${esc(Devices.name(d))}<span class="sub">${d === cur ? "Using now" : "Tap to switch"}</span></button>
-        ${d === cur ? `<button class="press dev-act" data-rename aria-label="Rename">Rename</button>` : `<button class="press dev-act danger" data-remove="${esc(d.id)}" aria-label="Remove">Remove</button>`}
+        ${d === cur ? `<button class="press dev-act" data-rename aria-label="Rename">Rename</button>` : (d.wake?.mac ? `<button class="press dev-act" data-wake="${esc(d.id)}" aria-label="Wake ${esc(Devices.name(d))}">Wake</button>` : "") + `<button class="press dev-act danger" data-remove="${esc(d.id)}" aria-label="Remove">Remove</button>`}
       </div>`).join("") + `<button class="row btn" id="devAdd">Add a Computer</button>`;
     list.querySelectorAll(".dev-pick").forEach(b => b.onclick = () => { if (b.dataset.dev !== cur?.id) Devices.use(b.dataset.dev); });
     list.querySelector("[data-rename]")?.addEventListener("click", renameDevice);
+    list.querySelectorAll("[data-wake]").forEach(b => b.onclick = () => Devices.wake(Devices.list.find(x => x.id === b.dataset.wake)));
     list.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => {
       const d = Devices.list.find(x => x.id === b.dataset.remove);
       if (d && confirm(`Remove ${Devices.name(d)} from this phone? Its chats here go too.`)) Devices.remove(d.id);
@@ -5340,6 +5612,33 @@ function renameDevice() {
   post({ type: "set", key: "device_name", value: name, id: newId() }).then(() => toast("Renamed", "check"), () => toast("Can't reach it right now.", "x", "var(--red)"));
 }
 function addDevice() { AddPc.open(); }
+
+// Waking the computer you're on when it's asleep: the phone switches to your other computer, which sends the
+// wake-up signal as soon as it's connected (WakeRelay.state). Each computer also learns the others' network cards,
+// so "wake up my PC" works by voice there too.
+const WakeRelay = {
+  sent: "",
+  state() {
+    const peers = JSON.stringify(Devices.peers());
+    if (peers !== this.sent && Devices.peers().length) {
+      post({ type: "peers", list: Devices.peers(), id: newId() }).then(() => { this.sent = peers; }, () => {});
+    }
+    let job = null;
+    try { job = JSON.parse(load("jarvis.wakeJob")); } catch {}
+    if (!job || job.via !== Devices.active?.id) return;
+    store("jarvis.wakeJob");
+    if (Date.now() - job.at > 5 * 60 * 1000) return;   // an old one: don't surprise anybody
+    const d = Devices.list.find(x => x.id === job.target);
+    if (d) { Devices.wake(d); toast(`Waking ${Devices.name(d)}. Switch back to it in a minute.`, "sparkles", "var(--blue)"); }
+  },
+  // From the "Can't find PC" card: hop over to another computer and wake this one from there.
+  start() {
+    const target = Devices.active, via = Devices.list.find(x => x !== target);
+    if (!target || !via) return;
+    store("jarvis.wakeJob", JSON.stringify({ target: target.id, via: via.id, at: Date.now() }));
+    Devices.use(via.id);
+  },
+};
 
 // ================= adding a computer: scan its QR code here, or paste its link =================
 // Scanning needs no clipboard: iOS often won't hand a link copied from the Camera to a web page as text, and the
@@ -5443,9 +5742,10 @@ function showLost() {
     ? `${cap(where)} hasn't said where it is lately, so Jarvis isn't running on it, or its connection didn't start. On it, check for the Jarvis icon in the taskbar tray (under the ^ arrow). If it's not there, start Jarvis (the Desktop shortcut, or <code>Jarvis.vbs</code> in its Jarvis folder). If it is, right-click it › Restart.`
     : `${cap(where)} doesn't answer. It may be asleep, off or offline, or Jarvis stopped on it. Wake it up and check for the Jarvis icon in its taskbar tray.`;
   card.innerHTML = `<b><span class="dot"></span>Can't find ${where}</b><p>${why}` + (many ? " To use your other computer, switch in Control Center." : "") +
-    `</p><div class="lost-btns"><button class="press" data-retry>Try Again</button>${many ? '<button class="press" data-switch>Switch Computer</button>' : '<button class="press" data-relink>Paste Pairing Link</button>'}</div>`;
+    `</p><div class="lost-btns"><button class="press" data-retry>Try Again</button>${many && Devices.active?.wake?.mac && lostWhy !== "never" ? `<button class="press" data-wake>Wake It</button>` : ""}${many ? '<button class="press" data-switch>Switch Computer</button>' : '<button class="press" data-relink>Paste Pairing Link</button>'}</div>`;
   card.querySelector("[data-retry]").onclick = () => { card.remove(); retryDelay = 2000; clearTimeout(retryTimer); connect(); };
   const sw = card.querySelector("[data-switch]"); if (sw) sw.onclick = () => { card.remove(); openControl(); };
+  const wk = card.querySelector("[data-wake]"); if (wk) wk.onclick = () => WakeRelay.start();
   const rl = card.querySelector("[data-relink]"); if (rl) rl.onclick = relink;
   document.body.append(card);
 }

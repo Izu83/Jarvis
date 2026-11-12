@@ -12,6 +12,7 @@ faster-whisper
 openwakeword
 mcp>=2.3
 pillow
+pillow-heif
 pywin32
 uiautomation
 winrt-runtime

@@ -318,6 +318,16 @@ A Shortcut can't do the app's encryption, so it uses its own key (`JARVIS_SIRI_K
 tunnel: it looks up the PC's current address on the relay (`<topic>-s`), then asks `<address>/ask` with the key and
 the question in headers. Answers that take longer than 45 seconds come to the app as a message instead.
 
+**Photos and files:** a second shortcut, **Send to Jarvis** (the same Settings page shows its steps), shares a
+photo, PDF or any file from any app. It asks what to do with it ("what plant is this?", "put this on my PC"; empty =
+"have a look"), then POSTs the item to the same address. The file is saved in `From Phone` like one sent from the
+app, and Jarvis looks at it. The WebSocket server only speaks GET, so a small front door (`jarvis/front.py`) on the
+phone port answers these POSTs and passes everything else through untouched. iPhone photos are often HEIC: with
+`pillow-heif` installed they're turned into JPEGs so the models can see them.
+
+**Pasting:** in the app's message box, paste a picture (Ctrl+V on the PC, Paste on the iPhone), or drop pictures and
+files on the chat. They go along with your message, like ones you pick with the paperclip.
+
 ## Live screen
 
 `/live` streams one monitor at up to 20 pictures a second (about 16 measured through the Cloudflare tunnel; it
@@ -343,7 +353,14 @@ A phone web page can't send the signal that wakes a sleeping PC, so there's **Na
 Control Center asks Nap or Sleep, and `/nap` (or "take a nap") locks the PC, turns the screens off and keeps it
 awake, so Jarvis stays reachable. `/wake`, the "Napping" chip above the message box, or "wake up" turns the screens
 back on (the PC stays locked). Using the mouse or keyboard at the PC ends a nap too. While napping the PC draws its
-normal idle power; real Sleep still switches it off, but then it can't be woken from the phone.
+normal idle power.
+
+**Waking it from real Sleep:** with two computers, the awake one can wake the other (Wake-on-LAN, `jarvis/wake.py`).
+Each Jarvis tells the phone its network card's address, and the phone passes them on, so: Settings › Your computers
+› **Wake**, or **Wake It** on the "Can't find PC" card (the app switches to your laptop, which sends the signal), or
+say "wake up my PC" to the laptop. It needs the sleeping PC on a network cable (this PC is) with its network card
+allowed to wake it (Device Manager › the network adapter › Power Management › "Allow this device to wake the
+computer", and "Wake on Magic Packet" under Advanced). From Shut down, the BIOS has to allow it as well.
 
 ## Find my file
 
@@ -529,6 +546,14 @@ Outlook, Yahoo and iCloud are detected from the address; for anything else set `
   tokens) or *Chatty* (a heads-up for every new email). The morning briefing has its own switch (see Morning
   briefing). Between `quiet_hours` (23:00 to 08:00)
   unasked messages still arrive, but without a notification.
+- **Checking in** (Settings › Memory › Checks in on you, `check_ins`): now and then he asks what you're up to, or
+  offers help with what's on your screen ("Busy in Figma? Want me to export those frames?"). *Sometimes* (default:
+  every 2.5 to 4 hours, at most 4 a day), *Often* (every 1 to 2 hours, at most 8) or *Never*. Not in quiet hours, a
+  nap or away mode, while a game or film is full screen, within 30 minutes of you talking to him, or after two
+  check-ins you didn't answer (until you say something). A free model writes it (Gemini, the free models, or Hermes
+  on the PC), from the time, the window in front, the music, what he knows about you and your last topics; with
+  none of those, a line of his own. "Say it out loud at the PC" (`check_in_aloud`) has him ask out loud too. Just
+  reply in the chat: it's an ordinary conversation (`jarvis/checkin.py`).
 
 Messages wait in `.brain/inbox.json` until the phone confirms them, so they arrive even if the app was closed (with
 a notification first).
@@ -607,7 +632,10 @@ a notification first).
 | `jarvis/health.py` | The self-check: problems reported once with the fix, `/health` |
 | `jarvis/live.py` | The live screen stream: mss capture, confirmed pictures, adaptive size |
 | `jarvis/partial.py` | The answer as it's written, throttled, for the phone |
-| `jarvis/siri.py` | The "Ask Jarvis" Siri / Share shortcut's key and question handling |
+| `jarvis/siri.py` | The "Ask Jarvis" and "Send to Jarvis" shortcuts: the key, the question, shared files |
+| `jarvis/front.py` | The phone port's front door: takes the Share shortcut's POSTs, passes the rest to the WebSocket server |
+| `jarvis/wake.py` | Waking your other computer (Wake-on-LAN): this one's network card, the others' from the phone |
+| `jarvis/checkin.py` | Checking in now and then: when, and the words |
 | `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |
 | `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |
 | `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |

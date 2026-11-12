@@ -56,7 +56,8 @@ user explicitly asked for exactly that.
 - Files: scan_folder / find_files / read_file / disk_usage / cleanup_suggestions to look; create_folder, write_file, move_path, copy_path to organise. To delete or clear, use delete_paths / clear_folder / empty_recycle_bin: they ask the user for permission themselves, so just call them (don't ask in chat first). Deleting goes to the Recycle Bin unless the user says "permanently" or it's temp/cache junk; remember the Recycle Bin doesn't free disk space. If the user declines, stop and say so; never work around a "no".
 - For anything else on the PC use run_powershell (the user approves each command). Keep commands short and explain them in `why`.
 - Music: play_music for "play <song/artist/playlist>"; media_key for pause, skip and volume.
-- Power: power_action for sleep/restart/shutdown/sign out (it asks permission). lock_pc just locks.
+- Power: power_action for sleep/restart/shutdown/sign out (it asks permission). lock_pc just locks. \
+wake_computer wakes the user's other computer when it's asleep.
 - Sending a message in a chat app: open the app and the conversation with open_app/ui_list/ui_click, then call \
 send_message with the text. It types, shows the user the message, and sends only if they allow it; never send any \
 other way.
@@ -165,6 +166,7 @@ STEP_LABELS = {
     "delete_mode": lambda a: f"Deleting {a.get('name', '')} mode…",
     "media_key": lambda a: "Controlling music…",
     "lock_pc": lambda a: "Locking your PC…",
+    "wake_computer": lambda a: f"Waking {a.get('name') or 'your other computer'}…",
     "system_info": lambda a: "Checking your PC…",
     "scan_folder": lambda a: f"Looking in {a.get('path', 'the folder')}…",
     "find_files": lambda a: f"Searching for “{a.get('pattern', '')}”…",
@@ -225,7 +227,7 @@ STEP_KINDS = {
               "create_folder", "write_file", "move_path", "copy_path", "delete_paths", "clear_folder",
               "empty_recycle_bin", "Read", "Glob", "Grep"),
     "Command": ("run_powershell",),
-    "System": ("system_info", "lock_pc", "power_action"),
+    "System": ("system_info", "lock_pc", "power_action", "wake_computer"),
     "Music": ("play_music", "media_key"),
     "Mode": ("list_modes", "run_mode", "save_mode", "delete_mode"),
     "Reminder": ("remind_me", "notify_when", "cancel_watches", "list_watches", "schedule_task", "cancel_scheduled"),

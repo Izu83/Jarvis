@@ -357,6 +357,13 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "wake_computer",
+        "description": "Wake another of the user's computers that is asleep (e.g. their PC, from this laptop) with "
+                       "Wake-on-LAN over the home network. Use for 'wake up my PC' / 'turn on my computer'.",
+        "input_schema": {"type": "object", "properties": {
+            "name": {"type": "string", "description": "Which computer, as the user calls it (e.g. 'PC'). Empty if they have one other."}}},
+    },
+    {
         "name": "call_user",
         "description": "Ring the user's phone with a 'Jarvis is calling…' notification so they can answer and talk "
                        "to you by voice. Use when the user says 'call me' or asks you to call them to tell them "
@@ -764,6 +771,9 @@ def run(name: str, args: dict) -> str:
     if name == "lock_pc":
         ctypes.windll.user32.LockWorkStation()
         return "Locked the PC."
+    if name == "wake_computer":
+        from . import wake
+        return wake.wake_by_name(args.get("name", ""))
     if name == "look_at_screen":
         return screens.capture_for_claude(args.get("monitor"))
     if name == "mouse_click":

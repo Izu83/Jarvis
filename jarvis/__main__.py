@@ -314,6 +314,9 @@ def main() -> None:
                msg_id: str | None = None, partial=None) -> None:
         """Queue a command. `partial` (optional) gets the answer's text as it's written, for the phone."""
         busy_with = working["text"]
+        if via != "schedule":   # you said something: you're around, and any check-in has its answer (checkin.py)
+            from . import checkin
+            checkin.heard()
         if stopping.is_stop_phrase(text) and speak.stop() and not busy_with:   # "Jarvis, stop" while he talks
             return
         if busy_with and stopping.is_stop_phrase(text):   # "Jarvis, stop" mid-task: don't queue it, stop

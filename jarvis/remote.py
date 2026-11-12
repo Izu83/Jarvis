@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, away, camera, faceid, inbox, media, modes, nap, outbox, pc, proactive, push, screens,
+from . import (activity, approval, away, camera, checkin, faceid, inbox, media, modes, nap, outbox, pc, proactive, push, screens,
                siri, stopping, sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
@@ -285,12 +285,23 @@ class PhoneChannel:
                        "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
                        # your name and photo, so every phone and the desktop app show the same (None = never set)
                        "me": {"name": settings.get("user_name"), "photo": settings.get("user_photo")},
+                       # this computer's network card, so the phone can have your other computer wake it (wake.py)
+                       "wake": self._wake_info(),
                        "away": away.is_on(), "away_since": away.since(), "faceid": faceid.enabled(),
                        "ask_permission": bool(settings.get("ask_permission", True)),
                        "nap": nap.is_on(), "nap_since": nap.since(),
                        "brain": settings["brain"], "usage": usage.summary(),
                        "vapid": push.public_key(), "notify": push.have_subs(),
                        "activity": activity.summary(), "watches": watchers.items() + proactive.items()})
+
+    @staticmethod
+    def _wake_info() -> dict | None:
+        from . import wake
+        try:
+            return wake.info()
+        except Exception:
+            log.debug("Couldn't read the network card", exc_info=True)
+            return None
 
     @staticmethod
     def _models_state() -> dict:
@@ -309,7 +320,8 @@ class PhoneChannel:
         self._publish({"kind": "memory", "id": "memory", "about": memory.about(),
                        "facts": [f["text"] for f in memory.facts()][::-1],   # newest first
                        "humour": settings.get("humour", "light"), "span": settings.get("memory_span", "normal"),
-                       "proactive": proactive.level(), "briefing": self._briefing_state()})
+                       "proactive": proactive.level(), "briefing": self._briefing_state(),
+                       "check_ins": checkin.level(), "check_in_aloud": bool(settings.get("check_in_aloud"))})
 
     @staticmethod
     def _briefing_state() -> dict:
@@ -820,6 +832,18 @@ class PhoneChannel:
                 hotkey.set_enabled(value)
                 log.info("Keyboard shortcut turned %s from the phone.", "on" if value else "off")
             self.send_state()
+        elif kind == "peers":   # the phone's other computers, so "wake up my PC" works from here (wake.py)
+            from . import wake
+            if wake.learn(data.get("list")):
+                log.info("The phone told me about your other computers: %s.", ", ".join(settings.get("peers") or {}))
+        elif kind == "wake":   # the phone's Wake button for another computer that's asleep
+            from . import wake
+            try:
+                wake.send(str(data.get("mac", "")), str(data.get("broadcast", "")))
+                name = " ".join(str(data.get("name") or "it").split())[:30]
+                self.reply(msg_id, f"Sent {name} a wake-up signal. It should be online in about a minute.")
+            except (ValueError, OSError) as e:
+                self.reply(msg_id, f"I couldn't send the wake-up signal: {e}")
         elif kind == "memory_get":
             self.send_memory()
         elif kind == "memory_set":   # Settings > Memory: About me, humour, how far back it remembers
@@ -830,6 +854,11 @@ class PhoneChannel:
             if data.get("humour") in memory.HUMOUR:
                 set_setting("humour", data["humour"])
                 log.info("Humour set to %s from the phone.", data["humour"])
+            if data.get("check_ins") in checkin.LEVELS:
+                set_setting("check_ins", data["check_ins"])
+                log.info("Check-ins set to %s from the phone.", data["check_ins"])
+            if isinstance(data.get("check_in_aloud"), bool):
+                set_setting("check_in_aloud", data["check_in_aloud"])
             if data.get("proactive") in proactive.LEVELS:
                 set_setting("proactive", data["proactive"])
                 log.info("Messages on his own set to %s from the phone.", data["proactive"])
@@ -992,8 +1021,21 @@ class PhoneChannel:
         self._save_upload({"id": up, "name": entry["name"]}, joined)
 
     def _save_upload(self, data: dict, raw: bytes | None = None) -> None:
+        try:
+            dest = self._store_file(data.get("name", "file"), raw if raw is not None else base64.b64decode(data.get("data", "")))
+        except Exception:
+            log.exception("Couldn't save the uploaded file")
+            self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": False, "text": "I couldn't save that file."})
+            return
+        log.info("Saved a file from the phone: %s", dest)
+        self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": True, "path": str(dest),
+                       "text": f"Saved {dest.name} to {dest.parent}."})
+
+    @staticmethod
+    def _store_file(name: str, raw: bytes):
+        """Save a file from the phone (the app or the Share button) without overwriting anything; returns its path."""
         from pathlib import Path
-        name = os.path.basename(data.get("name", "file")) or "file"
+        name = os.path.basename(name or "file") or "file"
         # Default to "From Phone" on the same drive as the project (D:), so a nearly-full C: isn't a problem.
         # Override with "upload_folder" in config.json. Fall back to Downloads if that folder can't be made.
         folder = Path(settings.get("upload_folder") or (Path(ROOT).anchor + "From Phone"))
@@ -1007,15 +1049,21 @@ class PhoneChannel:
         while dest.exists():   # don't overwrite
             dest = folder / f"{Path(name).stem} ({i}){Path(name).suffix}"
             i += 1
-        try:
-            dest.write_bytes(raw if raw is not None else base64.b64decode(data.get("data", "")))
-        except Exception:
-            log.exception("Couldn't save the uploaded file")
-            self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": False, "text": "I couldn't save that file."})
-            return
-        log.info("Saved a file from the phone: %s", dest)
-        self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": True, "path": str(dest),
-                       "text": f"Saved {dest.name} to {folder}."})
+        dest.write_bytes(raw)
+        return dest
+
+    def _share(self, path: str, headers: dict, body: bytes) -> tuple[int, str]:
+        """"Send to Jarvis" from an iPhone's Share button: a photo, file, link or text (see siri.py and front.py)."""
+        if path.split("?")[0] != siri.PATH:
+            return 404, "Not found.\n"
+        if not siri.authorised(headers.get("x-jarvis-key", "")):
+            log.warning("Share: a request with a wrong or missing key was refused.")
+            return 401, "Wrong Jarvis key. Copy it again from the Jarvis app's Settings.\n"
+        text = siri.shared(siri.question(headers.get("x-jarvis-ask", "")), headers, body, self._store_file)
+        if not text:
+            return 400, "There was nothing to send.\n"
+        log.info("Share: %r", text[:120])
+        return 200, self._ask_from_siri(text)
 
     def _monitor(self) -> None:
         """Warn the phone when the disk gets low or the GPU runs hot (once per episode, re-armed on recovery)."""
@@ -1056,9 +1104,15 @@ class PhoneChannel:
 
     async def _serve(self) -> None:
         self.loop = asyncio.get_running_loop()
-        # open_timeout covers _http too, which may wait up to siri.WAIT for an answer
-        async with serve(self._client, "127.0.0.1", self.port, max_size=2**26, ping_interval=20, ping_timeout=20,
-                         compression=None, process_request=self._http, open_timeout=siri.WAIT + 15):
+        # The WebSocket server sits on a private port behind front.py, which takes the Share button's POSTs (the
+        # WebSocket server only speaks GET) and passes everything else through. open_timeout covers _http too,
+        # which may wait up to siri.WAIT for an answer.
+        from .front import MAX_HEAD, Front
+        async with serve(self._client, "127.0.0.1", 0, max_size=2**26, ping_interval=20, ping_timeout=20,
+                         compression=None, process_request=self._http, open_timeout=siri.WAIT + 15) as inner:
+            inner_port = inner.sockets[0].getsockname()[1]
+            self.front = await asyncio.start_server(Front(inner_port, self._share).handle, "127.0.0.1", self.port,
+                                                    limit=MAX_HEAD)
             log.info("Phone server on 127.0.0.1:%d; starting tunnel...", self.port)
             self.tunnel.start()
             threading.Thread(target=self._re_announce, daemon=True, name="announce").start()
