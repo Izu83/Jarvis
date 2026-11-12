@@ -404,6 +404,16 @@
   .chip .cx svg.i { width: 12px; height: 12px; stroke-width: 2.6; }
   .chip .pbar { position: absolute; left: 10px; right: 34px; bottom: 5px; height: 3px; border-radius: 2px; background: var(--sep); overflow: hidden; }
   .chip .pbar i { display: block; height: 100%; background: var(--blue); transition: width .2s; }
+  /* a picture on its own: the image fills the tile, the × and the progress sit on it */
+  .chip.pic { width: 56px; height: 56px; padding: 0; overflow: hidden; box-shadow: 0 0 0 .5px var(--sep), 0 4px 14px rgba(0,0,0,.18); }
+  .chip.pic .th { width: 100%; height: 100%; border-radius: 0; transition: opacity .2s; }
+  .chip.pic.sending .th { opacity: .62; }
+  .chip.pic.bad { box-shadow: 0 0 0 2px var(--red); }
+  .chip.pic .cx { background: rgba(0,0,0,.55); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .chip.pic .pbar { left: 6px; right: 6px; bottom: 6px; background: rgba(255,255,255,.35); }
+  .chip.pic .pbar i { background: #fff; }
+  .chip.pic .warn { position: absolute; left: 4px; bottom: 4px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+                    background: var(--red); color: #fff; font-size: 12px; font-weight: 700; }
   .bubble .att { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
   .bubble .att img { width: 120px; height: 120px; object-fit: cover; border-radius: 14px; display: block; }
   .bubble .att .fn { font-size: 14px; opacity: .9; }
@@ -1490,12 +1500,12 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-12.3";   // bump together with version.json
+const VERSION = "2026-11-12.4";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
   { v: "JNIv45", when: "Nov 12, 2026", title: "Chattier, and more ways to reach him", notes: [
     "He checks in now and then: what you're up to, or help with what's on your screen. Settings › Memory › Checks in on you (Never, Sometimes, Often), and he can say it out loud at the PC.",
-    "Paste a picture into the message box, like a screenshot (Ctrl+V on the PC, Paste on the iPhone), or drop pictures and files on the chat.",
+    "Paste a picture into the message box, like a screenshot (Ctrl+V on the PC, Paste on the iPhone), or drop pictures and files on the chat. Pictures waiting to be sent show as just the picture.",
     "Send to Jarvis: share a photo, PDF or file from any app on your iPhone. Settings › Siri & Share shows how to make the shortcut.",
     "Wake your PC when it's asleep: Settings › Your computers › Wake, or Wake It on the “Can't find PC” card. Your laptop sends the signal, and “wake up my PC” works by voice there too.",
     "Choosing a profile photo now lets you move and zoom it in a circle, like on iOS.",
@@ -5503,15 +5513,25 @@ function renderAttach() {
   box.innerHTML = "";
   for (const a of attachments) {
     const c = document.createElement("div");
-    c.className = "chip glass";
-    c.innerHTML = (a.thumb ? `<img class="th" alt="">` : `<span class="th">${icon("doc")}</span>`)
-      + `<span class="nm"><b></b><span></span></span><button class="cx" aria-label="Remove">${icon("x")}</button>`
-      + (!a.path && !a.error ? `<span class="pbar"><i style="width:${Math.round(a.pct * 100)}%"></i></span>` : "");
-    if (a.thumb) c.querySelector("img").src = a.thumb;
-    c.querySelector("b").textContent = a.name;
-    const st = c.querySelector(".nm span");
-    st.textContent = a.error || (a.path ? "Ready" : "Sending…");
-    if (a.error) st.className = "bad";
+    const status = a.error || (a.path ? "Ready" : "Sending…");
+    const bar = !a.path && !a.error ? `<span class="pbar"><i style="width:${Math.round(a.pct * 100)}%"></i></span>` : "";
+    if (a.thumb) {   // a picture: just the picture, like in Messages (its name and state are for VoiceOver)
+      c.className = "chip pic" + (a.error ? " bad" : a.path ? "" : " sending");
+      c.innerHTML = `<img class="th" alt=""><button class="cx" aria-label="Remove">${icon("x")}</button>`
+        + (a.error ? `<span class="warn" aria-hidden="true">!</span>` : "") + bar;
+      c.querySelector("img").src = a.thumb;
+      c.setAttribute("role", "img");
+      c.setAttribute("aria-label", `${a.name}, ${status}`);
+      c.title = a.error || a.name;
+    } else {
+      c.className = "chip glass";
+      c.innerHTML = `<span class="th">${icon("doc")}</span><span class="nm"><b></b><span></span></span>`
+        + `<button class="cx" aria-label="Remove">${icon("x")}</button>` + bar;
+      c.querySelector("b").textContent = a.name;
+      const st = c.querySelector(".nm span");
+      st.textContent = status;
+      if (a.error) st.className = "bad";
+    }
     c.querySelector(".cx").onclick = () => { attachments.splice(attachments.indexOf(a), 1); renderAttach(); };
     box.append(c);
   }
