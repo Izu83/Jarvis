@@ -546,14 +546,6 @@ Outlook, Yahoo and iCloud are detected from the address; for anything else set `
   tokens) or *Chatty* (a heads-up for every new email). The morning briefing has its own switch (see Morning
   briefing). Between `quiet_hours` (23:00 to 08:00)
   unasked messages still arrive, but without a notification.
-- **Checking in** (Settings › Memory › Checks in on you, `check_ins`): now and then he asks what you're up to, or
-  offers help with what's on your screen ("Busy in Figma? Want me to export those frames?"). *Sometimes* (default:
-  every 2.5 to 4 hours, at most 4 a day), *Often* (every 1 to 2 hours, at most 8) or *Never*. Not in quiet hours, a
-  nap or away mode, while a game or film is full screen, within 30 minutes of you talking to him, or after two
-  check-ins you didn't answer (until you say something). A free model writes it (Gemini, the free models, or Hermes
-  on the PC), from the time, the window in front, the music, what he knows about you and your last topics; with
-  none of those, a line of his own. "Say it out loud at the PC" (`check_in_aloud`) has him ask out loud too. Just
-  reply in the chat: it's an ordinary conversation (`jarvis/checkin.py`).
 
 Messages wait in `.brain/inbox.json` until the phone confirms them, so they arrive even if the app was closed (with
 a notification first).
@@ -635,7 +627,6 @@ a notification first).
 | `jarvis/siri.py` | The "Ask Jarvis" and "Send to Jarvis" shortcuts: the key, the question, shared files |
 | `jarvis/front.py` | The phone port's front door: takes the Share shortcut's POSTs, passes the rest to the WebSocket server |
 | `jarvis/wake.py` | Waking your other computer (Wake-on-LAN): this one's network card, the others' from the phone |
-| `jarvis/checkin.py` | Checking in now and then: when, and the words |
 | `jarvis/stopping.py` | The stop button: brains check it between steps; Claude's session is ended |
 | `jarvis/pairing.py` | The tray's "Pair your phone" window: QR code + pairing link |
 | `jarvis/power.py`, `spotify.py`, `camera.py`, `gesture.py` | Power actions, Spotify search, webcam photos, Gesture-App |

@@ -1207,10 +1207,6 @@
         <div class="opt-label" style="margin-top: 17px;">Messages you on his own</div>
         <div class="segment" id="proactiveSeg"></div>
         <div class="opt-note" id="proactiveNote"></div>
-        <div class="opt-label" style="margin-top: 17px;">Checks in on you</div>
-        <div class="segment" id="checkinSeg"></div>
-        <div class="opt-note" id="checkinNote"></div>
-        <label class="row" style="padding: 0; margin-top: 12px;"><span class="grow">Say it out loud at the PC<span class="sub">When you're at the computer, he asks out loud too.</span></span><span class="switch"><input type="checkbox" id="checkinAloud"><span></span></span></label>
       </div>
       <div class="group-title">Morning briefing</div>
       <div class="group">
@@ -1500,11 +1496,10 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-12.4";   // bump together with version.json
+const VERSION = "2026-11-12.5";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
-  { v: "JNIv45", when: "Nov 12, 2026", title: "Chattier, and more ways to reach him", notes: [
-    "He checks in now and then: what you're up to, or help with what's on your screen. Settings › Memory › Checks in on you (Never, Sometimes, Often), and he can say it out loud at the PC.",
+  { v: "JNIv45", when: "Nov 12, 2026", title: "More ways to reach him", notes: [
     "Paste a picture into the message box, like a screenshot (Ctrl+V on the PC, Paste on the iPhone), or drop pictures and files on the chat. Pictures waiting to be sent show as just the picture.",
     "Send to Jarvis: share a photo, PDF or file from any app on your iPhone. Settings › Siri & Share shows how to make the shortcut.",
     "Wake your PC when it's asleep: Settings › Your computers › Wake, or Wake It on the “Can't find PC” card. Your laptop sends the signal, and “wake up my PC” works by voice there too.",
@@ -3157,7 +3152,6 @@ function renderLang() {
   });
   $("langNote").textContent = LANG_NOTE[voiceLang];
 }
-$("checkinAloud").onchange = e => memSet({ check_in_aloud: e.target.checked }, "Saved");
 let awayOn = false, awaySince = 0, napOn = false, napSince = 0;
 function onState(data) {
   Models.state(data);
@@ -4214,12 +4208,6 @@ const PROACTIVE_NOTE = {
   normal: "Also tells you when an important email arrives. Quiet from 23:00 to 08:00.",
   chatty: "Tells you about every new email, not just the important ones. Quiet from 23:00 to 08:00.",
 };
-const CHECKINS = [["off", "Never"], ["sometimes", "Sometimes"], ["often", "Often"]];
-const CHECKIN_NOTE = {
-  off: "He only talks when you talk to him (and for the messages above).",
-  sometimes: "Now and then he asks what you're up to, or offers help with what's on your screen. Up to 4 times a day.",
-  often: "He checks in every hour or two, up to 8 times a day. Never in quiet hours, during a game or film, or when you've just talked.",
-};
 let mem = null;
 function segmentOf(box, items, sel, pick) {
   box.innerHTML = "";
@@ -4249,10 +4237,6 @@ function onMemory(d) {
   const pro = d.proactive || "normal";
   $("proactiveNote").textContent = PROACTIVE_NOTE[pro];
   segmentOf($("proactiveSeg"), PROACTIVE, pro, id => { $("proactiveNote").textContent = PROACTIVE_NOTE[id]; memSet({ proactive: id }, "Saved"); });
-  const ci = CHECKIN_NOTE[d.check_ins] ? d.check_ins : "sometimes";
-  $("checkinNote").textContent = CHECKIN_NOTE[ci];
-  segmentOf($("checkinSeg"), CHECKINS, ci, id => { $("checkinNote").textContent = CHECKIN_NOTE[id]; memSet({ check_ins: id }, "Saved"); });
-  $("checkinAloud").checked = !!d.check_in_aloud;
   renderBriefing(d.briefing);
   const list = $("factList"); list.innerHTML = "";
   if (!d.facts?.length) list.innerHTML = '<div class="row"><span class="grow sub-only">Nothing yet. Tell Jarvis “remember that…”, or add something below.</span></div>';

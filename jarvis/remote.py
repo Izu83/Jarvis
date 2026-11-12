@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import (activity, approval, away, camera, checkin, faceid, inbox, media, modes, nap, outbox, pc, proactive, push, screens,
+from . import (activity, approval, away, camera, faceid, inbox, media, modes, nap, outbox, pc, proactive, push, screens,
                siri, stopping, sysinfo, tools, watchers)
 from .config import ROOT, secret, set_secret, set_setting, settings
 from .tunnel import Tunnel, last_url
@@ -320,8 +320,7 @@ class PhoneChannel:
         self._publish({"kind": "memory", "id": "memory", "about": memory.about(),
                        "facts": [f["text"] for f in memory.facts()][::-1],   # newest first
                        "humour": settings.get("humour", "light"), "span": settings.get("memory_span", "normal"),
-                       "proactive": proactive.level(), "briefing": self._briefing_state(),
-                       "check_ins": checkin.level(), "check_in_aloud": bool(settings.get("check_in_aloud"))})
+                       "proactive": proactive.level(), "briefing": self._briefing_state()})
 
     @staticmethod
     def _briefing_state() -> dict:
@@ -854,11 +853,6 @@ class PhoneChannel:
             if data.get("humour") in memory.HUMOUR:
                 set_setting("humour", data["humour"])
                 log.info("Humour set to %s from the phone.", data["humour"])
-            if data.get("check_ins") in checkin.LEVELS:
-                set_setting("check_ins", data["check_ins"])
-                log.info("Check-ins set to %s from the phone.", data["check_ins"])
-            if isinstance(data.get("check_in_aloud"), bool):
-                set_setting("check_in_aloud", data["check_in_aloud"])
             if data.get("proactive") in proactive.LEVELS:
                 set_setting("proactive", data["proactive"])
                 log.info("Messages on his own set to %s from the phone.", data["proactive"])

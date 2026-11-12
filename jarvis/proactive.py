@@ -279,16 +279,6 @@ def send_recap() -> str:
     return text
 
 
-def _check_in_send(text: str) -> None:
-    if _sender:
-        _sender(text, None, True)
-
-
-def _check_in_speak(text: str) -> None:
-    from . import speak
-    speak.say(text)
-
-
 def _loop() -> None:
     next_mail, mail_fails = time.time() + 60, 0
     while True:
@@ -314,13 +304,6 @@ def _loop() -> None:
             log.exception("Evening recap failed")
         if level() == "off":
             continue
-        try:   # now and then, he asks what you're up to (checkin.py); the words can take a model a few seconds
-            from . import checkin
-            if checkin.due():
-                threading.Thread(target=checkin.run, args=(_check_in_send, _check_in_speak), daemon=True,
-                                 name="checkin").start()
-        except Exception:
-            log.exception("Checking in failed")
         try:
             from . import shkolo
             if shkolo.check_due(now):
