@@ -207,6 +207,8 @@ class HermesBrain:
         self.last_used = 0.0
         self.last_thinking = ""
         self.lock = threading.Lock()
+        self.kind = None   # what sort of job the command being handled is (router.kind)
+        self._last_kind: dict[str, tuple[float, str]] = {}   # chat -> (when, kind) of its last command
         self._fallback = None   # a Claude brain, created only if/when it's actually needed
         self._strikes: dict[str, int] = {}   # errors in a row, per team member (see REST_SECONDS)
         log.info("Local brain ready: %s via %s. Claude is the fallback.",
@@ -365,8 +367,14 @@ class HermesBrain:
             available = self._available()
             if not available:
                 return "Every model is switched off. Tick one in the model menu."
-            order = router.plan(original, available, settings.get("local_first", False)) or sorted(available)
-            log.info("Router: %s -> %s", router.kind(original), " -> ".join(order))
+            # a follow-up carries on the job before it (router.kind), if that was in the last 15 minutes
+            when, previous = self._last_kind.get(chat or "", (0.0, None))
+            k = router.kind(original, previous if time.time() - when < 15 * 60 else None)
+            self._last_kind[chat or ""] = (time.time(), k)
+            order = router.plan(original, available, settings.get("local_first", False), k) or sorted(available)
+            log.info("Router: %s -> %s", k + (f" (carrying on from {previous})" if k == previous != router._kind(original) else ""),
+                     " -> ".join(order))
+            self.kind = k
             last = None
             for i, model in enumerate(order):
                 cap = lambda text: text[0].upper() + text[1:]
@@ -400,8 +408,9 @@ class HermesBrain:
             return answer, not getattr(self._fallback, "failed", False)
         from .cloud import CloudBrain
         brain = CloudBrain(model)   # Gemini, OpenRouter's free models, ChatGPT, Grok
-        extra = {"search": True} if model == "gemini" and router.kind(original) == "current" else {}
-        answer = brain.handle(command, chat=chat, recent=recent, progress=progress, **extra)
+        k = getattr(self, "kind", None) or router.kind(original)
+        extra = {"search": True} if model == "gemini" and k == "current" else {}
+        answer = brain.handle(command, chat=chat, recent=recent, progress=progress, kind=k, **extra)
         self.last_thinking = getattr(brain, "last_thinking", "") or ""
         return answer, not brain.failed
 

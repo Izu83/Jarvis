@@ -37,7 +37,22 @@ LONG = re.compile(r"(youtube\.com|youtu\.be|\bvideo\b|\bpdf\b|\bdocument\b|\bsum
 X = re.compile(r"(\btwitter\b|\btweets?\b|\bx\.com\b|on x\b|\belon\b|\bgrok\b)", re.I)
 
 
-def kind(command: str) -> str:
+PLEASANTRY = re.compile(r"^\W*(thanks?( you)?|thx|ty|ok(ay)?|cool|nice|great|perfect|lol|haha|good( job)?|"
+                        r"awesome|wow|yes|yep|no|nope)\W*$", re.I)
+TASKS = ("action", "code", "sight")
+
+
+def kind(command: str, previous: str | None = None) -> str:
+    """What sort of job this is. previous: the last command's kind in this conversation, if it was recent. A
+    follow-up with nothing to go on ("okay but make it REALLY blurred", "go again") carries on that job, so the
+    model that can do it gets it instead of the one for small talk."""
+    k = _kind(command)
+    if k == "chat" and previous in TASKS and not PLEASANTRY.match(command.split("\n\n[")[0]):
+        return previous
+    return k
+
+
+def _kind(command: str) -> str:
     if "[the user attached these files" in command.lower():   # photos and documents: a model that can see them
         return "sight"
     c = command.split("\n\n[")[0]   # what the user said, not the notes added to it (files, where they are)
@@ -67,9 +82,9 @@ ORDER = {   # "openrouter" = OpenRouter's free models (DeepSeek when it's free t
 }
 
 
-def plan(command: str, available: set[str], local_first: bool = False) -> list[str]:
-    """The models to try for this command, in order, from the ones available."""
-    k = kind(command)
+def plan(command: str, available: set[str], local_first: bool = False, k: str | None = None) -> list[str]:
+    """The models to try for this command, in order, from the ones available (k: its kind, if already known)."""
+    k = k or kind(command)
     order = list(ORDER[k])
     if local_first and "local" in order and k not in ("sight", "current", "long", "x"):
         order.remove("local")

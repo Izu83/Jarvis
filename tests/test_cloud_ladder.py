@@ -32,12 +32,13 @@ def test_deepseek_goes_first_when_its_free(monkeypatch):
 
 
 def test_a_busy_model_is_skipped_and_the_next_answers(monkeypatch):
+    monkeypatch.setattr(cloud, "_good", {})
     monkeypatch.setattr(cloud, "_ladders", {"openrouter": (time.time(), ["a:free", "b:free", "c:free"])})
     monkeypatch.setattr(cloud, "_resting", {})
     monkeypatch.setattr(cloud, "_provider_resting", {})
     brain, tried = cloud.CloudBrain("openrouter"), []
 
-    def call(model):
+    def call(model, timeout):
         tried.append(model)
         return _Resp(429 if model == "a:free" else 200, "rate-limited upstream")
     assert brain._post(call).status_code == 200
@@ -46,10 +47,50 @@ def test_a_busy_model_is_skipped_and_the_next_answers(monkeypatch):
 
 
 def test_the_daily_allowance_rests_all_of_them(monkeypatch):
+    monkeypatch.setattr(cloud, "_good", {})
     monkeypatch.setattr(cloud, "_ladders", {"openrouter": (time.time(), ["a:free", "b:free"])})
     monkeypatch.setattr(cloud, "_resting", {})
     monkeypatch.setattr(cloud, "_provider_resting", {})
     brain, tried = cloud.CloudBrain("openrouter"), []
-    brain._post(lambda m: (tried.append(m), _Resp(429, "Rate limit exceeded: free-models-per-day."))[1])
+    brain._post(lambda m, timeout: (tried.append(m), _Resp(429, "Rate limit exceeded: free-models-per-day."))[1])
     assert tried == ["a:free"]   # no point trying the others: it's one allowance for all
     assert cloud._all_resting("openrouter")
+
+
+def test_a_model_that_hangs_is_skipped_quickly(monkeypatch):
+    """Google's newest Flash sometimes just hangs: the next one down answers, and the hung one rests."""
+    monkeypatch.setattr(cloud, "_good", {})
+    monkeypatch.setattr(cloud, "_ladders", {"gemini": (time.time(), ["gemini-3.8-flash", "gemini-3.7-flash"])})
+    monkeypatch.setattr(cloud, "_resting", {})
+    monkeypatch.setattr(cloud, "_provider_resting", {})
+    monkeypatch.setitem(cloud.settings, "gemini_model", "")
+    brain, asked = cloud.CloudBrain("gemini"), []
+
+    def call(model, timeout):
+        asked.append((model, timeout))
+        if model == "gemini-3.8-flash":
+            raise cloud.requests.ReadTimeout("hung")
+        return _Resp(200, "ok")
+    assert brain._post(call, deadline=time.time() + 40).status_code == 200
+    assert [m for m, _ in asked] == ["gemini-3.8-flash", "gemini-3.7-flash"]
+    assert asked[0][1][1] <= 40                       # never the old 180 s
+    assert brain._models()[0] == "gemini-3.7-flash"   # the hung one rests for a while
+    cloud._resting.clear()
+    assert brain._models()[0] == "gemini-3.7-flash"   # and the one that answered stays first for a while
+
+
+def test_when_none_answer_in_time_the_next_brain_takes_over(monkeypatch):
+    monkeypatch.setattr(cloud, "_good", {})
+    monkeypatch.setattr(cloud, "_ladders", {"gemini": (time.time(), ["gemini-3.8-flash"])})
+    monkeypatch.setattr(cloud, "_resting", {})
+    monkeypatch.setitem(cloud.settings, "gemini_model", "")
+    brain = cloud.CloudBrain("gemini")
+
+    def hang(model, timeout):
+        raise cloud.requests.ReadTimeout("hung")
+    try:
+        brain._post(hang, deadline=time.time() + 40)
+    except cloud.requests.Timeout:
+        pass
+    else:
+        raise AssertionError("expected a Timeout so the next brain answers")

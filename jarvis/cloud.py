@@ -38,6 +38,16 @@ NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", 
 FREE = {"gemini", "openrouter"}   # no budget to watch
 LADDERS = {"gemini", "openrouter"}   # many models, tried in turn (see below)
 SEARCH_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# How long a model gets before the next one down (or the next brain) takes over. Gemini's newest models sometimes
+# just hang when Google is busy; waiting the old 180 s for each made "yo Jr" take three minutes.
+FIRST_ANSWER = 45   # s: the first reply of a command, for all of the ladder together
+NEXT_STEP = 90      # s: each later step (it's already working on it)
+PER_MODEL = 18      # s: one model's share of the first reply, so a hung one leaves time for the next one down
+BUSY_REST = 900     # s: a model that hung is skipped this long
+KEEP_GOOD = 1800    # s: the model that last answered goes first this long (no waiting on a busy newer one each time)
+# Gemini's Flash models think before answering. Unlimited thinking was the slow part (5 to 37 s to say hi); "low" was
+# 2 to 3 times faster in tests and still picked the right tools. A bit more for doing things on the PC and code.
+GEMINI_EFFORT = {"action": "medium", "code": "medium", "sight": "medium"}   # everything else: "low"
 
 
 def has_key(provider: str) -> bool:
@@ -63,6 +73,7 @@ def usable(provider: str) -> bool:
 _ladders: dict[str, tuple[float, list[str]]] = {}
 _resting: dict[str, float] = {}   # "provider:model" (chat) or "...:model/search" -> until when it's skipped
 _provider_resting: dict[str, float] = {}   # the whole provider: OpenRouter's daily free allowance is used up
+_good: dict[str, tuple[str, float]] = {}   # provider -> (the model that last answered, when)
 _names: dict[str, str] = {}   # OpenRouter model id -> its name ("NVIDIA: Nemotron 3 Ultra (free)"), for the phone
 # OpenRouter's free models, best first after DeepSeek (by name; anything else comes after these, newest first).
 # Too small, or not for chatting: left out.
@@ -191,14 +202,33 @@ class CloudBrain:
             return [self.model]
         pinned = settings.get(self.model_key) or ""
         models = [pinned] * bool(pinned) + [m for m in ladder(self.provider, self.key) if m != pinned]
+        good, when = _good.get(self.provider + "/search" * search, ("", 0.0))
+        if good in models and not pinned and time.time() - when < KEEP_GOOD:
+            models = [good] + [m for m in models if m != good]
         ready = [m for m in models if _resting.get(f"{self.provider}:{m}" + "/search" * search, 0) <= time.time()]
         return ready or models[-1:]   # all resting: try the last anyway, it says why
 
-    def _post(self, call, search: bool = False) -> requests.Response:
-        """call(model) -> response, down the ladder until one answers (or there's nothing left to try)."""
+    def _post(self, call, search: bool = False, deadline: float | None = None,
+              per_model: float | None = None) -> requests.Response:
+        """call(model, timeout) -> response, down the ladder until one answers in time (or there's nothing left to
+        try). A model that doesn't answer before the deadline is skipped for a while, like a busy one. Raises
+        requests.Timeout when none answered in time, so the next brain takes over."""
         r = None
+        deadline = deadline or time.time() + 180
         for model in self._models(search):
-            r = call(model)
+            left = deadline - time.time()
+            if left < 3:
+                break
+            try:
+                r = call(model, (10, min(left, per_model or left)))
+            except (requests.Timeout, requests.ConnectionError) as e:
+                if self.provider not in LADDERS:
+                    raise
+                _resting[f"{self.provider}:{model}" + "/search" * search] = time.time() + BUSY_REST
+                log.info("%s %s didn't answer in time (%s); skipping it for %d min.", self.name, model,
+                         type(e).__name__, BUSY_REST // 60)
+                r = None
+                continue
             if self.provider in LADDERS and (r.status_code in (429, 404) or r.status_code >= 500
                                              or (self.provider == "openrouter" and r.status_code in (400, 402))):
                 _rest(self.provider, model, r, search)
@@ -206,11 +236,15 @@ class CloudBrain:
                     break
                 continue
             self.model = model
+            if self.provider in LADDERS and r.status_code < 400:
+                _good[self.provider + "/search" * search] = (model, time.time())
             return r
+        if r is None:
+            raise requests.Timeout(f"none of {self.name}'s models answered in time")
         return r
 
     def handle(self, command: str, chat: str | None = None, recent: list | None = None, progress=None,
-               search: bool = False) -> str:
+               search: bool = False, kind: str = "chat") -> str:
         self.failed, self.last_thinking = True, ""
         note = memory.context(chat, 0.0, recent, True, with_facts=True)
         if search and self.provider == "gemini":
@@ -218,12 +252,14 @@ class CloudBrain:
         messages = [{"role": "system", "content": system_prompt()}, {"role": "user", "content": note + command}]
         from .hermes import _ollama_tools   # Jarvis's tools in the OpenAI shape
         spec, spent, started = _ollama_tools(), 0.0, time.time()
+        extra = {"reasoning_effort": GEMINI_EFFORT.get(kind, "low")} if self.provider == "gemini" else {}
         try:
-            for _ in range(MAX_TOOL_ROUNDS):
+            for step in range(MAX_TOOL_ROUNDS):
                 stopping.check()
-                r = self._post(lambda model: requests.post(
-                    f"{self.base}/chat/completions", timeout=180, headers={"Authorization": f"Bearer {self.key}"},
-                    json={"model": model, "messages": messages, "tools": spec}))
+                r = self._post(lambda model, timeout: requests.post(
+                    f"{self.base}/chat/completions", timeout=timeout, headers={"Authorization": f"Bearer {self.key}"},
+                    json={"model": model, "messages": messages, "tools": spec, **extra}),
+                    deadline=time.time() + (NEXT_STEP if step else FIRST_ANSWER), per_model=None if step else PER_MODEL)
                 if r.status_code >= 400:
                     log.warning("%s refused: %s %s", self.name, r.status_code, r.text[:300])
                     if r.status_code == 429:
@@ -274,11 +310,11 @@ class CloudBrain:
             progress("Searching Google…", "Web")
         started = time.time()
         try:
-            r = self._post(lambda model: requests.post(
-                SEARCH_API.format(model=model), timeout=120, headers={"x-goog-api-key": self.key},
+            r = self._post(lambda model, timeout: requests.post(
+                SEARCH_API.format(model=model), timeout=timeout, headers={"x-goog-api-key": self.key},
                 json={"systemInstruction": {"parts": [{"text": system_prompt()}]},
                       "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                      "tools": [{"google_search": {}}]}), search=True)
+                      "tools": [{"google_search": {}}]}), search=True, deadline=time.time() + 60, per_model=30)
             if r.status_code >= 400:
                 log.warning("Gemini search refused: %s %s", r.status_code, r.text[:300])
                 if r.status_code == 429:

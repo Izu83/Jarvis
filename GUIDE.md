@@ -203,6 +203,16 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 | X / Twitter | Grok, Gemini, Claude |
 | Everyday questions and chat | Gemini, free models, Claude, local, ChatGPT, Grok |
 
+A follow-up that gives nothing to go on ("okay but make it REALLY blurred", "go again") carries on the job before it
+in the same chat (if that was in the last 15 minutes), so it goes to the model that can do that job, not to the one
+for small talk. Just "thanks" or "ok" stays small talk.
+
+No model is waited on for long: the free ones get 45 seconds in all for their first reply (18 per model), and a
+model that hangs is skipped for 15 minutes while the next one down answers. The one that last answered goes first
+for half an hour, so a busy day at Google doesn't cost a wait on every message. Gemini's thinking is kept short
+(`reasoning_effort` "low", "medium" for doing things on the PC, code and pictures): unlimited thinking took 5 to
+37 seconds just to say hi.
+
 - **Claude**: your Claude plan, through Claude Code (`claude_code_model`, Sonnet).
 - **Gemini**: free, with a Google AI Studio key (https://aistudio.google.com/apikey, no card; it has daily
   limits, about 20 a day per model). Jarvis uses the newest stable Flash model your key can use (`gemini-3.8-flash`

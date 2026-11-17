@@ -89,3 +89,12 @@ def test_newest_stable_flash(monkeypatch):
         "json": lambda self: {"data": [{"id": i} for i in ids]}})())
     assert cloud.best_gemini_model("key") == "gemini-3.0-flash"
     assert cloud.usable("gemini") is False   # no key (the test config has none)
+
+
+def test_a_follow_up_carries_on_the_job():
+    assert router.kind("okay but it should be REALLY blurred, almost as much as you cant see it") == "chat"
+    assert router.kind("okay but it should be REALLY blurred, almost as much as you cant see it", "code") == "code"
+    assert router.kind("go again", "action") == "action"
+    assert router.kind("thanks!", "action") == "chat"                      # just thanks: small talk
+    assert router.kind("what's the bitcoin price", "action") == "current"  # a new kind of question is its own
+    assert router.kind("how are you", "current") == "chat"                 # only jobs carry on
