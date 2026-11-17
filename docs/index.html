@@ -36,6 +36,12 @@
     --base: #0b0c18;
     --glass: rgba(255,255,255,.075); --glass-strong: rgba(20,22,38,.5); --card: rgba(255,255,255,.065); --card-line: rgba(255,255,255,.12);
     --frost: blur(26px) saturate(170%); --frost-strong: blur(40px) saturate(180%);
+    /* In the Home Screen app (iOS 26 and later) iOS paints its own progressive blur down from the top edge, over the
+       status bar and a little below it, on top of the page. Nothing the page does can lift it, so sheets and the
+       drawer keep their titles out of it: the band is the status bar (env(safe-area-inset-top), 0 in Safari) plus
+       --top-blur. */
+    --top-blur: 40px;
+    --sheet-gap: max(6%, calc(env(safe-area-inset-top) + var(--top-blur)));
     --rim-hi: rgba(255,255,255,.45); --rim-mid: rgba(255,255,255,.16); --rim-lo: rgba(255,255,255,.08);
     --spec: rgba(255,255,255,.55); --spec-lo: rgba(255,255,255,.18); --inner-glow: rgba(255,255,255,.1); --edge: rgba(255,255,255,.12);
     --sheen: rgba(255,255,255,.12); --touch-a: .26;
@@ -449,7 +455,7 @@
   /* ---------- sidebar ---------- */
   .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.28); animation: fade .3s both; }
   @keyframes fade { from { background: transparent; } }
-  .drawer { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(86vw, 360px); border-radius: 0 30px 30px 0; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 12px) 0 calc(env(safe-area-inset-bottom) + 8px); animation: slide .5s var(--ios) both; transition: transform .3s var(--ios); }
+  .drawer { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(86vw, 360px); border-radius: 0 30px 30px 0; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 12px + min(var(--top-blur), env(safe-area-inset-top))) 0 calc(env(safe-area-inset-bottom) + 8px); animation: slide .5s var(--ios) both; transition: transform .3s var(--ios); }
   @keyframes slide { from { transform: translateX(-102%); } }
   .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 10px 20px; }
   .drawer-head h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: .3px; }
@@ -495,8 +501,8 @@
 
   /* ---------- sheets ---------- */
   .sheet-wrap { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.28); display: flex; align-items: flex-end; justify-content: center; animation: fade .3s both; }
-  .sheet { width: 100%; max-width: 560px; max-height: 94%; border-radius: 34px 34px 0 0; margin: 0 6px; display: flex; flex-direction: column; animation: up .5s var(--ios) both; padding-bottom: env(safe-area-inset-bottom); }
-  .sheet.tall { height: 94%; }
+  .sheet { width: 100%; max-width: 560px; max-height: calc(100% - var(--sheet-gap)); border-radius: 34px 34px 0 0; margin: 0 6px; display: flex; flex-direction: column; animation: up .5s var(--ios) both; padding-bottom: env(safe-area-inset-bottom); }
+  .sheet.tall { height: calc(100% - var(--sheet-gap)); }
   @keyframes up { from { transform: translateY(105%); } }
   @keyframes down { to { transform: translateY(105%); } }
   @keyframes fadeOut { to { background: transparent; opacity: 0; } }
@@ -1578,7 +1584,7 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-17.3";   // bump together with version.json
+const VERSION = "2026-11-17.4";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
   { v: "JNIv47", when: "Nov 17, 2026", title: "Tidier Settings, and keys from your phone", notes: [
@@ -1586,7 +1592,7 @@ const RELEASES = [
     "AI Models has a switch for each AI, and Add Key: paste a key for Gemini, the free models, ChatGPT or Grok from your phone. Your PC checks it, keeps it and switches that AI on. It's never shown again.",
     "Gemini no longer keeps you waiting: it thinks less, and if it hasn't answered in 45 seconds the next one takes over (it used to wait three minutes).",
     "A follow-up like “go again” stays with the job it continues, so it goes to the AI that was doing it.",
-    "Settings and the other panels are sharp again in the Home Screen app: their title, × and text were slightly blurred.",
+    "Settings and the other panels are sharp in the Home Screen app: they now open below the blur iOS puts along the top of the screen, instead of under it.",
   ]},
   { v: "JNIv46", when: "Nov 17, 2026", title: "Connects faster", notes: [
     "Opening the app connects in a few seconds: it tries every way to reach your PC at once instead of one after another, and no longer waits on a slow network to say where the PC is.",
