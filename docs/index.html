@@ -1578,7 +1578,7 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-17.2";   // bump together with version.json
+const VERSION = "2026-11-17.3";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
   { v: "JNIv47", when: "Nov 17, 2026", title: "Tidier Settings, and keys from your phone", notes: [
@@ -1586,6 +1586,7 @@ const RELEASES = [
     "AI Models has a switch for each AI, and Add Key: paste a key for Gemini, the free models, ChatGPT or Grok from your phone. Your PC checks it, keeps it and switches that AI on. It's never shown again.",
     "Gemini no longer keeps you waiting: it thinks less, and if it hasn't answered in 45 seconds the next one takes over (it used to wait three minutes).",
     "A follow-up like “go again” stays with the job it continues, so it goes to the AI that was doing it.",
+    "Settings and the other panels are sharp again in the Home Screen app: their title, × and text were slightly blurred.",
   ]},
   { v: "JNIv46", when: "Nov 17, 2026", title: "Connects faster", notes: [
     "Opening the app connects in a few seconds: it tries every way to reach your PC at once instead of one after another, and no longer waits on a slow network to say where the PC is.",
@@ -3707,6 +3708,27 @@ $("clipCopy").onclick = async () => {
   catch { toast("Select the text and copy it", "x", "var(--orange)"); }
 };
 function openSheet(id) { $(id).classList.remove("closing"); $(id).hidden = false; }
+// A sheet is a glass layer that sits on the bottom edge, so its top lands wherever its height ends: often between two
+// screen pixels (48.73 px down, say). The iPhone then draws the whole layer resampled, and its text, the grabber and
+// the × come out soft (photos hide it). So each sheet is nudged up the fraction it needs to sit on a whole pixel,
+// whenever it opens or changes height (Settings' pages are different heights).
+function snapSheet(sheet) {
+  if (sheet.closest("[hidden]")) return;
+  const t = getComputedStyle(sheet).transform;
+  if (t !== "none" && new DOMMatrix(t).m42 !== 0) return;   // still sliding or being dragged: once it settles
+  const dpr = devicePixelRatio || 1, cur = parseFloat(sheet.style.top) || 0;
+  const top = (sheet.getBoundingClientRect().top - cur) * dpr, frac = top - Math.floor(top);
+  const want = frac > .01 && frac < .99 ? `${(-frac / dpr).toFixed(4)}px` : "";
+  if (sheet.style.top !== want) sheet.style.top = want;
+}
+{
+  const sheets = document.querySelectorAll(".sheet-wrap .sheet");
+  const snapAll = () => sheets.forEach(snapSheet);
+  if (window.ResizeObserver) { const ro = new ResizeObserver(snapAll); sheets.forEach(s => ro.observe(s)); }
+  sheets.forEach(s => s.addEventListener("animationend", () => snapSheet(s)));
+  sheets.forEach(s => s.addEventListener("transitionend", () => snapSheet(s)));   // after a drag springs back
+  addEventListener("resize", snapAll);
+}
 function openControl() { $("pcSheetBody").append($("widget")); openSheet("pcSheet"); sync(); }
 function openNews() {
   $("newsBody").innerHTML = RELEASES.map((r, i) => `<div class="rel${i === 0 ? " latest" : ""}">
