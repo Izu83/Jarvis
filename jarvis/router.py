@@ -8,7 +8,7 @@ it's best at and the everyday questions, so your Claude limit lasts for what Cla
     doing things on the PC, many steps     Claude    -> Gemini -> free models -> local -> ChatGPT
     code                                    Claude    -> ChatGPT -> Gemini -> free models
     seeing the screen, photos you send      Claude    -> Gemini -> ChatGPT
-    current things (news, prices, search)   Gemini    -> Claude -> Grok -> ChatGPT -> free models
+    current things (news, prices, search)   Gemini    -> Perplexity -> Claude -> Grok -> ChatGPT -> free models
     YouTube, long documents                 Gemini    -> Claude -> free models
     X / Twitter                             Grok      -> Gemini -> Claude
     everyday questions and chat             Gemini    -> free models -> Claude -> local -> ChatGPT -> Grok
@@ -75,7 +75,7 @@ ORDER = {   # "openrouter" = OpenRouter's free models (DeepSeek when it's free t
     "action":  ["claude", "gemini", "openrouter", "local", "chatgpt"],
     "code":    ["claude", "chatgpt", "gemini", "openrouter", "local"],
     "sight":   ["claude", "gemini", "chatgpt"],
-    "current": ["gemini", "claude", "grok", "chatgpt", "openrouter"],
+    "current": ["gemini", "perplexity", "claude", "grok", "chatgpt", "openrouter"],
     "long":    ["gemini", "claude", "openrouter", "chatgpt"],
     "x":       ["grok", "gemini", "claude", "chatgpt"],
     "chat":    ["gemini", "openrouter", "claude", "local", "chatgpt", "grok"],

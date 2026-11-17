@@ -198,10 +198,16 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 | Doing things on the PC, many steps | Claude, Gemini, free models, local, ChatGPT |
 | Code | Claude, ChatGPT, Gemini, free models |
 | The screen, photos you send | Claude, Gemini, ChatGPT |
-| Anything current (news, prices, search) | Gemini, Claude, Grok, ChatGPT, free models |
+| Anything current (news, prices, search) | Gemini, Perplexity, Claude, Grok, ChatGPT, free models |
 | YouTube, long documents | Gemini, Claude, free models |
 | X / Twitter | Grok, Gemini, Claude |
 | Everyday questions and chat | Gemini, free models, Claude, local, ChatGPT, Grok |
+
+**Perplexity** (paid per use, no free tier): a key from https://console.perplexity.ai, added in the app or with
+`run.bat --keys`. It gets current questions after Gemini, through its Agent API (`POST /v1/agent`, effort "fast",
+`perplexity_effort` in config.json), and its sources go under the answer. It can't use Jarvis's tools. What it
+charged comes back with each answer and counts toward `paid_budget`. Its key is checked with an empty request: 401
+for a wrong key, 400 for a good one, nothing charged.
 
 **Adding a key from the phone:** Settings › AI Models › API keys › Add Key. Paste the key and tap Save: it goes to the
 PC over the encrypted link (`set_key`), the PC checks it with the provider (a read-only call, nothing spent), keeps it

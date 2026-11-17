@@ -33,8 +33,11 @@ PROVIDERS = {
                    "nvidia/nemotron-3-ultra-550b-a55b:free", "openrouter_price"),
     "chatgpt": ("OPENAI_API_KEY", "https://api.openai.com/v1", "chatgpt_model", "gpt-5-mini", "chatgpt_price"),
     "grok":    ("XAI_API_KEY",    "https://api.x.ai/v1",       "grok_model",    "grok-4-fast", "grok_price"),
+    # Perplexity: answers from the web with sources, through its Agent API (the Sonar API it replaced was retired
+    # on Sept 27, 2026). The "model" is its effort preset; "fast" searches the web and is the cheapest.
+    "perplexity": ("PERPLEXITY_API_KEY", "https://api.perplexity.ai/v1", "perplexity_effort", "fast", "perplexity_price"),
 }
-NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", "grok": "Grok"}
+NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", "grok": "Grok", "perplexity": "Perplexity"}
 FREE = {"gemini", "openrouter"}   # no budget to watch
 LADDERS = {"gemini", "openrouter"}   # many models, tried in turn (see below)
 SEARCH_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -50,12 +53,36 @@ KEEP_GOOD = 1800    # s: the model that last answered goes first this long (no w
 GEMINI_EFFORT = {"action": "medium", "code": "medium", "sight": "medium"}   # everything else: "low"
 
 
+def perplexity_answer(data: dict) -> tuple[str, list[tuple[str, str]]]:
+    """(the answer, its sources as (title, url)) from a Perplexity Agent API response. The answer is the "message"
+    item's text; the sources are the "search_results" item's results, in their [1], [2] order (or the citations on
+    the text when there are none)."""
+    text, sources, cited = "", [], []
+    for item in data.get("output") or []:
+        if item.get("type") == "message":
+            for part in item.get("content") or []:
+                text += part.get("text") or ""
+                cited += [(a.get("title") or a.get("url"), a["url"]) for a in part.get("annotations") or []
+                          if a.get("type") == "citation" and a.get("url")]
+        elif item.get("type") == "search_results":
+            sources += [(r.get("title") or r.get("url"), r["url"]) for r in item.get("results") or [] if r.get("url")]
+    text = text or data.get("output_text") or ""
+    text = re.sub(r"\[web:(\d+)\]", r"[\1]", text).strip()   # the higher efforts mark sources [web:1]
+    seen, out = set(), []
+    for title, url in sources or cited:
+        if url not in seen:
+            seen.add(url)
+            out.append((title, url))
+    return text, out[:8]
+
+
 def has_key(provider: str) -> bool:
     return bool(secret(PROVIDERS[provider][0]))
 
 
 KEY_PAGES = {"gemini": "https://aistudio.google.com/apikey", "openrouter": "https://openrouter.ai/keys",
-             "chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai"}
+             "chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai",
+             "perplexity": "https://console.perplexity.ai"}
 
 
 def check_key(provider: str, key: str) -> bool:
@@ -63,6 +90,11 @@ def check_key(provider: str, key: str) -> bool:
     base = PROVIDERS[provider][1]
     check = f"{base}/key" if provider == "openrouter" else f"{base}/models"   # OpenRouter's model list is public
     try:
+        if provider == "perplexity":
+            # No read-only call checks a Perplexity key, so send an empty question: a wrong key gets 401 before
+            # anything else; a good one gets "bad request" (400), and nothing is answered or charged.
+            r = requests.post(f"{base}/agent", json={}, headers={"Authorization": f"Bearer {key}"}, timeout=15)
+            return r.status_code not in (401, 403) and r.status_code < 500
         return requests.get(check, headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
     except requests.RequestException:
         return False
@@ -279,6 +311,8 @@ class CloudBrain:
                search: bool = False, kind: str = "chat") -> str:
         self.failed, self.last_thinking = True, ""
         note = memory.context(chat, 0.0, recent, True, with_facts=True)
+        if self.provider == "perplexity":
+            return self._perplexity(note + command, progress)
         if search and self.provider == "gemini":
             return self._search(note + command, progress)
         messages = [{"role": "system", "content": system_prompt()}, {"role": "user", "content": note + command}]
@@ -335,6 +369,39 @@ class CloudBrain:
             return f"{self.name} can't be reached right now."
         finally:
             partial.clear()
+
+    def _perplexity(self, prompt: str, progress) -> str:
+        """Perplexity's Agent API: it searches the web and answers with sources, which go under the answer. It can't
+        use Jarvis's tools (open apps and the like), so router.py only sends it questions about the world."""
+        if progress:
+            progress("Searching with Perplexity…", "Web")
+        started = time.time()
+        effort = settings.get("perplexity_effort") or "fast"
+        try:
+            r = requests.post(f"{self.base}/agent", timeout=(10, 90), headers={"Authorization": f"Bearer {self.key}"},
+                              json={"effort": effort, "input": prompt, "instructions": system_prompt()})
+            if r.status_code >= 400:
+                log.warning("Perplexity refused: %s %s", r.status_code, r.text[:300])
+                if r.status_code == 401:
+                    return "Perplexity didn't accept its key. Add it again in Settings › AI Models."
+                if r.status_code in (402, 429):
+                    return "Perplexity is out of credit or busy right now."
+                return f"Perplexity couldn't answer (error {r.status_code})."
+            data = r.json()
+        except (requests.RequestException, ValueError) as e:
+            log.warning("Perplexity didn't answer: %s", e)
+            return "Perplexity can't be reached right now."
+        answer, sources = perplexity_answer(data)
+        use = data.get("usage") or {}
+        cost = float(((use.get("cost") or {}).get("total_cost")) or 0)   # Perplexity says what it charged
+        usage.record_other("perplexity", use.get("input_tokens", 0), use.get("output_tokens", 0), cost)
+        if not answer:
+            return "Perplexity found nothing to say."
+        self.failed = False
+        log.info("Perplexity (%s) answered in %.1fs (about $%.4f).", effort, time.time() - started, cost)
+        if sources:
+            answer += "\n\nSources:\n" + "\n".join(f"{i}. [{t}]({u})" for i, (t, u) in enumerate(sources, 1))
+        return answer
 
     def _search(self, prompt: str, progress) -> str:
         """Gemini with Google Search, through its own API: for news, prices, scores and anything else current."""

@@ -83,7 +83,7 @@ def pairing_link() -> str:
 
 # the model picker's ticks (Settings and the model menu) and what the log calls them
 MODEL_TICKS = {"use_claude": "Claude", "use_gemini": "Gemini", "use_openrouter": "The free models",
-               "use_chatgpt": "ChatGPT", "use_grok": "Grok",
+               "use_chatgpt": "ChatGPT", "use_grok": "Grok", "use_perplexity": "Perplexity",
                "use_hermes": "Hermes", "use_qwen": "Qwen3"}
 
 
@@ -312,6 +312,7 @@ class PhoneChannel:
                 "openrouter_now": cloud.current_free_model(),
                 "use_chatgpt": bool(settings.get("use_chatgpt")), "chatgpt_key": cloud.has_key("chatgpt"),
                 "use_grok": bool(settings.get("use_grok")), "grok_key": cloud.has_key("grok"),
+                "use_perplexity": bool(settings.get("use_perplexity")), "perplexity_key": cloud.has_key("perplexity"),
                 "spend": round(usage.month_spend(), 2), "budget": float(settings.get("paid_budget", 5.0))}
 
     def send_memory(self) -> None:
