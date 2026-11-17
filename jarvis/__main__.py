@@ -48,38 +48,24 @@ def keys_setup() -> None:
     saved in .env."""
     import getpass
 
-    import requests
-
     from . import cloud
-    from .config import set_secret, set_setting
+    from .config import set_setting
 
     print("Gemini: FREE with a Google AI Studio key (no card). Free models: FREE with an OpenRouter key (no card;")
     print("DeepSeek whenever it's free there, otherwise the strongest free models). ChatGPT and Grok: paid per use through their APIs")
     print("(not the ChatGPT or Grok apps); Jarvis only sends them what they're best at, or what the others can't")
     print(f"answer, and keeps both together under your monthly budget (now ${settings.get('paid_budget', 5.0):g}).")
     print("Press Enter to skip one.\n")
-    where = {"gemini": "https://aistudio.google.com/apikey (free)", "openrouter": "https://openrouter.ai/keys (free)",
-             "chatgpt": "https://platform.openai.com/api-keys",
-             "grok": "https://console.x.ai"}
-    for provider, (env, base, *_rest) in cloud.PROVIDERS.items():
+    for provider in cloud.PROVIDERS:
         name = cloud.NAMES[provider]
         have = " (you have one; Enter keeps it)" if cloud.has_key(provider) else ""
-        key = getpass.getpass(f"{name} API key from {where[provider]}{have} (hidden): ").strip()
+        free = " (free)" if provider in cloud.FREE else ""
+        key = getpass.getpass(f"{name} API key from {cloud.KEY_PAGES[provider]}{free}{have} (hidden): ").strip()
         if not key:
             continue
-        try:
-            check = f"{base}/key" if provider == "openrouter" else f"{base}/models"   # OpenRouter's model list is public
-            ok = requests.get(check, headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
-        except requests.RequestException:
-            ok = False
-        if not ok:
-            print(f"  {name} didn't accept that key; nothing changed.")
-            continue
-        set_secret(env, key)
-        set_setting("use_" + provider, True)
-        best = cloud.best_gemini_model(key) if provider == "gemini" else None
-        print(f"  {name} is connected and ticked in the model menu"
-              + (f" (the newest it can use: {best}, and the next one down when that's busy)." if best else "."))
+        saved, message = cloud.save_key(provider, key)
+        best = cloud.best_gemini_model(key) if saved and provider == "gemini" else None
+        print("  " + message + (f" Newest model it can use: {best}, and the next one down when that's busy." if best else ""))
     budget = input(f"Monthly budget for ChatGPT and Grok together, in USD [{settings.get('paid_budget', 5.0):g}]: ").strip()
     if budget:
         try:

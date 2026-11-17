@@ -831,6 +831,15 @@ class PhoneChannel:
                 hotkey.set_enabled(value)
                 log.info("Keyboard shortcut turned %s from the phone.", "on" if value else "off")
             self.send_state()
+        elif kind == "set_key":   # the model list's Paste Key: an API key, sent over this encrypted link
+            from . import cloud
+            provider, pasted = data.get("provider"), data.get("key")
+            if provider in cloud.PROVIDERS and isinstance(pasted, str):
+                saved, message = cloud.save_key(provider, pasted[:400])
+            else:
+                saved, message = False, "That key couldn't be saved."
+            self._publish({"kind": "key_saved", "id": msg_id, "provider": provider, "ok": saved, "text": message})
+            self.send_state()
         elif kind == "peers":   # the phone's other computers, so "wake up my PC" works from here (wake.py)
             from . import wake
             if wake.learn(data.get("list")):

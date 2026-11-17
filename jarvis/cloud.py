@@ -54,6 +54,38 @@ def has_key(provider: str) -> bool:
     return bool(secret(PROVIDERS[provider][0]))
 
 
+KEY_PAGES = {"gemini": "https://aistudio.google.com/apikey", "openrouter": "https://openrouter.ai/keys",
+             "chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai"}
+
+
+def check_key(provider: str, key: str) -> bool:
+    """Does the provider accept this key? (A cheap read-only call; nothing is spent.)"""
+    base = PROVIDERS[provider][1]
+    check = f"{base}/key" if provider == "openrouter" else f"{base}/models"   # OpenRouter's model list is public
+    try:
+        return requests.get(check, headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
+    except requests.RequestException:
+        return False
+
+
+def save_key(provider: str, key: str) -> tuple[bool, str]:
+    """Check a pasted key and, if it works, keep it in .env and tick the model: (saved, what to tell the user).
+    Used by `run.bat --keys` and by the app's Paste Key. The key itself is never logged or sent back."""
+    from .config import set_secret, set_setting
+    name = NAMES[provider]
+    key = "".join(key.split())   # pasted with a stray space or line break
+    if not 20 <= len(key) <= 300 or not key.isascii():
+        return False, f"That doesn't look like a {name} key."
+    if not check_key(provider, key):
+        return False, f"{name} didn't accept that key. Nothing changed."
+    set_secret(PROVIDERS[provider][0], key)
+    set_setting("use_" + provider, True)
+    _ladders.pop(provider, None)        # its models may differ with this key: look again
+    _provider_resting.pop(provider, None)
+    log.info("%s key saved and %s ticked.", name, name)
+    return True, f"{name} is connected and switched on."
+
+
 def over_budget() -> bool:
     return usage.month_spend() >= float(settings.get("paid_budget", 5.0))
 

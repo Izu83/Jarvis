@@ -203,6 +203,10 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 | X / Twitter | Grok, Gemini, Claude |
 | Everyday questions and chat | Gemini, free models, Claude, local, ChatGPT, Grok |
 
+**Adding a key from the phone:** Settings › AI Models › API keys › Add Key. Paste the key and tap Save: it goes to the
+PC over the encrypted link (`set_key`), the PC checks it with the provider (a read-only call, nothing spent), keeps it
+in `.env` and switches that AI on (`cloud.save_key`, the same as `run.bat --keys`). It's never logged or sent back.
+
 A follow-up that gives nothing to go on ("okay but make it REALLY blurred", "go again") carries on the job before it
 in the same chat (if that was in the last 15 minutes), so it goes to the model that can do that job, not to the one
 for small talk. Just "thanks" or "ok" stays small talk.
@@ -222,7 +226,7 @@ for half an hour, so a busy day at Google doesn't cost a wait on every message. 
   Jarvis's tools, answers anything current with Google Search, and takes the everyday questions so your Claude limit
   lasts. (Google no longer lets personal accounts use the Gemini CLI, even with a Gemini plan, so it's the API.)
 - **Free models**: OpenRouter's free models, with a free key from https://openrouter.ai/keys (no card).
-  `run.bat --keys` adds it. DeepSeek goes first whenever one of its models is free there (none is in November
+  `run.bat --keys` or the app's Paste Key adds it. DeepSeek goes first whenever one of its models is free there (none is in November
   2026); otherwise the strongest free ones that can use Jarvis's tools, in order: NVIDIA Nemotron 3 Ultra,
   Thinking Machines Inkling, Gemma 4 31B, Nemotron 3.5 Lightning, and the rest. The list is looked up every 6 hours,
   so new free models join by themselves. A busy one is skipped for 2 minutes. The free allowance is about 50

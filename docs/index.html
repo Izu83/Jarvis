@@ -514,6 +514,43 @@
   .group-title { font-size: 13px; color: var(--label2); margin: 22px 34px 7px; letter-spacing: -.08px; }
   .group-foot { font-size: 13px; color: var(--label2); margin: 7px 34px 0; line-height: 18px; letter-spacing: -.08px; }
   .group { margin: 0 16px; border-radius: 22px; background: var(--card); overflow: hidden; box-shadow: inset 0 0 0 1px var(--card-line); }
+  /* ---------- Settings: a short list of pages, like iOS Settings. A page pushes in from the right and goes back the
+     way it came; the list behind it drifts a little to the left (spatial consistency). Reduced motion: a fade. ---------- */
+  .set-head { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; }
+  .set-head h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .set-head .set-left { justify-self: start; min-width: 32px; }
+  .set-head .set-right { justify-self: end; }
+  .back-btn { display: flex; align-items: center; gap: 1px; color: var(--blue); font-size: 17px; letter-spacing: -.4px; height: 32px; margin-left: -6px; padding-right: 6px; }
+  .back-btn svg.i { width: 21px; height: 21px; stroke-width: 2.5; transform: scaleX(-1); }
+  #setBody { overflow-x: hidden; }
+  .page-gap { height: 14px; }
+  .row.nav { min-height: 48px; }
+  .row.nav .mode-ic { width: 30px; height: 30px; border-radius: 8px; }
+  .row.nav .mode-ic svg.i { width: 17px; height: 17px; }
+  .row.nav .value { font-size: 15px; max-width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spage.push-in { animation: pushIn .42s var(--ios) both; }
+  .spage.pop-in { animation: popIn .42s var(--ios) both; }
+  @keyframes pushIn { from { transform: translateX(100%); } }
+  @keyframes popIn { from { transform: translateX(-28%); opacity: .4; } }
+  @media (prefers-reduced-motion: reduce) { .spage.push-in, .spage.pop-in { animation: fadeOnly .2s ease both; } }
+  /* Settings › AI Models: a switch for each AI, and pasting a key for the ones that need one */
+  .logo-tile { width: 30px; height: 30px; border-radius: 8px; background: var(--fill); display: grid; place-items: center; flex: none; }
+  .logo-tile svg { width: 18px; height: 18px; fill: currentColor; color: var(--label); }
+  .switch input:disabled + span { opacity: .45; }
+  .key-state { font-size: 15px; color: var(--label2); white-space: nowrap; }
+  #keyRows .disclose { transition: transform .3s var(--ios); }
+  #keyRows [aria-expanded="true"] .disclose { transform: rotate(90deg); }
+  .key-state.ok { color: var(--green); }
+  .key-panel { padding: 2px 18px 16px; font-size: 15px; line-height: 20px; color: var(--label2); }
+  .key-panel p { margin: 0 0 10px; }
+  .key-panel a { color: var(--blue); }
+  .key-input { display: block; width: 100%; height: 44px; border: 0; outline: 0; border-radius: 12px; background: var(--fill); color: var(--label); padding: 0 13px; font: inherit; font-size: 16px; -webkit-text-security: disc; }
+  .key-input:focus { box-shadow: 0 0 0 2px var(--blue); }
+  .key-btns { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .key-btns .mini.ghost { background: var(--fill); color: var(--blue); box-shadow: none; }
+  .key-msg { margin-top: 8px; font-size: 13px; line-height: 17px; }
+  .key-msg.bad { color: var(--red); }
+  .key-msg.ok { color: var(--green); }
   /* ---------- Settings › Memory ---------- */
   .mem-about { padding: 14px 16px 12px; }
   .mem-about textarea { display: block; width: 100%; min-height: 104px; border: 0; outline: 0; resize: none; background: var(--fill); border-radius: 14px; padding: 11px 13px; color: var(--label); font: inherit; font-size: 16px; line-height: 21px; letter-spacing: -.2px; }
@@ -1172,10 +1209,11 @@
 
 <!-- profile + settings -->
 <div class="sheet-wrap" id="sheet" hidden>
-  <div class="sheet glass strong" role="dialog" aria-label="Profile">
+  <div class="sheet glass strong" role="dialog" aria-label="Settings">
     <div class="grabber"></div>
-    <div class="sheet-head"><span style="width:32px"></span><h3>Profile</h3><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
-    <div class="sheet-body">
+    <div class="sheet-head set-head"><span class="set-left"><button class="back-btn press" id="setBack" type="button" hidden><svg class="i"><use href="#i-right"/></svg>Settings</button></span><h3 id="setTitle">Settings</h3><span class="set-right"><button class="x-btn press" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></span></div>
+    <div class="sheet-body" id="setBody">
+    <div class="spage root" data-page="root" data-title="Settings">
       <div class="profile">
         <button class="ring press" id="photoBtn" type="button" aria-label="Change your photo"><img class="avatar me-pic" src="avatar.jpg" alt=""><span class="cam" aria-hidden="true"><svg class="i"><use href="#i-camera"/></svg></span></button>
         <input type="file" id="photoInput" accept="image/*" hidden>
@@ -1183,17 +1221,50 @@
         <a href="https://github.com/Izu83" target="_blank" rel="noopener">github.com/Izu83</a><br>
         <span class="pc-line"><span class="dot" id="profDot"></span><span id="profPc">Jarvis</span></span>
       </div>
-      <div class="group-title">Appearance</div>
-      <div class="group" style="padding: 15px 16px 17px;">
-        <div class="opt-label">Theme</div>
-        <div class="segment" id="themeSeg"></div>
-        <div class="opt-label" style="margin-top: 17px;">Wallpaper</div>
-        <div class="swatches" id="wallpapers"></div>
-        <div class="opt-label" style="margin-top: 17px;">Accent</div>
-        <div class="swatches" id="accents"></div>
-        <label class="row" style="padding: 0; margin-top: 12px;"><span class="grow">Moving background<span class="sub">The colours drift slowly behind the glass. Uses a little more battery.</span></span><span class="switch"><input type="checkbox" id="driftToggle"><span></span></span></label>
+      <div class="group" style="margin-top:18px">
+        <button class="row nav" data-go="models"><span class="mode-ic" style="background:#5e5ce6"><svg class="i"><use href="#i-sparkles"/></svg></span><span class="grow">AI Models</span><span class="value" id="navModels"></span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="memory"><span class="mode-ic" style="background:#ff2d55"><svg class="i"><use href="#i-book"/></svg></span><span class="grow">Memory</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="briefings"><span class="mode-ic" style="background:#ff9f0a"><svg class="i"><use href="#i-sun"/></svg></span><span class="grow">Briefings</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="modes"><span class="mode-ic" style="background:#30b0c7"><svg class="i"><use href="#i-gamepad"/></svg></span><span class="grow">Modes</span><svg class="i disclose"><use href="#i-right"/></svg></button>
       </div>
-      <div class="group-title">Memory</div>
+      <div class="group" style="margin-top:22px">
+        <button class="row nav" data-go="voice"><span class="mode-ic" style="background:#af52de"><svg class="i"><use href="#i-wave"/></svg></span><span class="grow">Voice</span><span class="value" id="navVoice"></span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="appearance"><span class="mode-ic" style="background:#0a84ff"><svg class="i"><use href="#i-display"/></svg></span><span class="grow">Appearance</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="notifications"><span class="mode-ic" style="background:#ff3b30"><svg class="i"><use href="#i-bell"/></svg></span><span class="grow">Notifications</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+      </div>
+      <div class="group" style="margin-top:22px">
+        <button class="row nav" data-go="privacy"><span class="mode-ic" style="background:#636366"><svg class="i"><use href="#i-shield"/></svg></span><span class="grow">Privacy &amp; Security</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="siri"><span class="mode-ic" style="background:linear-gradient(135deg, #5ac8fa, #bf5af2)"><svg class="i"><use href="#i-mic"/></svg></span><span class="grow">Siri &amp; Share</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="computers"><span class="mode-ic" style="background:#64d2ff"><svg class="i"><use href="#i-laptop"/></svg></span><span class="grow">Your Computers</span><span class="value" id="navComputers"></span><svg class="i disclose"><use href="#i-right"/></svg></button>
+        <button class="row nav" data-go="connection"><span class="mode-ic" style="background:#34c759"><svg class="i"><use href="#i-wifi"/></svg></span><span class="grow">Connection</span><svg class="i disclose"><use href="#i-right"/></svg></button>
+      </div>
+      <div class="group" style="margin-top:22px">
+        <button class="row" id="versionRow"><span class="grow">What's New</span><span class="value"><b id="jniLabel" style="color:var(--label)"></b> · <span id="versionLabel"></span></span><svg class="i disclose"><use href="#i-right"/></svg></button>
+      </div>
+      <div class="group" style="margin-top:22px"><button class="row btn danger" id="deleteAllBtn">Delete All Chats</button></div>
+      <div class="group" style="margin-top:22px"><button class="row btn danger" id="unpair">Unpair This Phone</button></div>
+    </div>
+    <div class="spage" data-page="models" data-title="AI Models" hidden>
+      <div class="page-gap"></div>
+      <div class="group" id="modelRows"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
+      <div class="group-foot" id="modelHow"></div>
+      <div class="group-title">API keys</div>
+      <div class="group" id="keyRows"></div>
+      <div class="group-foot">A key goes from here to your PC over the encrypted link. Your PC checks it, keeps it in its own .env file and switches that AI on. It's never shown again, here or on the PC.</div>
+      <div class="group-title">Local brain</div>
+      <div class="group" id="localList"><div class="row"><span class="grow">Waiting for your PC…</span></div></div>
+      <div class="group" style="margin-top:12px"><label class="row"><span class="grow">Try local models first<span class="sub">Free, but much slower, and they get real tasks wrong. Off = Claude does everything and they only step in when Claude can't answer.</span></span><span class="switch"><input type="checkbox" id="localFirstToggle"><span></span></span></label></div>
+      <div class="group-foot">Free models on your PC. Green = online; "in memory" means it answers right away, otherwise the first command takes a few extra seconds to load it.</div>
+      <div class="group-title">Claude usage</div>
+      <div class="group">
+        <div class="row"><span class="grow">Times Jarvis used Claude</span><span class="value" id="uClaude">—</span></div>
+        <div class="row"><span class="grow">Tokens used<span class="sub">input + output, all time</span></span><span class="value" id="uTokens">—</span></div>
+        <div class="row"><span class="grow">Handled locally for free</span><span class="value" id="uLocal">—</span></div>
+        <button class="row btn" id="usageReset">Reset Counter</button>
+      </div>
+    </div>
+    <div class="spage" data-page="memory" data-title="Memory" hidden>
+      <div class="page-gap"></div>
       <div class="group mem-about">
         <div class="opt-label">About me</div>
         <textarea id="aboutText" rows="4" maxlength="4000" placeholder="Your name, what you do, people Jarvis should know, how you like your answers…"></textarea>
@@ -1208,6 +1279,15 @@
         <div class="segment" id="proactiveSeg"></div>
         <div class="opt-note" id="proactiveNote"></div>
       </div>
+      <div class="group-title">Things Jarvis remembers</div>
+      <div class="group" id="factList"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
+      <div class="group" style="margin-top:12px">
+        <label class="row add-fact"><svg class="i"><use href="#i-plus"/></svg><input id="factAdd" placeholder="Add something to remember" enterkeyhint="done" autocomplete="off"></label>
+        <button class="row btn danger" id="memClear">Forget Recent Conversations</button>
+      </div>
+      <div class="group-foot">Jarvis also saves things you mention by itself, like names, people and what you like. Tap × to delete one. Forgetting conversations keeps About me and these facts.</div>
+    </div>
+    <div class="spage" data-page="briefings" data-title="Briefings" hidden>
       <div class="group-title">Morning briefing</div>
       <div class="group">
         <label class="row"><span class="grow">Every morning<span class="sub">Weather, your calendar, reminders, email and your PC in one message. No tokens.</span></span><span class="switch"><input type="checkbox" id="briefOn"><span></span></span></label>
@@ -1242,21 +1322,65 @@
         <label class="row"><span class="grow">Time</span><input type="time" id="recapTime" class="row-input"></label>
         <button class="row btn" id="recapNow">Send It Now</button>
       </div>
-      <div class="group-title">Things Jarvis remembers</div>
-      <div class="group" id="factList"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
-      <div class="group" style="margin-top:12px">
-        <label class="row add-fact"><svg class="i"><use href="#i-plus"/></svg><input id="factAdd" placeholder="Add something to remember" enterkeyhint="done" autocomplete="off"></label>
-        <button class="row btn danger" id="memClear">Forget Recent Conversations</button>
-      </div>
-      <div class="group-foot">Jarvis also saves things you mention by itself, like names, people and what you like. Tap × to delete one. Forgetting conversations keeps About me and these facts.</div>
-      <div class="group-title">Modes</div>
+    </div>
+    <div class="spage" data-page="modes" data-title="Modes" hidden>
+      <div class="page-gap"></div>
       <div class="group" id="modeList"></div>
       <div class="group-foot">Create or change a mode by asking, e.g. "Make a gaming mode with Discord on the vertical monitor and Steam on the main one."</div>
-      <div class="group-title">Local brain</div>
-      <div class="group" id="localList"><div class="row"><span class="grow">Waiting for your PC…</span></div></div>
-      <div class="group"><label class="row"><span class="grow">Try local models first<span class="sub">Free, but much slower, and they get real tasks wrong. Off = Claude does everything and they only step in when Claude can't answer.</span></span><span class="switch"><input type="checkbox" id="localFirstToggle"><span></span></span></label></div>
-      <div class="group-foot">Free models on your PC. Green = online; "in memory" means it answers right away, otherwise the first command takes a few extra seconds to load it.</div>
-      <div class="group-title">Siri &amp; Share</div>
+    </div>
+    <div class="spage" data-page="voice" data-title="Voice" hidden>
+      <div class="group-title">Jarvis's voice</div>
+      <div class="group" id="voiceList"></div>
+      <div class="group-foot">Tap one to hear it. Replies in Bulgarian are read by a Bulgarian voice of the same kind.</div>
+      <div class="group-title">Replies</div>
+      <div class="group">
+        <label class="row"><span class="grow">Read replies aloud</span><span class="switch"><input type="checkbox" id="speakToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle"><span></span></span></label>
+      </div>
+      <div class="group-title">Voice mode</div>
+      <div class="group">
+        <label class="row"><span class="grow">Interrupt by voice<span class="sub">Say “stop”, “wait” or “Jarvis, …” while he's talking</span></span><span class="switch"><input type="checkbox" id="bargeToggle"><span></span></span></label>
+        <div class="row link-row"><span class="grow">Open straight into Voice mode<span class="sub" id="voiceLink"></span></span><button class="mini press" id="voiceLinkCopy">Copy</button></div>
+      </div>
+      <div class="group-foot">With Interrupt on, the microphone stays on while Jarvis talks, so on some iPhones he sounds a little quieter. For one move into Voice mode: make a Shortcut that opens the link, then set it in Settings › Accessibility › Touch › Back Tap (or on the Action Button). It opens in Safari, so pair Safari once with your pairing link too.</div>
+      <div class="group-title">Language you speak</div>
+      <div class="group" style="padding: 15px 16px 17px;">
+        <div class="segment" id="langSeg"></div>
+        <div class="opt-note" id="langNote"></div>
+      </div>
+      <div class="group-foot">For “Hey Jarvis” on your PC and dictation here. Replies in Bulgarian are read in a Bulgarian voice either way.</div>
+    </div>
+    <div class="spage" data-page="appearance" data-title="Appearance" hidden>
+      <div class="page-gap"></div>
+      <div class="group" style="padding: 15px 16px 17px;">
+        <div class="opt-label">Theme</div>
+        <div class="segment" id="themeSeg"></div>
+        <div class="opt-label" style="margin-top: 17px;">Wallpaper</div>
+        <div class="swatches" id="wallpapers"></div>
+        <div class="opt-label" style="margin-top: 17px;">Accent</div>
+        <div class="swatches" id="accents"></div>
+        <label class="row" style="padding: 0; margin-top: 12px;"><span class="grow">Moving background<span class="sub">The colours drift slowly behind the glass. Uses a little more battery.</span></span><span class="switch"><input type="checkbox" id="driftToggle"><span></span></span></label>
+      </div>
+    </div>
+    <div class="spage" data-page="notifications" data-title="Notifications" hidden>
+      <div class="page-gap"></div>
+      <div class="group">
+        <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
+        <button class="row btn" id="notifyTest">Send a Test Notification</button>
+      </div>
+      <div class="group-foot" id="notifyHint" hidden></div>
+    </div>
+    <div class="spage" data-page="privacy" data-title="Privacy &amp; Security" hidden>
+      <div class="page-gap"></div>
+      <div class="group">
+        <label class="row"><span class="grow">Share where I am<span class="sub">Jarvis knows your exact location when you talk to him from this device (GPS), for “near me”, distances and the weather here</span></span><span class="switch"><input type="checkbox" id="geoToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Ask before risky actions<span class="sub">Running commands, deleting, overwriting and shutting down wait for your Allow. Off: Jarvis just does them</span></span><span class="switch"><input type="checkbox" id="askToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Face ID for permissions<span class="sub" id="faceidSub">Deleting, running commands and shutting down need your face before they're allowed</span></span><span class="switch"><input type="checkbox" id="faceidToggle"><span></span></span></label>
+      </div>
+      <div class="group-foot">Messages and emails always go without asking. Your PC checks the Face ID itself, so someone holding your unlocked phone can't approve anything; in the desktop app on your PC it asks for your Windows PIN or password instead. Turning Face ID off needs it too. Lost your phone? Right-click the Jarvis tray icon on the PC › Turn off Face ID for permissions.</div>
+    </div>
+    <div class="spage" data-page="siri" data-title="Siri &amp; Share" hidden>
+      <div class="page-gap"></div>
       <div class="group">
         <button class="row btn" id="siriBtn">Set Up “Ask Jarvis” for Siri</button>
         <div class="siri-how" id="siriHow" hidden>
@@ -1285,66 +1409,24 @@
         </div>
       </div>
       <div class="group-foot">The key lets the shortcut talk to your PC, so don't share it. If Jarvis needs longer than about 45 seconds, Siri says so and the answer comes here as a message.</div>
-      <div class="group-title">Tokens</div>
-      <div class="group">
-        <label class="row"><span class="grow">Use Claude for complex commands<span class="sub">Off = only the free built-in commands, never uses your Claude limit</span></span><span class="switch"><input type="checkbox" id="claudeToggle"><span></span></span></label>
-      </div>
-      <div class="group-title">Claude usage</div>
-      <div class="group">
-        <div class="row"><span class="grow">Times Jarvis used Claude</span><span class="value" id="uClaude">—</span></div>
-        <div class="row"><span class="grow">Tokens used<span class="sub">input + output, all time</span></span><span class="value" id="uTokens">—</span></div>
-        <div class="row"><span class="grow">Handled locally for free</span><span class="value" id="uLocal">—</span></div>
-        <button class="row btn" id="usageReset">Reset Counter</button>
-      </div>
+    </div>
+    <div class="spage" data-page="computers" data-title="Your Computers" hidden>
+      <div class="page-gap"></div>
+      <div class="group" id="devList"></div>
+      <div class="group-foot">Jarvis can run on more than one computer, like your PC and your laptop. Each has its own chats here; pick one in Control Center (the computer tab) or above. Messages from the other one wait until you switch to it.</div>
       <div class="group-title">Desktop</div>
       <div class="group">
         <label class="row"><span class="grow">Talk shortcut<span class="sub">Press Ctrl + Alt + J on your PC to start talking, without saying "Hey Jarvis"</span></span><span class="switch"><input type="checkbox" id="hotkeyToggle"><span></span></span></label>
       </div>
-      <div class="group-title">Replies</div>
-      <div class="group">
-        <label class="row"><span class="grow">Read replies aloud</span><span class="switch"><input type="checkbox" id="speakToggle"><span></span></span></label>
-        <label class="row"><span class="grow">Send after dictation</span><span class="switch"><input type="checkbox" id="autoSendToggle"><span></span></span></label>
-      </div>
-      <div class="group-title">Jarvis's voice</div>
-      <div class="group" id="voiceList"></div>
-      <div class="group-foot">Tap one to hear it. Replies in Bulgarian are read by a Bulgarian voice of the same kind.</div>
-      <div class="group-title">Voice mode</div>
-      <div class="group">
-        <label class="row"><span class="grow">Interrupt by voice<span class="sub">Say “stop”, “wait” or “Jarvis, …” while he's talking</span></span><span class="switch"><input type="checkbox" id="bargeToggle"><span></span></span></label>
-        <div class="row link-row"><span class="grow">Open straight into Voice mode<span class="sub" id="voiceLink"></span></span><button class="mini press" id="voiceLinkCopy">Copy</button></div>
-      </div>
-      <div class="group-foot">With Interrupt on, the microphone stays on while Jarvis talks, so on some iPhones he sounds a little quieter. For one move into Voice mode: make a Shortcut that opens the link, then set it in Settings › Accessibility › Touch › Back Tap (or on the Action Button). It opens in Safari, so pair Safari once with your pairing link too.</div>
-      <div class="group-title">Language you speak</div>
-      <div class="group" style="padding: 15px 16px 17px;">
-        <div class="segment" id="langSeg"></div>
-        <div class="opt-note" id="langNote"></div>
-      </div>
-      <div class="group-foot">For “Hey Jarvis” on your PC and dictation here. Replies in Bulgarian are read in a Bulgarian voice either way.</div>
-      <div class="group-title">Security</div>
-      <div class="group">
-        <label class="row"><span class="grow">Share where I am<span class="sub">Jarvis knows your exact location when you talk to him from this device (GPS), for “near me”, distances and the weather here</span></span><span class="switch"><input type="checkbox" id="geoToggle"><span></span></span></label>
-        <label class="row"><span class="grow">Ask before risky actions<span class="sub">Running commands, deleting, overwriting and shutting down wait for your Allow. Off: Jarvis just does them</span></span><span class="switch"><input type="checkbox" id="askToggle"><span></span></span></label>
-        <label class="row"><span class="grow">Face ID for permissions<span class="sub" id="faceidSub">Deleting, running commands and shutting down need your face before they're allowed</span></span><span class="switch"><input type="checkbox" id="faceidToggle"><span></span></span></label>
-      </div>
-      <div class="group-foot">Messages and emails always go without asking. Your PC checks the Face ID itself, so someone holding your unlocked phone can't approve anything; in the desktop app on your PC it asks for your Windows PIN or password instead. Turning Face ID off needs it too. Lost your phone? Right-click the Jarvis tray icon on the PC › Turn off Face ID for permissions.</div>
-      <div class="group-title">Notifications</div>
-      <div class="group">
-        <label class="row"><span class="grow">Notify me on this phone<span class="sub">Alerts even when the app is closed</span></span><span class="switch"><input type="checkbox" id="notifyToggle"><span></span></span></label>
-        <button class="row btn" id="notifyTest">Send a Test Notification</button>
-      </div>
-      <div class="group-foot" id="notifyHint" hidden></div>
-      <div class="group-title">Your computers</div>
-      <div class="group" id="devList"></div>
-      <div class="group-foot">Jarvis can run on more than one computer, like your PC and your laptop. Each has its own chats here; pick one in Control Center (the computer tab) or above. Messages from the other one wait until you switch to it.</div>
-      <div class="group-title">Connection</div>
+    </div>
+    <div class="spage" data-page="connection" data-title="Connection" hidden>
+      <div class="page-gap"></div>
       <div class="group">
         <div class="row"><span class="grow">Connection</span><span class="value" id="relayName"></span></div>
         <button class="row btn" id="relinkBtn">Connect with Pairing Link</button>
         <div class="row"><span class="grow">Encryption</span><span class="value">AES-256-GCM</span></div>
-        <button class="row" id="versionRow"><span class="grow">What's New</span><span class="value"><b id="jniLabel" style="color:var(--label)"></b> · <span id="versionLabel"></span></span><svg class="i disclose"><use href="#i-right"/></svg></button></div>
       </div>
-      <div class="group" style="margin-top:22px"><button class="row btn danger" id="deleteAllBtn">Delete All Chats</button></div>
-      <div class="group" style="margin-top:22px"><button class="row btn danger" id="unpair">Unpair This Phone</button></div>
+    </div>
     </div>
   </div>
 </div>
@@ -1496,9 +1578,15 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-17.1";   // bump together with version.json
+const VERSION = "2026-11-17.2";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv47", when: "Nov 17, 2026", title: "Tidier Settings, and keys from your phone", notes: [
+    "Settings is now a short list: AI Models, Memory, Briefings, Modes, Voice, Appearance, Notifications, Privacy & Security, Siri & Share, Your Computers and Connection. Each opens its own page.",
+    "AI Models has a switch for each AI, and Add Key: paste a key for Gemini, the free models, ChatGPT or Grok from your phone. Your PC checks it, keeps it and switches that AI on. It's never shown again.",
+    "Gemini no longer keeps you waiting: it thinks less, and if it hasn't answered in 45 seconds the next one takes over (it used to wait three minutes).",
+    "A follow-up like “go again” stays with the job it continues, so it goes to the AI that was doing it.",
+  ]},
   { v: "JNIv46", when: "Nov 17, 2026", title: "Connects faster", notes: [
     "Opening the app connects in a few seconds: it tries every way to reach your PC at once instead of one after another, and no longer waits on a slow network to say where the PC is.",
     "While it's connecting, it says Connecting… instead of offline. Offline only shows when your PC really can't be reached.",
@@ -2401,16 +2489,16 @@ const Models = {
       return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}, on your Claude plan. Best at doing things on your PC, and code.`;
     }
     if (m.key === "use_gemini") {
-      if (!x.gemini_key) return "Needs a free key from aistudio.google.com: run.bat --keys on the PC.";
+      if (!x.gemini_key) return "Needs a free key: Settings › AI Models › Gemini.";
       return "Free, with Google Search. Best for anything current, YouTube, long documents and everyday questions.";
     }
     if (m.key === "use_openrouter") {
-      if (!x.openrouter_key) return "Needs a free key from openrouter.ai: run.bat --keys on the PC.";
+      if (!x.openrouter_key) return "Needs a free key: Settings › AI Models › Free models.";
       return "Free, from OpenRouter: DeepSeek whenever it's free there, otherwise the best free model."
         + (x.openrouter_now ? ` Now: ${esc(x.openrouter_now)}.` : "");
     }
     if (m.key === "use_chatgpt" || m.key === "use_grok") {
-      if (!this.usable(m)) return "Needs an API key (paid per use): run.bat --keys on the PC.";
+      if (!this.usable(m)) return `Needs an API key (paid per use): Settings › AI Models › ${m.name}.`;
       return m.key === "use_grok" ? "Pay per use. Only for X / Twitter, or when your plans can't answer."
         : "Pay per use. Only when your plans can't answer, within the budget.";
     }
@@ -2444,6 +2532,7 @@ const Models = {
     $("modelName").textContent = this.label();
     $("modelChip").classList.toggle("local", !this.on().some(m => !m.model));
     if (!$("modelMenu").hidden) this.renderMenu();
+    if (typeof SetNav !== "undefined") { SetNav.values(); if (SetNav.page === "models") KeyBox.render(); }
   },
   toggle(key) {
     const s = this.s;
@@ -2483,6 +2572,105 @@ $("modelChip").onclick = e => { e.stopPropagation(); $("modelMenu").hidden ? Mod
 document.addEventListener("pointerdown", e => { if (!$("modelMenu").hidden && !e.target.closest("#modelMenu, #modelChip")) Models.close(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") Models.close(); });
 addEventListener("resize", () => Models.close());
+
+// ================= Settings: a list of pages =================
+// The root lists the sections; each opens as its own page with a back button (the controls on the pages are the same
+// ones as before, just grouped). Pages slide in from the right and back out to the right.
+const SetNav = {
+  page: "root", rootScroll: 0,
+  el: key => document.querySelector(`#setBody .spage[data-page="${key}"]`),
+  show(key, how) {
+    const body = $("setBody"), from = this.el(this.page), to = this.el(key);
+    if (!to || key === this.page) return;
+    if (this.page === "root") this.rootScroll = body.scrollTop;
+    from.hidden = true; to.hidden = false;
+    to.classList.remove("push-in", "pop-in");
+    if (how) { void to.offsetWidth; to.classList.add(how); }
+    this.page = key;
+    body.scrollTop = key === "root" ? this.rootScroll : 0;
+    $("setTitle").innerHTML = to.dataset.title;
+    $("setBack").hidden = key === "root";
+    if (key === "models") KeyBox.render();
+  },
+  go(key) { this.show(key, "push-in"); },
+  back() { this.show("root", "pop-in"); },
+  reset() { this.rootScroll = 0; this.show("root"); },
+  values() {   // what's set, beside some rows, like iOS
+    if ($("navModels")) $("navModels").textContent = Models.s ? Models.label() : "";
+    if ($("navComputers")) $("navComputers").textContent = Devices.list.length > 1 ? String(Devices.list.length) : "";
+  },
+};
+document.querySelectorAll("#setBody .row.nav").forEach(b => b.onclick = () => SetNav.go(b.dataset.go));
+$("setBack").onclick = () => SetNav.back();
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden && SetNav.page !== "root") { e.stopImmediatePropagation(); SetNav.back(); } }, true);
+
+// Settings › AI Models: a switch for each AI (the same ticks as the model menu), and Paste Key for the ones that
+// need one. The key goes to the PC over the encrypted link (type "set_key"); the PC checks it with the provider, keeps
+// it in its .env and switches that AI on. It's never sent back, and the box empties as soon as it's sent.
+const KEYS = [
+  { p: "gemini", key: "use_gemini", name: "Gemini", logo: "googlegemini", tint: "#8e75b2", free: true, url: "https://aistudio.google.com/apikey",
+    how: "Free, no card. Sign in with Google, tap <b>Create API key</b>, copy it." },
+  { p: "openrouter", key: "use_openrouter", name: "Free models (OpenRouter)", logo: "openrouter", tint: "#6467f2", free: true, url: "https://openrouter.ai/keys",
+    how: "Free, no card. Make an account, tap <b>Create API Key</b>, copy it. Jarvis only uses its free models." },
+  { p: "chatgpt", key: "use_chatgpt", name: "ChatGPT", logo: "openai", url: "https://platform.openai.com/api-keys",
+    how: "<b>Paid per use</b>, kept under your monthly budget. Create a secret key and copy it." },
+  { p: "grok", key: "use_grok", name: "Grok", logo: "x", url: "https://console.x.ai",
+    how: "<b>Paid per use</b>, kept under your monthly budget. Create an API key and copy it." },
+];
+const KeyBox = {
+  open: null, waiting: new Map(),
+  has(p) { return !!(Models.s?.models || {})[p + "_key"]; },
+  render() {
+    const rows = $("modelRows"), keys = $("keyRows");
+    if (!rows || !keys) return;
+    const s = Models.s;
+    if (!s) { rows.innerHTML = '<div class="row"><span class="grow sub-only">Waiting for your PC…</span></div>'; keys.innerHTML = ""; return; }
+    rows.innerHTML = Models.LIST.map(m => {
+      const ok = Models.usable(m), on = !!s[m.key] && ok;
+      return `<label class="row"><span class="logo-tile"><svg class="logo" aria-hidden="true"${m.tint ? ` style="color:${m.tint}"` : ""}><use href="#l-${m.logo}"/></svg></span>`
+        + `<span class="grow">${m.name}<span class="sub">${Models.sub(m).replace(/Settings › AI Models › [^.]+\./, "add it below.")}</span></span>`
+        + `<span class="switch"><input type="checkbox" data-key="${m.key}"${on ? " checked" : ""}${ok ? "" : " disabled"} aria-label="${m.name}"><span></span></span></label>`;
+    }).join("");
+    for (const i of rows.querySelectorAll("input[data-key]")) i.onchange = () => { Models.toggle(i.dataset.key); this.render(); };
+    $("modelHow").textContent = Models.how();
+    const keep = this.open && $("keyIn-" + this.open) ? $("keyIn-" + this.open).value : "";
+    keys.innerHTML = KEYS.map(k => {
+      const have = this.has(k.p), open = this.open === k.p;
+      return `<button class="row" data-p="${k.p}" aria-expanded="${open}"><span class="logo-tile"><svg class="logo" aria-hidden="true"${k.tint ? ` style="color:${k.tint}"` : ""}><use href="#l-${k.logo}"/></svg></span>`
+        + `<span class="grow">${k.name}<span class="sub">${k.free ? "Free" : "Paid per use"}</span></span>`
+        + `<span class="key-state${have ? " ok" : ""}">${have ? "Added" : "Add Key"}</span><svg class="i disclose"><use href="#i-right"/></svg></button>`
+        + (open ? `<div class="key-panel"><p>${k.how} Get it at <a href="${k.url}" target="_blank" rel="noopener">${k.url.replace("https://", "")}</a>, then paste it here.${have ? " Pasting a new one replaces the one your PC has." : ""}</p>`
+          + `<input class="key-input" id="keyIn-${k.p}" placeholder="Paste the key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="${k.name} API key">`
+          + `<div class="key-btns"><button class="mini ghost press" data-paste="${k.p}">Paste</button><button class="mini press" data-save="${k.p}">Save</button></div>`
+          + `<div class="key-msg" id="keyMsg-${k.p}" aria-live="polite"></div></div>` : "");
+    }).join("");
+    if (keep && $("keyIn-" + this.open)) $("keyIn-" + this.open).value = keep;
+    for (const b of keys.querySelectorAll("button[data-p]")) b.onclick = () => { this.open = this.open === b.dataset.p ? null : b.dataset.p; this.render(); };
+    for (const b of keys.querySelectorAll("[data-paste]")) b.onclick = async () => {
+      try { $("keyIn-" + b.dataset.paste).value = (await navigator.clipboard.readText()).trim(); }
+      catch { this.say(b.dataset.paste, "Tap the box and paste the key there.", "bad"); }
+    };
+    for (const b of keys.querySelectorAll("[data-save]")) b.onclick = () => this.save(b.dataset.save);
+    for (const i of keys.querySelectorAll(".key-input")) i.onkeydown = e => { if (e.key === "Enter") this.save(i.id.slice(6)); };
+  },
+  say(p, text, cls = "") { const m = $("keyMsg-" + p); if (m) { m.textContent = text; m.className = "key-msg " + cls; } },
+  async save(p) {
+    const box = $("keyIn-" + p), key = box.value.replace(/\s+/g, "");
+    if (key.length < 20) { this.say(p, "That's too short to be a key. Copy the whole key and paste it.", "bad"); return; }
+    const id = newId();
+    box.value = "";   // it's on its way: don't leave it on screen
+    this.say(p, "Checking it on your PC…");
+    this.waiting.set(id, p);
+    try { await post({ type: "set_key", provider: p, key, id }); }
+    catch { this.waiting.delete(id); this.say(p, "Not connected to your PC. Try again once it's connected.", "bad"); box.value = key; }
+  },
+  done(d) {   // the PC's answer: saved, or why not
+    const p = this.waiting.get(d.id) || d.provider;
+    this.waiting.delete(d.id);
+    if (d.ok) { this.open = null; toast(d.text, "check", "var(--green)"); this.render(); }
+    else this.say(p, d.text, "bad");
+  },
+};
 
 // ================= the desktop app: is the phone connected? =================
 const PhoneLink = {
@@ -2925,6 +3113,7 @@ async function onMessage(text) {
     if (data.kind === "state") { onState(data); return; }
     if (data.kind === "memory") { onMemory(data); return; }
     if (data.kind === "siri") { onSiri(data); return; }
+    if (data.kind === "key_saved") { KeyBox.done(data); return; }
     if (data.kind === "partial") { onPartial(data); return; }
     if (data.kind && data.kind.startsWith("clean_")) { Clean.on(data); return; }
     if (data.kind === "faceid_challenge") { faceidWait?.(data); faceidWait = null; return; }
@@ -3213,7 +3402,6 @@ function onState(data) {
   if (typeof data.faceid === "boolean") { faceidOn = data.faceid; $("faceidToggle").checked = data.faceid; }
   if (typeof data.ask_permission === "boolean" && document.activeElement !== $("askToggle")) $("askToggle").checked = data.ask_permission;
   setModes(data.modes || []);
-  if (typeof data.use_claude === "boolean" && document.activeElement !== $("claudeToggle")) $("claudeToggle").checked = data.use_claude;
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
   if (typeof data.local_first === "boolean" && document.activeElement !== $("localFirstToggle")) $("localFirstToggle").checked = data.local_first;
   if (data.usage) { const u = data.usage, n = x => (x || 0).toLocaleString();
@@ -3945,7 +4133,7 @@ $("newBtn").onclick = () => newChat(chatById(db.current)?.messages.length ? chat
 $("drawerNewBtn").onclick = () => newChat();
 $("newGroupBtn").onclick = createGroup;
 $("search").oninput = renderSidebar;
-const openProfile = () => { openSheet("sheet"); post({ type: "memory_get", id: newId() }).catch(() => {}); };
+const openProfile = () => { SetNav.reset(); SetNav.values(); openSheet("sheet"); post({ type: "memory_get", id: newId() }).catch(() => {}); };
 
 // Profile: tap your name to rename yourself, tap your photo to choose a new one.
 const saidMe = p => p.then(() => toast("Saved", "check"), () => toast("Saved here. Your PC gets it when it's connected.", "check", "var(--orange)"));
@@ -4366,7 +4554,6 @@ document.addEventListener("pointerdown", e => {
 }, { passive: true });
 
 $("localFirstToggle").onchange = e => { post({ type: "set", key: "local_first", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Local models first" : "Claude does everything", e.target.checked ? "check" : "sparkles", e.target.checked ? "var(--green)" : "var(--blue)"); };
-$("claudeToggle").onchange = e => { post({ type: "set", key: "use_claude", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Claude on" : "Claude off \u2014 free commands only", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("hotkeyToggle").onchange = e => { post({ type: "set", key: "hotkey_enabled", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Talk shortcut on \u2014 Ctrl + Alt + J" : "Talk shortcut off", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("usageReset").onclick = () => { post({ type: "usage_reset", id: newId() }).catch(() => {}); toast("Usage counter reset", "check", "var(--green)"); };
 $("deleteAllBtn").onclick = () => { if (!confirm("Delete all chats and groups?")) return; db = { chats: [], groups: [], current: null }; saveDb(); closeSheets(); renderChat(); updateBadges(); };

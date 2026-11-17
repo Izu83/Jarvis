@@ -94,3 +94,19 @@ def test_when_none_answer_in_time_the_next_brain_takes_over(monkeypatch):
         pass
     else:
         raise AssertionError("expected a Timeout so the next brain answers")
+
+
+def test_a_pasted_key_is_checked_before_it_is_kept(monkeypatch):
+    """The app's Paste Key: a key the provider turns down changes nothing; a good one is kept and switched on."""
+    kept, ticked = {}, {}
+    import jarvis.config as config
+    monkeypatch.setattr(config, "set_secret", lambda k, v: kept.__setitem__(k, v))
+    monkeypatch.setattr(config, "set_setting", lambda k, v: ticked.__setitem__(k, v))
+    monkeypatch.setattr(cloud, "check_key", lambda provider, key: key.endswith("good"))
+    saved, text = cloud.save_key("openrouter", "sk-or-v1-" + "x" * 30 + "bad")
+    assert not saved and "didn't accept" in text and not kept and not ticked
+    saved, text = cloud.save_key("openrouter", "short")
+    assert not saved and "doesn't look like" in text
+    saved, text = cloud.save_key("openrouter", " sk-or-v1-" + "x" * 30 + "\ngood ")   # pasted with a line break
+    assert saved and kept == {"OPENROUTER_API_KEY": "sk-or-v1-" + "x" * 30 + "good"} and ticked == {"use_openrouter": True}
+    assert "x" * 30 not in text   # the key is never said back
