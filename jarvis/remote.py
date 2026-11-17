@@ -249,7 +249,7 @@ class PhoneChannel:
     def send_state(self) -> None:
         """Modes (shown as buttons) and live PC status (the phone's Control Center)."""
         try:
-            status = pc.status()
+            status = pc.status(on_ready=self.send_state)   # once the busiest app and the music are in, again with them
         except Exception:
             log.exception("Couldn't read PC status")
             status = None

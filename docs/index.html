@@ -1496,9 +1496,15 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-12.5";   // bump together with version.json
+const VERSION = "2026-11-17.1";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv46", when: "Nov 17, 2026", title: "Connects faster", notes: [
+    "Opening the app connects in a few seconds: it tries every way to reach your PC at once instead of one after another, and no longer waits on a slow network to say where the PC is.",
+    "While it's connecting, it says Connecting… instead of offline. Offline only shows when your PC really can't be reached.",
+    "Your PC answers the app straight away. Its status no longer waits seven seconds to add up which app is busiest.",
+    "Coming back to the app, or getting signal back, reconnects at once.",
+  ]},
   { v: "JNIv45", when: "Nov 12, 2026", title: "More ways to reach him", notes: [
     "Paste a picture into the message box, like a screenshot (Ctrl+V on the PC, Paste on the iPhone), or drop pictures and files on the chat. Pictures waiting to be sent show as just the picture.",
     "Send to Jarvis: share a photo, PDF or file from any app on your iPhone. Settings › Siri & Share shows how to make the shortcut.",
@@ -2822,48 +2828,78 @@ function tileState(tile, state) {
 }
 
 // ================= receiving =================
-// The PC announces its current tunnel address (encrypted) on the relay; the relay keeps it for 12 hours.
-async function discover() {
+// The PC announces its current tunnel address (encrypted) on the relay; the relay keeps it for 12 hours. The relay
+// can be slow or blocked on some networks (abroad, hotel Wi-Fi), so it gets a few seconds and never holds up trying
+// the address that worked last time.
+async function discover(ms = 6000) {
+  const stop = new AbortController(), timer = setTimeout(() => stop.abort(), ms);
   try {
-    const r = await fetch(`${cfg.server}/${cfg.topic}-r/json?poll=1&since=12h`, { cache: "no-store" });
+    const r = await fetch(`${cfg.server}/${cfg.topic}-r/json?poll=1&since=12h`, { cache: "no-store", signal: stop.signal });
     const lines = (await r.text()).trim().split("\n").filter(Boolean).reverse();   // newest first
     for (const line of lines) {
       try { const m = JSON.parse(line); if (m.event !== "message") continue; const d = await openJson(m.message); if (d.kind === "hello" && d.url) return d.url; } catch {}
     }
-  } catch {}
+  } catch {} finally { clearTimeout(timer); }
   return null;
 }
-let connecting = false, retryTimer = null, retryDelay = 2000;
+// linkLost: a whole round of tries failed since the app was last opened, so the status says offline (not
+// "Connecting…") until it connects. openedAt: when the socket opened (the PC's status follows within a second or two).
+let connecting = false, retryTimer = null, retryDelay = 1500, linkLost = false, openedAt = 0;
 async function connect() {
   if (connecting || (ws && ws.readyState <= WebSocket.OPEN)) return;
   connecting = true; clearTimeout(retryTimer);
-  renderStatus(false);
+  renderStatus();
   // the desktop app is on the PC itself: straight to Jarvis, never through the internet
   const here = desktop && /^https?:\/\/127\.0\.0\.1[:/]/.test(cfg.url || "");   // this PC, not your other computer
-  const announced = here ? null : await discover();
+  // Every address at once: the one that worked last time, the pairing one, and the one the PC announced on the relay
+  // (as soon as the relay answers). The first to open wins; the others close themselves.
+  const tried = new Set();
+  let announced = null;
+  const ok = await new Promise(resolve => {
+    let trying = 0, finding = !here, done = false;
+    const settle = won => { if (!done && (won || (!trying && !finding))) { done = true; resolve(won); } };
+    const attempt = url => {
+      if (!url || tried.has(url) || done) return;
+      tried.add(url); trying++;
+      openSocket(url).then(won => { trying--; settle(won); });
+    };
+    (here ? [cfg.url] : [load(Devices.k("jarvis.lastUrl")), cfg.url]).forEach(attempt);
+    if (finding) discover().then(url => { announced = url; finding = false; attempt(url); settle(false); });
+    else settle(false);
+  });
+  connecting = false;
+  if (ok) return;
   // why it can't connect, for the "Can't find" card: it never said where it is, or its address doesn't answer
   lostWhy = here ? "" : announced ? "silent" : "never";
-  const candidates = here ? [cfg.url] : [...new Set([load(Devices.k("jarvis.lastUrl")), announced, cfg.url].filter(Boolean))];
-  for (const url of candidates) if (await openSocket(url)) { connecting = false; return; }
-  connecting = false;
-  if (!pcSeen || !candidates.length) showLost();
-  retryTimer = setTimeout(connect, retryDelay); retryDelay = Math.min(retryDelay * 1.6, 30000);
+  linkLost = true; renderStatus();
+  if (!pcSeen || !tried.size) showLost();
+  retryTimer = setTimeout(connect, retryDelay); retryDelay = Math.min(retryDelay * 1.5, 15000);
 }
+// Start over quickly: the app came back to the front, the network came back, or Try Again.
+function reconnectNow() {
+  if (!cfg || (ws && ws.readyState === WebSocket.OPEN)) return;
+  linkLost = false; retryDelay = 1500; clearTimeout(retryTimer);
+  connect(); renderStatus();
+}
+window.addEventListener("online", reconnectNow);
 function openSocket(url) {
   return new Promise(resolve => {
-    let opened = false;
-    const sock = new WebSocket(url.replace(/^http/, "ws") + "/ws");
-    const giveUp = setTimeout(() => { if (!opened) { sock.close(); resolve(false); } }, 8000);
+    let opened = false, sock;
+    try { sock = new WebSocket(url.replace(/^http/, "ws") + "/ws"); } catch { resolve(false); return; }
+    const giveUp = setTimeout(() => { if (!opened) { sock.close(); resolve(false); } }, 10000);
     sock.onopen = () => {
-      opened = true; clearTimeout(giveUp); ws = sock; retryDelay = 2000;
-      store(Devices.k("jarvis.lastUrl"), url); renderStatus(true); sync(); $("lostCard")?.remove();
+      opened = true; clearTimeout(giveUp);
+      if (ws && ws !== sock && ws.readyState === WebSocket.OPEN) { sock.close(); resolve(false); return; }   // another address won
+      ws = sock; openedAt = Date.now(); linkLost = false; retryDelay = 1500;
+      store(Devices.k("jarvis.lastUrl"), url); renderStatus(); sync(); $("lostCard")?.remove();
+      setTimeout(renderStatus, 8000);   // if the PC's status hasn't come by then, say so
       if (!$("sysSheet").hidden) watch();
       resolve(true);
     };
     sock.onerror = () => { if (!opened) { clearTimeout(giveUp); resolve(false); } };
     sock.onclose = () => {
       if (!opened) { clearTimeout(giveUp); resolve(false); return; }
-      if (ws === sock) { ws = null; renderStatus(false); if (document.visibilityState === "visible") retryTimer = setTimeout(connect, 1500); }
+      if (ws === sock) { ws = null; renderStatus(); if (document.visibilityState === "visible") retryTimer = setTimeout(connect, 300); }
     };
     sock.binaryType = "arraybuffer";   // live-screen pictures come as binary messages
     sock.onmessage = e => typeof e.data === "string" ? onMessage(e.data) : onFrame(e.data);
@@ -2977,8 +3013,8 @@ function probe() {
   setTimeout(() => {
     if (lastRx >= t || document.visibilityState !== "visible") return;
     try { ws?.close(); } catch {}
-    ws = null; connect();
-  }, 4000);
+    ws = null; reconnectNow();
+  }, 6000);
 }
 
 // Re-create the live view for a command sent before the app was closed/reloaded.
@@ -3108,11 +3144,17 @@ function lastSeenText() {
   const d = new Date(t), today = new Date().toDateString() === d.toDateString();
   return "last seen " + (today ? "" : d.toLocaleDateString([], { day: "numeric", month: "short" }) + " ") + timeLabel(t);
 }
-function renderStatus(relayOk = true) {
+function renderStatus() {
   const pcOnline = Date.now() - pcSeen < 45000;
   const seen = lastSeenText();
   const many = Devices.list.length > 1, nm = many ? Devices.name() : "PC";
-  const [text, cls] = !relayOk ? [pcSeen ? "Reconnecting…" : (seen ? nm + " offline · " + seen : "Finding " + Devices.label() + "…"), "warn"] : pcOnline ? [nm + " online", "ok"] : [seen ? nm + " offline · " + seen : nm + " offline", "bad"];
+  // Still finding it (the first round of tries since the app opened, or the PC's status is on its way): that's
+  // "Connecting…", not "offline". Offline is only for when a whole round of tries came to nothing.
+  const live = ws?.readyState === WebSocket.OPEN;
+  const trying = !pcOnline && (live ? Date.now() - openedAt < 8000 : !linkLost);
+  const [text, cls] = pcOnline ? [nm + " online", "ok"]
+    : trying ? [pcSeen ? "Reconnecting…" : "Connecting…", "warn"]
+    : [seen ? nm + " offline · " + seen : nm + " offline", "bad"];
   // A tab label names the section and stays put (Apple: "single words"): the computer's name. Whether it's online
   // shows in the dot beside it, in its spoken label, and in Control Center.
   $("status").textContent = Devices.name();
@@ -3188,7 +3230,7 @@ function onState(data) {
   ring($("ramRing"), pc.ram); $("ramVal").textContent = pc.ram + "%";
   $("topApp").innerHTML = pc.top ? `Busiest app: <b>${esc(pc.top.name)}</b> · ${Math.round(pc.top.cpu)}% CPU` : "";
   renderMusic(pc.music);
-  renderStatus(true);
+  renderStatus();
 }
 
 // ================= now playing: album covers + progress =================
@@ -3237,7 +3279,7 @@ async function addArt(info) {
   store(ART_KEY, JSON.stringify([...artCache]));
   if (music?.art === info.art) { delete $("art").dataset.art; renderMusic(music); }
 }
-setInterval(() => { if (cfg && document.visibilityState === "visible") { if (ws?.readyState === WebSocket.OPEN) sync(); else connect(); renderStatus(ws?.readyState === WebSocket.OPEN); } }, 20000);
+setInterval(() => { if (cfg && document.visibilityState === "visible") { if (ws?.readyState === WebSocket.OPEN) sync(); else connect(); renderStatus(); } }, 20000);
 
 // ================= System page (live stats) =================
 const hist = { cpu: [], ram: [], net: [] };
@@ -3294,7 +3336,7 @@ function onSys(s) {
   $("sApps").className = ""; $("sApps").innerHTML = s.apps.map((a, i) => `
     <div class="app-row"><span class="rank" style="background:${colors[i % colors.length]}">${i + 1}</span><span class="t">${esc(a.name)}</span>
     <span class="v"><b>${a.cpu}%</b> CPU<br>${fmtBytes(a.mem)}</span></div>`).join("");
-  renderStatus(true);
+  renderStatus();
 }
 setInterval(() => { if (!$("sysSheet").hidden && Date.now() - sysSeen > 12000) { $("sysDot").className = "dot warn"; $("sysLive").textContent = sysSeen ? "Paused" : "Connecting…"; } }, 3000);
 
@@ -4339,7 +4381,7 @@ document.addEventListener("visibilitychange", () => {
   checkForUpdate();
   if (chatById(db.current)?.unread) renderChat();
   updateBadges();
-  if (!ws || ws.readyState > WebSocket.OPEN) connect(); else probe();
+  if (!ws || ws.readyState > WebSocket.OPEN) reconnectNow(); else probe();
   if (!$("sysSheet").hidden) watch();
 });
 
@@ -5574,7 +5616,7 @@ async function relink() {
   key = k2; store(Devices.k("jarvis.lastUrl"));
   cfg = Devices.active; closeSheets(); $("lostCard")?.remove();
   const old = ws; ws = null; old?.close();
-  connecting = false; retryDelay = 2000; clearTimeout(retryTimer);
+  connecting = false; linkLost = false; retryDelay = 1500; clearTimeout(retryTimer);
   toast("Connecting to " + Devices.label() + "…", "sparkles", "var(--blue)");
   connect();
 }
@@ -5747,7 +5789,7 @@ function showLost() {
     : `${cap(where)} doesn't answer. It may be asleep, off or offline, or Jarvis stopped on it. Wake it up and check for the Jarvis icon in its taskbar tray.`;
   card.innerHTML = `<b><span class="dot"></span>Can't find ${where}</b><p>${why}` + (many ? " To use your other computer, switch in Control Center." : "") +
     `</p><div class="lost-btns"><button class="press" data-retry>Try Again</button>${many && Devices.active?.wake?.mac && lostWhy !== "never" ? `<button class="press" data-wake>Wake It</button>` : ""}${many ? '<button class="press" data-switch>Switch Computer</button>' : '<button class="press" data-relink>Paste Pairing Link</button>'}</div>`;
-  card.querySelector("[data-retry]").onclick = () => { card.remove(); retryDelay = 2000; clearTimeout(retryTimer); connect(); };
+  card.querySelector("[data-retry]").onclick = () => { card.remove(); reconnectNow(); };
   const sw = card.querySelector("[data-switch]"); if (sw) sw.onclick = () => { card.remove(); openControl(); };
   const wk = card.querySelector("[data-wake]"); if (wk) wk.onclick = () => WakeRelay.start();
   const rl = card.querySelector("[data-relink]"); if (rl) rl.onclick = relink;
@@ -5778,7 +5820,7 @@ async function start() {
   loadDb();
   try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
   restoreAwaiting();
-  renderCmds(); renderModeList(); renderChat(); updateBadges(); renderStatus(true);
+  renderCmds(); renderModeList(); renderChat(); updateBadges(); renderStatus();
   connect();
   setMainMode(load("jarvis.mainMode") === "voice" ? "voice" : "chat");
   if (/[?&]voice=1/.test(location.search)) {   // the Voice mode link (Back Tap, Action Button): straight in, listening

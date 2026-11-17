@@ -45,26 +45,99 @@ def cpu_now() -> int:
     return round(_cpu["pct"])
 
 
-def apps(limit: int = 5) -> list[dict]:
-    """Apps by CPU since the last call, with their processes added up (Chrome has dozens)."""
+class Fresh:
+    """A slow reading kept up to date in a background thread while something keeps asking for it, so whoever asks
+    gets the latest value at once instead of waiting seconds (the phone's status waited ~7 s for the busiest app).
+
+    The thread stops IDLE seconds after the last ask; the next ask starts it again, and when its first value lands
+    it calls that ask's on_ready (so the phone can get a status with it right away)."""
+    IDLE = 90
+
+    def __init__(self, name: str, read, every: float, warm: bool = False):
+        self.name, self.read, self.every, self.warm = name, read, every, warm
+        self.value, self.at = None, 0.0
+        self.asked, self.running, self.on_ready = 0.0, False, None
+        self.lock = threading.Lock()
+
+    def get(self, on_ready=None, wait: bool = False):
+        """The latest value (None before the first). wait: read it now if there isn't one yet."""
+        with self.lock:
+            self.asked = time.time()
+            if not self.running:
+                self.running, self.on_ready = True, on_ready
+                threading.Thread(target=self._run, daemon=True, name=self.name).start()
+        if self.value is None and wait:
+            return self.read()
+        return self.value
+
+    def _run(self) -> None:
+        first = True
+        if self.warm:   # counters that measure "since the last call" need a call to start from
+            try:
+                self.read()
+            except Exception:
+                pass
+            time.sleep(1)
+        while True:
+            with self.lock:
+                if time.time() - self.asked >= self.IDLE:
+                    self.running = False
+                    return
+            try:
+                self.value, self.at = self.read(), time.time()
+            except Exception:
+                pass
+            if first:
+                first = False
+                with self.lock:
+                    ready, self.on_ready = self.on_ready, None
+                if ready:
+                    try:
+                        ready()
+                    except Exception:
+                        pass
+            time.sleep(self.every)
+
+
+_cpu_times: dict[int, tuple[float, float]] = {}   # pid -> (when, CPU seconds used by then)
+
+
+def _all_apps(limit: int = 10) -> list[dict]:
+    """Apps by CPU since the last call, with their processes added up (Chrome has dozens). Slow: seconds with a few
+    hundred processes, so the phone reads it through TOP_APPS. CPU comes from the CPU time used since the last call,
+    read in the same pass as the memory (psutil's cpu_percent would make a second, equally slow pass)."""
     usage: dict[str, dict] = {}
-    for p in psutil.process_iter(["name", "memory_info"]):
+    now, seen = time.time(), {}
+    for p in psutil.process_iter(["name", "memory_info", "cpu_times"]):
         try:
             raw = (p.info["name"] or "").removesuffix(".exe")
             if raw.lower() in IDLE_PROCESSES:
                 continue
             name = FRIENDLY.get(raw.lower(), raw[:1].upper() + raw[1:])
             a = usage.setdefault(name, {"name": name, "cpu": 0.0, "mem": 0})
-            a["cpu"] += p.cpu_percent(None)
+            times = p.info["cpu_times"]
+            if times:
+                used = times.user + times.system
+                seen[p.pid] = (now, used)
+                last = _cpu_times.get(p.pid)
+                if last and now > last[0] and used >= last[1]:
+                    a["cpu"] += (used - last[1]) / (now - last[0]) * 100
             a["mem"] += p.info["memory_info"].rss if p.info["memory_info"] else 0
         except psutil.Error:
             continue
+    _cpu_times.clear()
+    _cpu_times.update(seen)
     cores = psutil.cpu_count() or 1
     top = sorted(usage.values(), key=lambda a: (a["cpu"], a["mem"]), reverse=True)[:limit]
     return [{"name": a["name"], "cpu": round(a["cpu"] / cores, 1), "mem": a["mem"]} for a in top]
 
 
-apps()  # prime the per-process CPU counters
+TOP_APPS = Fresh("top-apps", _all_apps, every=10, warm=True)
+
+
+def apps(limit: int = 5, on_ready=None, wait: bool = True) -> list[dict]:
+    """The busiest apps, from the background reading (wait=False: [] until the first one is in)."""
+    return (TOP_APPS.get(on_ready, wait=wait) or [])[:limit]
 
 
 def gpus() -> list[dict]:

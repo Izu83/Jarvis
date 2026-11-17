@@ -43,7 +43,22 @@ def device_name() -> str:
     return (settings.get("device_name") or "").strip() or ("Laptop" if kind() == "laptop" else "PC")
 
 
-def status() -> dict:
+MUSIC = sysinfo.Fresh("now-playing", now_playing, every=2)
+
+
+def _music(on_ready=None) -> dict | None:
+    """What's playing, from the background reading, with the position moved on to now."""
+    info = MUSIC.get(on_ready)
+    if info and info.get("playing") and info.get("position") is not None:
+        info = {**info, "position": round(info["position"] + max(0.0, time.time() - MUSIC.at), 1)}
+        if info.get("duration"):
+            info["position"] = min(info["position"], info["duration"])
+    return info
+
+
+def status(on_ready=None) -> dict:
+    """Live status for the phone, at once: the slow parts (the busiest app, the music) come from readings kept fresh
+    in the background. on_ready is called when they weren't running yet and their first reading is in."""
     return {
         "host": platform.node(),
         "name": device_name(),
@@ -51,8 +66,8 @@ def status() -> dict:
         "cpu": sysinfo.cpu_now(),
         "ram": round(psutil.virtual_memory().percent),
         "uptime": int(time.time() - psutil.boot_time()),
-        "top": (sysinfo.apps(1) or [None])[0],
-        "music": now_playing(),
+        "top": (sysinfo.apps(1, on_ready, wait=False) or [None])[0],
+        "music": _music(on_ready),
     }
 
 
