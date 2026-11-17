@@ -36,8 +36,12 @@ PROVIDERS = {
     # Perplexity: answers from the web with sources, through its Agent API (the Sonar API it replaced was retired
     # on Sept 27, 2026). The "model" is its effort preset; "fast" searches the web and is the cheapest.
     "perplexity": ("PERPLEXITY_API_KEY", "https://api.perplexity.ai/v1", "perplexity_effort", "fast", "perplexity_price"),
+    # DeepSeek's own API (paid per use, but a fraction of a cent an answer). There's no free DeepSeek API: the free
+    # one comes through OpenRouter's free models, which put DeepSeek first whenever one of its models is free there.
+    "deepseek": ("DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek_model", "deepseek-flash", "deepseek_price"),
 }
-NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", "grok": "Grok", "perplexity": "Perplexity"}
+NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", "grok": "Grok", "perplexity": "Perplexity",
+         "deepseek": "DeepSeek"}
 FREE = {"gemini", "openrouter"}   # no budget to watch
 LADDERS = {"gemini", "openrouter"}   # many models, tried in turn (see below)
 SEARCH_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -51,6 +55,17 @@ KEEP_GOOD = 1800    # s: the model that last answered goes first this long (no w
 # Gemini's Flash models think before answering. Unlimited thinking was the slow part (5 to 37 s to say hi); "low" was
 # 2 to 3 times faster in tests and still picked the right tools. A bit more for doing things on the PC and code.
 GEMINI_EFFORT = {"action": "medium", "code": "medium", "sight": "medium"}   # everything else: "low"
+# DeepSeek thinks first by default. Worth it for code and doing things on the PC; plain chat answers straight away.
+DEEPSEEK_THINKS = {"action", "code"}
+
+
+def extra_options(provider: str, kind: str) -> dict:
+    """Provider-specific additions to a chat-completions request."""
+    if provider == "gemini":
+        return {"reasoning_effort": GEMINI_EFFORT.get(kind, "low")}
+    if provider == "deepseek":
+        return {"thinking": {"type": "enabled" if kind in DEEPSEEK_THINKS else "disabled"}}
+    return {}
 
 
 def perplexity_answer(data: dict) -> tuple[str, list[tuple[str, str]]]:
@@ -82,7 +97,7 @@ def has_key(provider: str) -> bool:
 
 KEY_PAGES = {"gemini": "https://aistudio.google.com/apikey", "openrouter": "https://openrouter.ai/keys",
              "chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai",
-             "perplexity": "https://console.perplexity.ai"}
+             "perplexity": "https://console.perplexity.ai", "deepseek": "https://platform.deepseek.com/api_keys"}
 
 
 def check_key(provider: str, key: str) -> bool:
@@ -318,7 +333,7 @@ class CloudBrain:
         messages = [{"role": "system", "content": system_prompt()}, {"role": "user", "content": note + command}]
         from .hermes import _ollama_tools   # Jarvis's tools in the OpenAI shape
         spec, spent, started = _ollama_tools(), 0.0, time.time()
-        extra = {"reasoning_effort": GEMINI_EFFORT.get(kind, "low")} if self.provider == "gemini" else {}
+        extra = extra_options(self.provider, kind)
         try:
             for step in range(MAX_TOOL_ROUNDS):
                 stopping.check()
@@ -346,7 +361,10 @@ class CloudBrain:
                         log.info("%s (%s) answered in %.1fs (about $%.4f).", self.name, self.model,
                                  time.time() - started, spent)
                     return answer or f"{self.name} had nothing to say."
-                messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
+                turn = {"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls}
+                if msg.get("reasoning_content"):   # DeepSeek's thinking has to come back with its tool calls
+                    turn["reasoning_content"] = msg["reasoning_content"]
+                messages.append(turn)
                 if msg.get("content"):
                     self.last_thinking += msg["content"].strip() + "\n"
                 for call in calls:

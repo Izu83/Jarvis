@@ -76,6 +76,11 @@ DEFAULTS = {
     "grok_model": "grok-4-fast",
     "chatgpt_price": [0.25, 2.0],
     "grok_price": [0.2, 0.5],
+    # DeepSeek's own API (paid, a key from platform.deepseek.com): "deepseek-flash" (fast, cheapest) or
+    # "deepseek-v4-pro". Price per million tokens at peak hours (off-peak is half), so the spend is never under-counted.
+    "use_deepseek": False,
+    "deepseek_model": "deepseek-flash",
+    "deepseek_price": [0.3, 1.2],
     "paid_budget": 5.0,
     "claude_code_model": "sonnet",  # "sonnet", "haiku" (fastest) or "opus"; empty = your Claude Code default
     "claude_code_effort": "medium",  # medium = smarter multi-step; "low" = fastest, "high" = smartest (more tokens)

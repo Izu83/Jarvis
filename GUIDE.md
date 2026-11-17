@@ -195,19 +195,27 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 
 | The job | Order |
 |---|---|
-| Doing things on the PC, many steps | Claude, Gemini, free models, local, ChatGPT |
-| Code | Claude, ChatGPT, Gemini, free models |
+| Doing things on the PC, many steps | Claude, Gemini, free models, DeepSeek, local, ChatGPT |
+| Code | Claude, DeepSeek, ChatGPT, Gemini, free models |
 | The screen, photos you send | Claude, Gemini, ChatGPT |
 | Anything current (news, prices, search) | Gemini, Perplexity, Claude, Grok, ChatGPT, free models |
-| YouTube, long documents | Gemini, Claude, free models |
+| YouTube, long documents | Gemini, Claude, free models, DeepSeek |
 | X / Twitter | Grok, Gemini, Claude |
-| Everyday questions and chat | Gemini, free models, Claude, local, ChatGPT, Grok |
+| Everyday questions and chat | Gemini, free models, Claude, DeepSeek, local, ChatGPT, Grok |
 
 **Perplexity** (paid per use, no free tier): a key from https://console.perplexity.ai, added in the app or with
 `run.bat --keys`. It gets current questions after Gemini, through its Agent API (`POST /v1/agent`, effort "fast",
 `perplexity_effort` in config.json), and its sources go under the answer. It can't use Jarvis's tools. What it
 charged comes back with each answer and counts toward `paid_budget`. Its key is checked with an empty request: 401
 for a wrong key, 400 for a good one, nothing charged.
+
+**DeepSeek** (paid per use, very cheap): a key from https://platform.deepseek.com/api_keys. There is no free DeepSeek
+API (OpenRouter's free DeepSeek models come and go, and NVIDIA retired its free ones on Nov 16, 2026); the free
+DeepSeek is the "free models" ladder, which tries DeepSeek first whenever one is free on OpenRouter. With a key it's
+`deepseek_model` ("deepseek-flash", or "deepseek-v4-pro") through `https://api.deepseek.com`. It thinks first for
+code and PC jobs (`thinking` enabled; its `reasoning_content` goes back with each tool call, as DeepSeek requires)
+and answers chat without. `deepseek_price` is the peak-hour price, so the spend estimate is never low. Its key is
+checked with `GET /models`, nothing charged.
 
 **Adding a key from the phone:** Settings › AI Models › API keys › Add Key. Paste the key and tap Save: it goes to the
 PC over the encrypted link (`set_key`), the PC checks it with the provider (a read-only call, nothing spent), keeps it
