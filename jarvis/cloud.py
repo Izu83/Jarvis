@@ -402,6 +402,32 @@ def info(provider: str) -> dict:
             "spend": round(usage.month_spend(), 4)}
 
 
+def quick(prompt: str, providers=("groq", "nvidia"), max_tokens: int = 160) -> str | None:
+    """A short answer with no tools and no memory (e.g. what an email is about): the first of these that's set up
+    and answers within about 20 s. None when none can."""
+    for provider in providers:
+        if not usable(provider):
+            continue
+        brain = CloudBrain(provider)
+        try:
+            r = brain._post(lambda model, timeout: requests.post(
+                f"{brain.base}/chat/completions", timeout=timeout, headers={"Authorization": f"Bearer {brain.key}"},
+                json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}),
+                deadline=time.time() + 20, per_model=10)
+            if r.status_code >= 400:
+                continue
+            data = r.json()
+            use = data.get("usage") or {}
+            usage.record_other(provider, use.get("prompt_tokens", 0), use.get("completion_tokens", 0))
+            text = (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+            text = re.sub(r"(?s)<think>.*?</think>", "", text).strip()   # a model that thinks out loud
+            if text:
+                return text
+        except (requests.RequestException, ValueError):
+            continue
+    return None
+
+
 def blocked(data: dict) -> bool:
     """Did the provider's safety filter refuse the request? Google refuses a whole request when the conversation
     sent with it has swearing or threats in it (friends shouting at Jarvis through the PC's microphone), on every

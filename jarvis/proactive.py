@@ -47,7 +47,7 @@ def level() -> str:
 def quiet(now: dt.datetime | None = None) -> bool:
     """Inside the quiet hours (default 23:00 to 08:00)?"""
     start, end = (settings.get("quiet_hours") or [23, 8])[:2]
-    hour = (now or dt.datetime.now()).hour
+    hour = (now or your_now()).hour   # your night, wherever your phone is
     return start <= hour < end if start < end else (hour >= start or hour < end)
 
 
@@ -212,6 +212,29 @@ def _who(m: dict) -> str:
     return name or addr
 
 
+def urgent(m: dict) -> bool:
+    """Worth a message right away: Gmail marked it important, it's from someone you marked important, or its subject
+    sounds time-sensitive. Just "from a person" isn't enough: automated mail with no subject got through that way."""
+    return bool(m.get("important")) and m.get("why") in (
+        "a sender you marked as important", "Gmail marked it important", "looks time-sensitive")
+
+
+def about(m: dict) -> str:
+    """What an email is about, in a sentence: Groq (fast and free) reads it; without Groq, its first lines. Only Groq
+    and NVIDIA get to read it (they don't train on what they're sent)."""
+    text = (m.get("body") or m.get("snippet") or "").strip()
+    if text:
+        from . import cloud
+        said = cloud.quick(
+            "In one short sentence, in the email's own language, say what this email is about and whether the reader "
+            "needs to do anything (and by when). Don't start with \"This email\".\n\n"
+            f"From: {m.get('from', '')}\nSubject: {m.get('subject', '')}\n\n{text[:1500]}",
+            providers=("groq", "nvidia"))
+        if said:
+            return said
+    return (m.get("snippet") or "")[:200] or "(no text)"
+
+
 def mail_digest() -> str:
     """The day's new email in one message (at email_digest_time, 22:00): the ones worth a look first, with a line of
     each, then the rest by sender. Instead of a message every time one arrives."""
@@ -235,6 +258,29 @@ def mail_digest() -> str:
     return "\n".join(lines)
 
 
+def set_phone_tz(name: str) -> None:
+    """The phone's time zone ("Asia/Shanghai"), sent each time it connects, so the email summary comes at 22:00
+    where you are, not where the PC is."""
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(name)
+    except Exception:
+        return
+    if _state.get("phone_tz") != name:
+        _state["phone_tz"] = name
+        _save_state()
+        log.info("Your phone's time zone is %s.", name)
+
+
+def your_now() -> dt.datetime:
+    """The time where you are (your phone's time zone), else the PC's."""
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.datetime.now(ZoneInfo(_state["phone_tz"])).replace(tzinfo=None)
+    except Exception:
+        return dt.datetime.now()
+
+
 def _digest_due(now: dt.datetime) -> bool:
     return bool(settings.get("email_address")) and _due(now, "email_digest", "email_digest_time", "22:00", "mail_digest")
 
@@ -251,11 +297,16 @@ def _check_mail() -> None:
         # one summary at the end of the day instead of a message for each: keep them until then
         keep = _state.setdefault("mail_today", [])
         keep += [{"from": _who(m), "subject": m["subject"], "snippet": (m.get("snippet") or "")[:140],
-                  "important": bool(m["important"])} for m in new]
+                  "important": urgent(m)} for m in new]
         del keep[:-200]
     _save_state()
     important = [m for m in new if m["important"] or level() == "chatty"]
-    if first or not important or settings.get("email_digest", True):   # the first look only learns what's there
+    if first or not important:   # the first look only learns what's already there
+        return
+    if settings.get("email_digest", True):
+        # the rest waits for the evening summary; one that really matters still comes now, saying what it's about
+        for m in [m for m in new if urgent(m)][:3]:
+            _say(f"📬 Important email from {_who(m)}: {m['subject']}\n{about(m)}")
         return
 
     who = _who
@@ -340,11 +391,12 @@ def _loop() -> None:
         except Exception:
             log.exception("Evening recap failed")
         try:
-            if _digest_due(now):
-                _state["mail_digest"] = now.date().isoformat()
+            yours = your_now()
+            if _digest_due(yours):
+                _state["mail_digest"] = yours.date().isoformat()
                 _save_state()
                 if _sender:
-                    _sender(mail_digest(), None, not quiet())
+                    _sender(mail_digest(), None, True)   # the one you asked for: it may buzz
                 next_mail = time.time() + MAIL_EVERY
         except Exception:
             log.exception("The email summary failed")

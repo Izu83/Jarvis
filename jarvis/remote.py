@@ -690,6 +690,8 @@ class PhoneChannel:
                 self.reply(msg_id, last[-1]["t"] if last else "On it...", done=False,
                            step_kind=last[-1]["k"] if last else "")
         elif kind == "sync":
+            if data.get("tz") and not (data.get("client") or {}).get("kind") == "computer":
+                proactive.set_phone_tz(str(data["tz"]))   # where you are: the 22:00 email summary goes by your clock
             self.send_state()
             self.deliver_messages(force=True)   # anything that was waiting for the app to open
             self.deliver_files(force=True)

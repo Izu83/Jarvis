@@ -1617,9 +1617,13 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-18.2";   // bump together with version.json
+const VERSION = "2026-11-18.3";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv52", when: "Nov 18, 2026", title: "Email at the end of the day", notes: [
+    "New email comes as one summary at 10 PM your time (wherever your phone is), the important ones first, instead of a message every time one arrives.",
+    "An email that really matters still comes straight away, with a sentence saying what it's about and whether you need to do anything. Important means Gmail marked it so, you marked the sender, or it sounds time-sensitive (an exam, a deadline, a meeting); automated mail with no subject doesn't count any more.",
+  ]},
   { v: "JNIv51", when: "Nov 18, 2026", title: "Your photos full-size, and every step in full", notes: [
     "Tap a photo you sent to Jarvis to open it full-size (pinch to zoom). It's kept on the device you sent it from; on your other devices it comes from your PC.",
     "While Jarvis is writing, the logo of the AI that's working on it shows in front of the dots: Claude, Gemini, Groq, NVIDIA and the rest.",
@@ -3514,7 +3518,10 @@ function whoAmI() {
     : /iPhone/.test(ua) ? "iPhone" : kind === "tablet" ? "iPad" : /Android/.test(ua) ? "Android phone" : "A phone";
   return { kind, name };
 }
-function sync() { post({ type: "sync", id: newId(), client: whoAmI() }).catch(() => {}); }
+function sync() {   // tz: where you are, so things like the 10 PM email summary go by your clock, not the PC's
+  let tz = ""; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch {}
+  post({ type: "sync", id: newId(), client: whoAmI(), tz }).catch(() => {});
+}
 // The socket can look open while it's actually dead (iOS freezes it in the background). After coming back, ask for
 // the state and reconnect if nothing arrives.
 function probe() {

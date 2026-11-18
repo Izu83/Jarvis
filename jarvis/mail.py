@@ -138,7 +138,8 @@ def check(unread_only: bool = True, limit: int = 15) -> list[dict]:
             important, why = _sort(sender, subject, msg, uid, sets)
             snippet = _body_text(msg)
             out.append({"id": uid.decode(), "from": sender, "subject": subject, "date": msg.get("Date", ""),
-                        "snippet": re.sub(r"\s+", " ", snippet)[:160], "important": important, "why": why})
+                        "snippet": re.sub(r"\s+", " ", snippet)[:160], "important": important, "why": why,
+                        "body": re.sub(r"\s+", " ", snippet)[:1500]})   # for "what it's about"
         return out
     finally:
         imap.logout()

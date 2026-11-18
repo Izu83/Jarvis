@@ -19,18 +19,21 @@ def inbox(monkeypatch):
     return sent, box
 
 
-def mail(i, important, frm="Teacher <t@school.bg>", subject="Homework"):
-    return {"id": str(i), "from": frm, "subject": subject, "snippet": "Please read chapter 3", "important": important}
+def mail(i, important, frm="Teacher <t@school.bg>", subject="Homework", why=None):
+    why = why or ("Gmail marked it important" if important else "newsletter or automated sender")
+    return {"id": str(i), "from": frm, "subject": subject, "snippet": "Please read chapter 3", "important": important,
+            "why": why, "body": "Please read chapter 3 by Friday."}
 
 
 def test_new_email_waits_for_the_evening_summary(inbox):
     sent, box = inbox
-    box += [mail(1, True), mail(2, False, "Spotify <no-reply@spotify.com>", "New releases")]
+    box += [mail(1, True, why="from a person"), mail(2, False, "Spotify <no-reply@spotify.com>", "New releases")]
+    box[0]["important"] = True
     proactive._check_mail()
-    assert sent == []   # nothing during the day
+    assert sent == []   # nothing during the day: "from a person" alone isn't urgent
     text = proactive.mail_digest()
-    assert text.startswith("📬 Today's email: 2 new, 1 worth a look.")
-    assert "• Teacher: Homework — Please read chapter 3" in text
+    assert text.startswith("📬 Today's email: 2 new.")
+    assert "Teacher (Homework)" in text
     assert "Spotify (New releases)" in text
     assert proactive._state["mail_today"] == []   # tomorrow starts empty
 
@@ -61,3 +64,34 @@ def test_switched_off_it_is_a_heads_up_again(inbox, monkeypatch):
     box.append(mail(1, True))
     proactive._check_mail()
     assert sent and sent[0].startswith("📬 New email from Teacher")
+
+
+def test_an_important_one_comes_now_saying_what_its_about(inbox, monkeypatch):
+    sent, box = inbox
+    from jarvis import cloud
+    asked = []
+    monkeypatch.setattr(cloud, "quick", lambda prompt, providers=("groq", "nvidia"), **k: asked.append(providers) or
+                        "Read chapter 3 by Friday.")
+    box.append(mail(1, True, subject="Exam on Friday", why="looks time-sensitive"))
+    proactive._check_mail()
+    assert sent == ["📬 Important email from Teacher: Exam on Friday\nRead chapter 3 by Friday."]
+    assert asked == [("groq", "nvidia")]   # only those read your email
+    assert "• Teacher: Exam on Friday" in proactive.mail_digest()   # and it's in the evening summary too
+
+
+def test_without_groq_its_the_first_lines(inbox, monkeypatch):
+    sent, box = inbox
+    from jarvis import cloud
+    monkeypatch.setattr(cloud, "quick", lambda *a, **k: None)
+    box.append(mail(1, True))
+    proactive._check_mail()
+    assert sent[0].endswith("\nPlease read chapter 3")
+
+
+def test_ten_pm_is_your_ten_pm(inbox):
+    proactive.set_phone_tz("Asia/Shanghai")
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    assert abs((proactive.your_now() - dt.datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)).total_seconds()) < 5
+    proactive.set_phone_tz("Not/AZone")
+    assert proactive._state["phone_tz"] == "Asia/Shanghai"
