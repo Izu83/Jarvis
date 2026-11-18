@@ -150,7 +150,7 @@ def transcript(entries: list[dict]) -> str:
 
 
 def background(chat, since: float = 0.0, phone_recent: list | None = None, fresh: bool = True,
-               with_facts: bool | None = None) -> str:
+               with_facts: bool | None = None, conversation: bool = True) -> str:
     """What a brain should know before the new command. `fresh`: the brain remembers nothing (new session), so
     give it the facts and the whole recent conversation; otherwise only what happened since it last answered
     (exchanges other brains handled). Empty when there's nothing to tell."""
@@ -162,8 +162,8 @@ def background(chat, since: float = 0.0, phone_recent: list | None = None, fresh
         known = facts_text()
         if known:
             parts.append("What you remember about the user (saved with the remember tool):\n" + known)
-    entries = recent(chat, 0.0 if fresh else since)
-    if not entries and fresh and phone_recent:
+    entries = recent(chat, 0.0 if fresh else since) if conversation else []
+    if not entries and fresh and phone_recent and conversation:
         entries = from_phone(phone_recent)
     if entries:
         head = ("The conversation so far (already handled; use it to understand follow-ups like \"it\", \"that\", "
@@ -173,9 +173,10 @@ def background(chat, since: float = 0.0, phone_recent: list | None = None, fresh
 
 
 def context(chat, since: float = 0.0, phone_recent: list | None = None, fresh: bool = True,
-            with_facts: bool | None = None) -> str:
-    """background() as a prefix for the command itself ("" when there's nothing to tell)."""
-    body = background(chat, since, phone_recent, fresh, with_facts)
+            with_facts: bool | None = None, conversation: bool = True) -> str:
+    """background() as a prefix for the command itself ("" when there's nothing to tell). conversation=False: only
+    the facts, without the recent conversation."""
+    body = background(chat, since, phone_recent, fresh, with_facts, conversation)
     return f"[{body}]\n\nThe user's new message:\n" if body else ""
 
 

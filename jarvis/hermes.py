@@ -185,7 +185,7 @@ def _needs_claude(command: str) -> bool:
 
 MODEL_NAMES = {"claude": "Claude", "gemini": "Gemini", "openrouter": "the free models", "local": "the local brain",
                "chatgpt": "ChatGPT", "grok": "Grok", "perplexity": "Perplexity",
-               "deepseek": "DeepSeek"}
+               "deepseek": "DeepSeek", "nvidia": "NVIDIA", "groq": "Groq"}
 
 
 class HermesBrain:

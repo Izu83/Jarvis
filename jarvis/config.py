@@ -79,6 +79,14 @@ DEFAULTS = {
     # DeepSeek's own API (paid, a key from platform.deepseek.com): "deepseek-flash" (fast, cheapest) or
     # "deepseek-v4-pro". Price per million tokens at peak hours (off-peak is half), so the spend is never under-counted.
     "use_deepseek": False,
+    # Free with a key (no card): NVIDIA's hosted models (build.nvidia.com) and Groq (console.groq.com). "" = the best
+    # one that's free right now, then the next one down; a name = try that one first.
+    "use_nvidia": True,
+    "nvidia_model": "",
+    "nvidia_price": [0, 0],
+    "use_groq": True,
+    "groq_model": "",
+    "groq_price": [0, 0],
     "deepseek_model": "deepseek-flash",
     "deepseek_price": [0.3, 1.2],
     "paid_budget": 5.0,

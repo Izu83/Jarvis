@@ -84,7 +84,8 @@ def pairing_link() -> str:
 # the model picker's ticks (Settings and the model menu) and what the log calls them
 MODEL_TICKS = {"use_claude": "Claude", "use_gemini": "Gemini", "use_openrouter": "The free models",
                "use_chatgpt": "ChatGPT", "use_grok": "Grok", "use_perplexity": "Perplexity",
-               "use_deepseek": "DeepSeek", "use_hermes": "Hermes", "use_qwen": "Qwen3"}
+               "use_deepseek": "DeepSeek", "use_nvidia": "NVIDIA", "use_groq": "Groq",
+               "use_hermes": "Hermes", "use_qwen": "Qwen3"}
 
 
 class PhoneChannel:
@@ -314,7 +315,37 @@ class PhoneChannel:
                 "use_grok": bool(settings.get("use_grok")), "grok_key": cloud.has_key("grok"),
                 "use_perplexity": bool(settings.get("use_perplexity")), "perplexity_key": cloud.has_key("perplexity"),
                 "use_deepseek": bool(settings.get("use_deepseek")), "deepseek_key": cloud.has_key("deepseek"),
+                "use_nvidia": bool(settings.get("use_nvidia", True)), "nvidia_key": cloud.has_key("nvidia"),
+                "use_groq": bool(settings.get("use_groq", True)), "groq_key": cloud.has_key("groq"),
+                "gemini_model": settings.get("gemini_model") or "",
                 "spend": round(usage.month_spend(), 2), "budget": float(settings.get("paid_budget", 5.0))}
+
+    @staticmethod
+    def _model_info(who: str) -> dict:
+        """One AI's details page: requests and tokens (today, this week, month, all time, the last 14 days), what it
+        allows and what's left when the provider says, its models and which are resting, and its last answer."""
+        from . import cloud, usage
+        from .brain import EFFORTS, MODELS, RUNNING
+        if who == "claude":
+            out = {"provider": "claude", "name": "Claude", "free": True, "key": True, "on": bool(settings["use_claude"]),
+                   "pinned": settings.get("claude_code_model") or "", "running": RUNNING.get("model") or "",
+                   "models": [{"id": m, "name": m.capitalize(), "resting": 0, "ladder": True} for m in MODELS],
+                   "effort": settings.get("claude_code_effort"), "efforts": list(EFFORTS),
+                   "plan_limit": RUNNING.get("limit") or {},
+                   "limits": "Your Claude plan: a limit every 5 hours and one for the week. Jarvis sees where it "
+                             "stands only after Claude has answered at least once since Jarvis started."}
+        elif who in ("hermes", "qwen"):
+            out = {"provider": who, "name": "Hermes" if who == "hermes" else "Qwen3", "free": True, "key": True,
+                   "on": bool(settings.get("use_" + who, True)), "models": [], "local": True,
+                   "limits": "Free and private: it runs on your PC's graphics card, so there's no limit, only speed. "
+                             "The counts are for both local models together."}
+            who = "local"
+        elif who in cloud.PROVIDERS:
+            out = cloud.info(who)
+        else:
+            return {}
+        out["stats"] = usage.stats(who)
+        return out
 
     def send_memory(self) -> None:
         """What Jarvis remembers, for Settings > Memory on the phone."""
@@ -661,6 +692,14 @@ class PhoneChannel:
             self.send_state()
             self.deliver_messages(force=True)   # anything that was waiting for the app to open
             self.deliver_files(force=True)
+        elif kind == "chats_hello":   # a phone or computer connected: the chats it's missing, and the ones we want
+            from . import chatsync
+            out = chatsync.hello(data.get("have"), data.get("groups_at", 0))
+            self._publish({"kind": "chats", "id": msg_id, **out})
+        elif kind == "chats_push":   # chats changed on one of them: keep them, and pass them on to all of them
+            from . import chatsync
+            out = chatsync.push(data.get("chats"), data.get("deleted"), data.get("groups"), data.get("groups_at", 0))
+            self._publish({"kind": "chats", "id": msg_id, "ack": True, **out})
         elif kind == "got_file":   # the phone has saved a file: stop re-sending it
             outbox.done(data.get("fid", ""))
         elif kind == "got_msg":   # the phone has a message from Jarvis: stop re-sending it
@@ -811,6 +850,13 @@ class PhoneChannel:
             elif key in MODEL_TICKS:   # the model picker's ticks
                 set_setting(key, value)
                 log.info("%s turned %s.", MODEL_TICKS[key], "on" if value else "off")
+            elif isinstance(key, str) and key.endswith("_model") and key[:-6] in ("gemini", "openrouter", "nvidia", "groq"):
+                from . import cloud   # a model picked on an AI's details page ("" = Jarvis picks)
+                pick = data.get("value") if isinstance(data.get("value"), str) else None
+                if pick is not None and (pick == "" or pick in cloud.choices(key[:-6])):
+                    set_setting(key, pick)
+                    cloud._good.pop(key[:-6], None)   # the new pick goes first right away
+                    log.info("%s will use %s first.", cloud.NAMES[key[:-6]], pick or "the best free model")
             elif key == "claude_code_model":
                 from .brain import MODELS
                 if data.get("value") in MODELS:
@@ -833,6 +879,8 @@ class PhoneChannel:
                 hotkey.set_enabled(value)
                 log.info("Keyboard shortcut turned %s from the phone.", "on" if value else "off")
             self.send_state()
+        elif kind == "model_info":   # an AI's details page: usage, limits, its models
+            self._publish({"kind": "model_info", "id": msg_id, "info": self._model_info(str(data.get("who") or ""))})
         elif kind == "set_key":   # the model list's Paste Key: an API key, sent over this encrypted link
             from . import cloud
             provider, pasted = data.get("provider"), data.get("key")

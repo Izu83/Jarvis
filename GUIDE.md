@@ -195,13 +195,13 @@ costs nothing), and the next one in line answers if one fails or hits its limit:
 
 | The job | Order |
 |---|---|
-| Doing things on the PC, many steps | Claude, Gemini, free models, DeepSeek, local, ChatGPT |
-| Code | Claude, DeepSeek, ChatGPT, Gemini, free models |
+| Doing things on the PC, many steps | Claude, Gemini, NVIDIA, Groq, free models, DeepSeek, local, ChatGPT |
+| Code | Claude, NVIDIA, DeepSeek, ChatGPT, Gemini, Groq, free models |
 | The screen, photos you send | Claude, Gemini, ChatGPT |
 | Anything current (news, prices, search) | Gemini, Perplexity, Claude, Grok, ChatGPT, free models |
-| YouTube, long documents | Gemini, Claude, free models, DeepSeek |
+| YouTube, long documents | Gemini, Claude, NVIDIA, free models, DeepSeek |
 | X / Twitter | Grok, Gemini, Claude |
-| Everyday questions and chat | Gemini, free models, Claude, DeepSeek, local, ChatGPT, Grok |
+| Everyday questions and chat | Gemini, Groq, NVIDIA, free models, Claude, DeepSeek, local, ChatGPT, Grok |
 
 **Perplexity** (paid per use, no free tier): a key from https://console.perplexity.ai, added in the app or with
 `run.bat --keys`. It gets current questions after Gemini, through its Agent API (`POST /v1/agent`, effort "fast",
@@ -216,6 +216,34 @@ DeepSeek is the "free models" ladder, which tries DeepSeek first whenever one is
 code and PC jobs (`thinking` enabled; its `reasoning_content` goes back with each tool call, as DeepSeek requires)
 and answers chat without. `deepseek_price` is the peak-hour price, so the spend estimate is never low. Its key is
 checked with `GET /models`, nothing charged.
+
+**NVIDIA and Groq** (free, no card): keys from https://build.nvidia.com/settings/api-keys (an NVIDIA account with a
+checked phone number) and https://console.groq.com/keys. Both are ladders like Gemini's: NVIDIA's chat models best
+first (`NVIDIA_PREFER`: Mistral Large 4, Nemotron 3 Ultra, GLM 5, MiniMax M3...; its model list is public), Groq's
+(`GROQ_PREFER`: gpt-oss-120b, Qwen 3.8...). A model that refuses tools (400) or was retired (410) rests and the next
+one answers. Groq says what's left in `x-ratelimit-*` headers, kept for the details page; a Groq model out of its
+daily allowance rests until midnight UTC. An NVIDIA key is checked by asking a small model for one word.
+
+**Gemini 4** (Argon, Carbon, Hydrogen) isn't on Gemini's automatic ladder: pick it on Gemini's details page or set
+`gemini_model`. It takes 20 to 40 s an answer whatever its thinking level, so models starting with a name in `SLOW`
+get up to 55 s. Google Search isn't part of its free allowance, so searches fall through to the Flash models.
+
+**Safety filters:** Google refuses a whole request, on every Gemini model and before reading it, when the conversation
+sent with it has swearing or threats in it. `cloud.blocked()` spots that; Jarvis asks once more with only the facts
+(`memory.context(..., conversation=False)`), and if it's still refused the AI counts as failed so the next one answers.
+
+**An AI's details page** (tap it in Settings › AI Models): the phone sends `{type: "model_info", who}` and the PC
+answers with `cloud.info()` (models, what's resting, limits, the last rate-limit headers) and `usage.stats()`
+(requests and tokens today, 7 days, this month, all time, the last 14 days, the last answer and how long it took;
+`usage.json` keeps 62 days). Claude's shows its plan limit from Claude Code's `rate_limit_event`. Picking a model
+sends `set` with `<provider>_model` ("" = automatic), checked against `cloud.choices()`.
+
+**Chats on every device** (`chatsync.py`): each phone and computer keeps its own chats and sends the ones that changed
+(`chats_push`, found by comparing a short summary of each chat with the last one sent); the PC merges them into
+`.brain/chats.json` and passes the result to every device (`chats`). On connecting, a device sends `chats_hello` with
+its chats' versions and gets what it's missing. Messages are merged by time and who wrote them, so none is lost; the
+title and group come from the newest change; a deleted chat is remembered for 60 days. Pictures and files stay on the
+device that got them.
 
 **Adding a key from the phone:** Settings › AI Models › API keys › Add Key. Paste the key and tap Save: it goes to the
 PC over the encrypted link (`set_key`), the PC checks it with the provider (a read-only call, nothing spent), keeps it

@@ -39,17 +39,27 @@ PROVIDERS = {
     # DeepSeek's own API (paid per use, but a fraction of a cent an answer). There's no free DeepSeek API: the free
     # one comes through OpenRouter's free models, which put DeepSeek first whenever one of its models is free there.
     "deepseek": ("DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek_model", "deepseek-flash", "deepseek_price"),
+    # Free (no card): NVIDIA's hosted models (build.nvidia.com; about 40 requests a minute, the biggest free models
+    # anywhere) and Groq (the fastest; per model 30 a minute, 1,000 and 200,000 tokens a day).
+    "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1", "nvidia_model",
+               "mistralai/mistral-large-4-1t-a52b", "nvidia_price"),
+    "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1", "groq_model", "openai/gpt-oss-120b", "groq_price"),
 }
 NAMES = {"gemini": "Gemini", "openrouter": "Free models", "chatgpt": "ChatGPT", "grok": "Grok", "perplexity": "Perplexity",
-         "deepseek": "DeepSeek"}
-FREE = {"gemini", "openrouter"}   # no budget to watch
-LADDERS = {"gemini", "openrouter"}   # many models, tried in turn (see below)
+         "deepseek": "DeepSeek", "nvidia": "NVIDIA", "groq": "Groq"}
+FREE = {"gemini", "openrouter", "nvidia", "groq"}   # no budget to watch
+LADDERS = {"gemini", "openrouter", "nvidia", "groq"}   # many models, tried in turn (see below)
+# Free providers that answer "bad request" for a model that can't use tools (or 410 for one they retired): the next
+# model down takes over instead of the whole provider failing.
+SOFT_FAIL = {"openrouter", "nvidia", "groq"}
 SEARCH_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 # How long a model gets before the next one down (or the next brain) takes over. Gemini's newest models sometimes
 # just hang when Google is busy; waiting the old 180 s for each made "yo Jr" take three minutes.
 FIRST_ANSWER = 45   # s: the first reply of a command, for all of the ladder together
 NEXT_STEP = 90      # s: each later step (it's already working on it)
 PER_MODEL = 18      # s: one model's share of the first reply, so a hung one leaves time for the next one down
+# Models that are slow even to say hi, so they get longer (Gemini 4 takes 20 to 40 s, whatever its thinking level).
+SLOW = {"gemini-4-": 55}
 BUSY_REST = 900     # s: a model that hung is skipped this long
 KEEP_GOOD = 1800    # s: the model that last answered goes first this long (no waiting on a busy newer one each time)
 # Gemini's Flash models think before answering. Unlimited thinking was the slow part (5 to 37 s to say hi); "low" was
@@ -97,7 +107,8 @@ def has_key(provider: str) -> bool:
 
 KEY_PAGES = {"gemini": "https://aistudio.google.com/apikey", "openrouter": "https://openrouter.ai/keys",
              "chatgpt": "https://platform.openai.com/api-keys", "grok": "https://console.x.ai",
-             "perplexity": "https://console.perplexity.ai", "deepseek": "https://platform.deepseek.com/api_keys"}
+             "perplexity": "https://console.perplexity.ai", "deepseek": "https://platform.deepseek.com/api_keys",
+             "nvidia": "https://build.nvidia.com/settings/api-keys", "groq": "https://console.groq.com/keys"}
 
 
 def check_key(provider: str, key: str) -> bool:
@@ -109,6 +120,13 @@ def check_key(provider: str, key: str) -> bool:
             # No read-only call checks a Perplexity key, so send an empty question: a wrong key gets 401 before
             # anything else; a good one gets "bad request" (400), and nothing is answered or charged.
             r = requests.post(f"{base}/agent", json={}, headers={"Authorization": f"Bearer {key}"}, timeout=15)
+            return r.status_code not in (401, 403) and r.status_code < 500
+        if provider == "nvidia":
+            # NVIDIA's model list is public and an empty request is refused before the key is looked at, so ask a
+            # small model for one word (free).
+            r = requests.post(f"{base}/chat/completions", headers={"Authorization": f"Bearer {key}"}, timeout=30,
+                              json={"model": "google/gemma-4-31b-it", "max_tokens": 1,
+                                    "messages": [{"role": "user", "content": "hi"}]})
             return r.status_code not in (401, 403) and r.status_code < 500
         return requests.get(check, headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
     except requests.RequestException:
@@ -159,6 +177,20 @@ _names: dict[str, str] = {}   # OpenRouter model id -> its name ("NVIDIA: Nemotr
 OPENROUTER_PREFER = ("nemotron-3-ultra", "inkling:", "nemotron-3.5-super", "gemma-4-31b", "nemotron-3.5-lightning",
                      "gemma-4-26b", "inkling-small")
 OPENROUTER_SKIP = ("content-safety", "guard", "lfm-", "-code", "embed", "omni", "-vl", "vision", "audio", "image")
+# NVIDIA's and Groq's chat models, best first; their lists also hold embedding, safety, speech and video models, so
+# only these go on the ladder (newer versions match too: "glm-5." is any GLM 5).
+NVIDIA_PREFER = ("mistral-large-4", "nemotron-3-ultra", "glm-5.", "minimax-m3", "step-5", "nemotron-3.5-super",
+                 "gemma-4-31b", "gpt-oss-120b", "gpt-oss-20b")
+GROQ_PREFER = ("gpt-oss-120b", "qwen3.8", "kimi-k2", "llama-4-maverick", "qwen3", "gpt-oss-20b", "llama-3.3-70b")
+GEMINI_EXTRA = re.compile(r"gemini-4-[a-z]+")   # Gemini 4 (Argon, Carbon, Hydrogen): offered to pick, not on the ladder
+_choices: dict[str, list[str]] = {}   # provider -> every model you can pick for it (the ladder and the extra ones)
+
+
+def _preferred(ids: list[str], prefer: tuple[str, ...]) -> list[str]:
+    out = []
+    for name in prefer:
+        out += [i for i in ids if name in i and i not in out]
+    return out
 
 
 def _fetch_models(provider: str, key: str) -> list[str]:
@@ -168,7 +200,14 @@ def _fetch_models(provider: str, key: str) -> list[str]:
         ids = [m.get("id", "").removeprefix("models/") for m in r.json().get("data", [])]
         found = [(float(m.group(1)), name) for name in ids
                  if (m := re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash", name))]   # stable only: no -lite, -preview
-        return [name for _, name in sorted(found, reverse=True)]
+        flash = [name for _, name in sorted(found, reverse=True)]
+        _choices["gemini"] = flash + sorted(i for i in ids if GEMINI_EXTRA.fullmatch(i))
+        return flash
+    if provider in ("nvidia", "groq"):
+        headers = {"Authorization": f"Bearer {key}"} if provider == "groq" else {}   # NVIDIA's list is public
+        r = requests.get(f"{PROVIDERS[provider][1]}/models", headers=headers, timeout=20)
+        ids = [m.get("id", "") for m in r.json().get("data", []) if m.get("active", True)]
+        return _preferred(ids, NVIDIA_PREFER if provider == "nvidia" else GROQ_PREFER)
     r = requests.get(f"{PROVIDERS['openrouter'][1]}/models", timeout=20)
     for m in r.json().get("data", []):
         if m.get("name"):
@@ -197,6 +236,9 @@ def ladder(provider: str, key: str) -> list[str]:
             if found:
                 _ladders[provider] = (time.time(), found)
                 models = found
+                _choices.setdefault(provider, found)
+                if provider != "gemini":
+                    _choices[provider] = found
         except (requests.RequestException, ValueError, AttributeError, KeyError):
             log.debug("couldn't list %s's models", provider, exc_info=True)
     return models or [PROVIDERS[provider][3]]
@@ -247,18 +289,96 @@ def _rest(provider: str, model: str, r: requests.Response, search: bool = False)
         log.info("%s: today's free allowance is used up; back in %s.", name,
                  f"{secs // 3600} h" if secs >= 3600 else f"{max(1, secs // 60)} min")
         return
-    secs = {429: 600, 404: 86400}.get(r.status_code, 300)
+    secs = {429: 600, 404: 86400, 410: 86400, 400: 6 * 3600}.get(r.status_code, 300)
     if r.status_code == 429:
         m = re.search(r'"retryDelay":\s*"(\d+)', r.text)
+        after = (getattr(r, "headers", None) or {}).get("retry-after")
         if m:
             secs = max(60, int(m.group(1)))
-        elif provider == "openrouter":
+        elif re.search(r"per[- ]day|\bRPD\b|\bTPD\b", r.text):
+            secs = _until_tomorrow_utc()   # Groq: this model's allowance for today is used up
+        elif after and str(after).replace(".", "", 1).isdigit():
+            secs = max(30, int(float(after)))
+        elif provider == "gemini" and search and "QuotaFailure" not in r.text:
+            secs = 6 * 3600   # Google Search isn't part of this model's free allowance at all (Gemini 4)
+        elif provider in SOFT_FAIL:
             secs = 120   # a busy free model, or the per-minute limit
     _resting[f"{provider}:{model}" + "/search" * search] = time.time() + secs
     why = "isn't available" if r.status_code == 404 else (
         "has used up its free allowance" if r.status_code == 429 and provider == "gemini" else "is busy")
     log.info("%s %s %s; using the next one down for %s.", name, model, why,
              f"{secs // 3600} h" if secs >= 3600 else f"{max(1, secs // 60)} min")
+
+
+_limits: dict[str, dict] = {}   # provider -> what its last answer's rate-limit headers said, and when
+
+
+def limits_seen(provider: str, model: str, r) -> None:
+    """Keep what the provider says is left (Groq and OpenAI send x-ratelimit-* headers with each answer)."""
+    h = {k.lower(): v for k, v in (getattr(r, "headers", None) or {}).items() if k.lower().startswith("x-ratelimit-")}
+    if h:
+        _limits[provider] = {"model": model, "at": time.time(), **h}
+
+
+# What each one allows, in words, for the details page (providers don't say most of it through their APIs).
+LIMITS = {
+    "gemini": "Free. Each model has its own daily allowance: Google no longer publishes the numbers, about 20 to 250 "
+              "a day. Google Search answers have a separate allowance, and Gemini 4 gets none on the free tier.",
+    "openrouter": "Free. About 50 requests a day for all the free models together (1,000 after a one-time $10 "
+                  "top-up), 20 a minute.",
+    "nvidia": "Free. About 40 requests a minute for each model. NVIDIA can retire a model without warning; the next "
+              "one down takes over.",
+    "groq": "Free. For each model: 30 requests a minute, 1,000 a day and 200,000 tokens a day.",
+    "chatgpt": "Paid per use, within your monthly budget (all the paid ones together).",
+    "grok": "Paid per use, within your monthly budget (all the paid ones together).",
+    "perplexity": "Paid per use (it says what each answer cost), within your monthly budget.",
+    "deepseek": "Paid per use, a fraction of a cent an answer, within your monthly budget. Half price off-peak.",
+}
+
+
+def model_name(provider: str, model: str) -> str:
+    if provider == "gemini":
+        return " ".join(w.capitalize() if not w[0].isdigit() else w for w in model.split("-"))
+    return _names.get(model, model.split("/")[-1])
+
+
+def choices(provider: str) -> list[str]:
+    """The models you can pick for this provider ("" = Jarvis picks)."""
+    if provider not in LADDERS or not has_key(provider):
+        return []
+    if provider not in _choices:
+        ladder(provider, secret(PROVIDERS[provider][0]))
+    return list(_choices.get(provider) or _ladders.get(provider, (0, []))[1])
+
+
+def info(provider: str) -> dict:
+    """Everything the details page shows about one of these: its models and which are resting, limits, last answer."""
+    now = time.time()
+    pinned = settings.get(PROVIDERS[provider][2]) or ""
+    models = []
+    for m in ([pinned] if pinned and provider in LADDERS else []) + [m for m in choices(provider) if m != pinned]:
+        until = max(_resting.get(f"{provider}:{m}", 0), _provider_resting.get(provider, 0))
+        models.append({"id": m, "name": model_name(provider, m), "resting": until if until > now else 0,
+                       "ladder": m in _ladders.get(provider, (0, []))[1]})
+    if provider not in LADDERS:
+        models = [{"id": settings.get(PROVIDERS[provider][2]) or PROVIDERS[provider][3], "resting": 0, "ladder": True}]
+        models[0]["name"] = models[0]["id"]
+    live = dict(_limits.get(provider) or {})
+    return {"provider": provider, "name": NAMES[provider], "free": provider in FREE, "key": has_key(provider),
+            "on": bool(settings.get("use_" + provider, provider in FREE)), "usable": usable(provider),
+            "pinned": pinned, "models": models, "limits": LIMITS.get(provider, ""), "live": live,
+            "resting": _all_resting(provider), "budget": float(settings.get("paid_budget", 5.0)),
+            "spend": round(usage.month_spend(), 4)}
+
+
+def blocked(data: dict) -> bool:
+    """Did the provider's safety filter refuse the request? Google refuses a whole request when the conversation
+    sent with it has swearing or threats in it (friends shouting at Jarvis through the PC's microphone), on every
+    Gemini model, before reading any of it."""
+    choice = (data.get("choices") or [{}])[0]
+    why = str(choice.get("finish_reason") or "") + str((data.get("promptFeedback") or {}).get("blockReason") or "")
+    why += "".join(str(c.get("finishReason") or "") for c in data.get("candidates") or [])
+    return bool(re.search(r"content_filter|PROHIBITED|SAFETY|BLOCKLIST|SPII", why))
 
 
 def _cost(provider: str, tin: int, tout: int) -> float:
@@ -294,12 +414,17 @@ class CloudBrain:
         requests.Timeout when none answered in time, so the next brain takes over."""
         r = None
         deadline = deadline or time.time() + 180
-        for model in self._models(search):
+        for i, model in enumerate(self._models(search)):
+            allow = next((secs for name, secs in SLOW.items() if model.startswith(name)), None)
+            if allow and per_model:
+                if i == 0:   # a slow first choice still leaves the next one down its share
+                    deadline = max(deadline, time.time() + allow + PER_MODEL)
+                allow = max(allow, per_model)
             left = deadline - time.time()
             if left < 3:
                 break
             try:
-                r = call(model, (10, min(left, per_model or left)))
+                r = call(model, (10, min(left, (allow or per_model) or left)))
             except (requests.Timeout, requests.ConnectionError) as e:
                 if self.provider not in LADDERS:
                     raise
@@ -308,8 +433,9 @@ class CloudBrain:
                          type(e).__name__, BUSY_REST // 60)
                 r = None
                 continue
+            limits_seen(self.provider, model, r)
             if self.provider in LADDERS and (r.status_code in (429, 404) or r.status_code >= 500
-                                             or (self.provider == "openrouter" and r.status_code in (400, 402))):
+                                             or (self.provider in SOFT_FAIL and r.status_code in (400, 402, 410))):
                 _rest(self.provider, model, r, search)
                 if _all_resting(self.provider):
                     break
@@ -328,8 +454,10 @@ class CloudBrain:
         note = memory.context(chat, 0.0, recent, True, with_facts=True)
         if self.provider == "perplexity":
             return self._perplexity(note + command, progress)
+        # Without the recent conversation, for a provider whose filter refused it (see blocked())
+        short = memory.context(chat, 0.0, None, True, with_facts=True, conversation=False) if note else ""
         if search and self.provider == "gemini":
-            return self._search(note + command, progress)
+            return self._search(note + command, progress, short + command)
         messages = [{"role": "system", "content": system_prompt()}, {"role": "user", "content": note + command}]
         from .hermes import _ollama_tools   # Jarvis's tools in the OpenAI shape
         spec, spent, started = _ollama_tools(), 0.0, time.time()
@@ -354,10 +482,18 @@ class CloudBrain:
                 usage.record_other(self.provider, tin, tout, cost)
                 msg = (data.get("choices") or [{}])[0].get("message") or {}
                 calls = msg.get("tool_calls") or []
+                if not calls and not (msg.get("content") or "").strip() and blocked(data):
+                    if step == 0 and note and messages[1]["content"] != short + command:
+                        log.info("%s's filter refused the recent conversation; asking again without it.", self.name)
+                        messages[1]["content"] = short + command
+                        continue
+                    log.info("%s's filter refused this; the next one takes over.", self.name)
+                    return f"{self.name}'s safety filter refused this one."
                 if not calls:
                     answer = (msg.get("content") or "").strip()
                     if answer:
                         self.failed = False
+                        usage.record_answer(self.provider, self.model, time.time() - started)
                         log.info("%s (%s) answered in %.1fs (about $%.4f).", self.name, self.model,
                                  time.time() - started, spent)
                     return answer or f"{self.name} had nothing to say."
@@ -416,12 +552,13 @@ class CloudBrain:
         if not answer:
             return "Perplexity found nothing to say."
         self.failed = False
+        usage.record_answer("perplexity", effort, time.time() - started)
         log.info("Perplexity (%s) answered in %.1fs (about $%.4f).", effort, time.time() - started, cost)
         if sources:
             answer += "\n\nSources:\n" + "\n".join(f"{i}. [{t}]({u})" for i, (t, u) in enumerate(sources, 1))
         return answer
 
-    def _search(self, prompt: str, progress) -> str:
+    def _search(self, prompt: str, progress, short: str = "") -> str:
         """Gemini with Google Search, through its own API: for news, prices, scores and anything else current."""
         if progress:
             progress("Searching Google…", "Web")
@@ -441,11 +578,15 @@ class CloudBrain:
         except (requests.RequestException, ValueError) as e:
             log.warning("Gemini search didn't answer: %s", e)
             return "Gemini can't be reached right now."
+        if blocked(data) and short and short != prompt:   # its filter refused the conversation: once more without it
+            log.info("Gemini's filter refused the recent conversation; searching again without it.")
+            return self._search(short, None, "")
         use = data.get("usageMetadata") or {}
         usage.record_other("gemini", use.get("promptTokenCount", 0), use.get("candidatesTokenCount", 0))
         parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
         answer = "".join(p.get("text", "") for p in parts).strip()
         if answer:
             self.failed = False
+            usage.record_answer("gemini", self.model, time.time() - started)
             log.info("Gemini (%s) answered with Google Search in %.1fs.", self.model, time.time() - started)
         return answer or "Gemini found nothing to say."

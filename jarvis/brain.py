@@ -395,6 +395,8 @@ class ClaudeCodeBrain:
                     continue
                 if event.get("type") == "system" and event.get("subtype") == "init" and event.get("model"):
                     RUNNING["model"] = event["model"]
+                if event.get("type") == "rate_limit_event":   # where your Claude plan's limit stands
+                    RUNNING["limit"] = event.get("rate_limit_info") or {}
                 events.put(event)
         except Exception:
             log.exception("Lost the Claude Code output stream")
