@@ -2,7 +2,8 @@
 
 - Scheduled tasks: "every morning at 8 check my email and tell me what matters", "at 18:00 tell me the weather".
   When the time comes the task runs through the brain like a command, and the answer arrives as a message.
-- New important emails: a heads-up when one arrives (checked every few minutes over IMAP, no tokens).
+- New email: one summary of the day's at 22:00 (email_digest_time), the ones worth a look first. Checked every few
+  minutes over IMAP (no tokens) and kept until then; email_digest off = a heads-up for each important one instead.
 - The morning briefing once a day at morning_time (its own switch, "briefing"; see briefing.py).
 
 How much he does unasked is the "proactive" setting (off / normal / chatty). Scheduled tasks always run: the user
@@ -206,6 +207,38 @@ def _say(text: str) -> None:
         _sender(text, None, not quiet())
 
 
+def _who(m: dict) -> str:
+    name, addr = email.utils.parseaddr(m["from"])
+    return name or addr
+
+
+def mail_digest() -> str:
+    """The day's new email in one message (at email_digest_time, 22:00): the ones worth a look first, with a line of
+    each, then the rest by sender. Instead of a message every time one arrives."""
+    try:
+        _check_mail()   # the last few minutes' too
+    except Exception as e:
+        log.info("Couldn't check for new email before the summary (%s).", e)
+    mails, _state["mail_today"] = _state.get("mail_today", []), []
+    _save_state()
+    if not mails:
+        return "📬 No new email today."
+    top = [m for m in mails if m["important"]]
+    rest = [m for m in mails if not m["important"]]
+    lines = [f"📬 Today's email: {len(mails)} new" + (f", {len(top)} worth a look" if top else "") + "."]
+    for m in top[:10]:
+        lines.append(f"• {m['from']}: {m['subject'] or '(no subject)'}" + (f" — {m['snippet']}" if m["snippet"] else ""))
+    if rest:
+        lines.append(("The rest:" if top else "From:") + " " + ", ".join(
+            f"{m['from']} ({m['subject'][:40] or 'no subject'})" for m in rest[:12])
+            + (f" and {len(rest) - 12} more." if len(rest) > 12 else "."))
+    return "\n".join(lines)
+
+
+def _digest_due(now: dt.datetime) -> bool:
+    return bool(settings.get("email_address")) and _due(now, "email_digest", "email_digest_time", "22:00", "mail_digest")
+
+
 def _check_mail() -> None:
     from . import mail
     mails = mail.check(unread_only=True, limit=10)
@@ -214,14 +247,18 @@ def _check_mail() -> None:
     new = [m for m in mails if m["id"] not in seen]
     _state["seen_mail"] = (list(seen) + [m["id"] for m in new])[-300:]
     _state["mail_seeded"] = True
+    if settings.get("email_digest", True) and not first:
+        # one summary at the end of the day instead of a message for each: keep them until then
+        keep = _state.setdefault("mail_today", [])
+        keep += [{"from": _who(m), "subject": m["subject"], "snippet": (m.get("snippet") or "")[:140],
+                  "important": bool(m["important"])} for m in new]
+        del keep[:-200]
     _save_state()
     important = [m for m in new if m["important"] or level() == "chatty"]
-    if first or not important:   # the first look only learns what's already there
+    if first or not important or settings.get("email_digest", True):   # the first look only learns what's there
         return
 
-    def who(m):
-        name, addr = email.utils.parseaddr(m["from"])
-        return name or addr
+    who = _who
     if len(important) == 1:
         m = important[0]
         _say(f"📬 New email from {who(m)}: {m['subject']}" + (f" — {m['snippet'][:120]}" if m["snippet"] else ""))
@@ -302,6 +339,15 @@ def _loop() -> None:
                 send_recap()
         except Exception:
             log.exception("Evening recap failed")
+        try:
+            if _digest_due(now):
+                _state["mail_digest"] = now.date().isoformat()
+                _save_state()
+                if _sender:
+                    _sender(mail_digest(), None, not quiet())
+                next_mail = time.time() + MAIL_EVERY
+        except Exception:
+            log.exception("The email summary failed")
         if level() == "off":
             continue
         try:

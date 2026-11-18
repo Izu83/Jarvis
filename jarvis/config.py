@@ -43,6 +43,10 @@ DEFAULTS = {
     # The evening recap at recap_time: what Jarvis did, your time in apps, tomorrow's calendar and weather (no tokens)
     "recap": True,
     "recap_time": "21:30",
+    # New email: one summary of the day's at email_digest_time instead of a message for each one as it arrives.
+    # email_digest false = the old way (a heads-up for each important email).
+    "email_digest": True,
+    "email_digest_time": "22:00",
     "weather_city": "",
     "quiet_hours": [23, 8],
     # Which brains Jarvis may use: the model picker's three ticks (phone and desktop app). Any mix, at least one.

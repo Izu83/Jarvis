@@ -83,7 +83,9 @@ def test_quiet_hours():
 
 
 def test_new_important_email_gets_a_heads_up(clean, monkeypatch):
+    """With the evening summary switched off (email_digest false): a message as each important one arrives."""
     _, said = clean
+    monkeypatch.setitem(proactive.settings, "email_digest", False)
     from jarvis import mail
     inbox_now = [{"id": "1", "from": "Ana <ana@x.com>", "subject": "Old one", "snippet": "", "important": True}]
     monkeypatch.setattr(mail, "check", lambda unread_only=True, limit=10: list(inbox_now))
