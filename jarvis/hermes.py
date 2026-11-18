@@ -383,6 +383,7 @@ class HermesBrain:
                     self._say(cap(f"{MODEL_NAMES[order[i - 1]]} couldn't do it, so {MODEL_NAMES[model]} is trying…"))
                 elif model != "claude":
                     self._say(cap(f"{MODEL_NAMES[model]} is on it…"))
+                self._mark(model)
                 answer, ok = self._ask_model(model, original, command, chat, recent, progress)
                 if ok:
                     return answer
@@ -433,6 +434,7 @@ class HermesBrain:
                 self._say(f"{tried[-1]} got stuck, so {name} is taking over…")
             elif key == "qwen":
                 self._say(f"{name} is thinking it through…")
+            self._mark(key)
             try:
                 answer = self._run(key, command)
                 self._strikes[key] = 0   # it answered (even if not confidently): it works
@@ -450,6 +452,15 @@ class HermesBrain:
                 self._strike(key)
             tried.append(name)
         return None
+
+    def _mark(self, who: str) -> None:
+        """Tell the app which AI is working now ("claude", "groq", "hermes"...), for the little logo in front of the
+        typing dots. Not a step: it isn't shown as a pill or kept with the steps."""
+        if self.progress:
+            try:
+                self.progress("hermes" if who == "local" else who, "AI")
+            except Exception:
+                log.debug("progress callback failed", exc_info=True)
 
     def _say(self, text: str) -> None:
         """A step pill showing which brain is on it, so you can see the team at work."""

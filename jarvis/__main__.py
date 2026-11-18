@@ -325,7 +325,8 @@ def main() -> None:
         log.info("Command: %s", text)
 
         def step(msg: str, kind: str = "") -> None:   # every step is saved and shown live
-            activity.step(tid, kind or "Step", msg)
+            if kind != "AI":   # which AI is working: only for the logo by the typing dots, not a step
+                activity.step(tid, kind or "Step", msg)
             if progress:
                 try:
                     progress(msg, kind)

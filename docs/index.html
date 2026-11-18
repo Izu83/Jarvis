@@ -260,12 +260,14 @@
   .pill.err .pd { background: var(--red); }
   .pill svg.i.pi { width: 14px; height: 14px; flex: none; color: var(--orange); stroke-width: 2.2; }
   .pill .pk { color: var(--label2); flex: none; }
-  .pill .pt { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill .pt { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }   /* the whole step, on more lines if it's long */
+  .pill:has(.pt:not(:empty)) { align-items: baseline; }
+  .pill .pd, .pill svg.i.pi { align-self: center; }
+  .statusbar .pill .pt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* the floating chip stays one line */
   .pill.run .pt { font-weight: 500; }
   .pill.more { color: var(--label2); font-weight: 500; }
   .pill.away { box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 1px color-mix(in srgb, var(--orange) 55%, transparent); }
   .pill.away.busy { opacity: .5; }
-  .pills.open .pill .pt { white-space: normal; }
   /* floating chips under the top bar: "working" + upcoming reminders */
   .statusbar { display: flex; justify-content: center; gap: 6px; padding: 0 4px 10px; }
   .statusbar .pill { min-width: 0; flex: 0 1 auto; max-width: 100%; box-shadow: 0 6px 18px -8px rgba(0,0,0,.35), inset 0 0 0 .5px var(--bubble-line); }
@@ -300,7 +302,8 @@
   .rem .x-btn { margin-left: auto; }
   @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.96); } }
   .bubble.writing::after { content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; vertical-align: -2px; background: currentColor; animation: blink 1s steps(1) infinite; }
-  .typing { display: inline-flex; gap: 5px; padding: 5px 2px; }
+  .typing { display: inline-flex; align-items: center; gap: 5px; padding: 5px 2px; }
+  .typing .ai-mark { width: 16px; height: 16px; margin-right: 4px; flex: none; fill: currentColor; color: var(--label2); animation: fadeIn .25s var(--ease) both; }
   .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--label2); animation: blink 1.3s infinite; }
   .typing i:nth-child(2) { animation-delay: .18s; } .typing i:nth-child(3) { animation-delay: .36s; }
   @keyframes blink { 0%, 60%, 100% { opacity: .25; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
@@ -1614,9 +1617,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-18.1";   // bump together with version.json
+const VERSION = "2026-11-18.2";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv51", when: "Nov 18, 2026", title: "Your photos full-size, and every step in full", notes: [
+    "Tap a photo you sent to Jarvis to open it full-size (pinch to zoom). It's kept on the device you sent it from; on your other devices it comes from your PC.",
+    "While Jarvis is writing, the logo of the AI that's working on it shows in front of the dots: Claude, Gemini, Groq, NVIDIA and the rest.",
+    "Every step is written out in full, on more lines when it's long, instead of being cut off with ….",
+  ]},
   { v: "JNIv50", when: "Nov 18, 2026", title: "Your chats everywhere, NVIDIA and Groq, and each AI's usage", notes: [
     "Your chats are the same on your phone and your computer: a chat started on one shows up on the other, with every message, and new messages follow it. Deleting a chat deletes it on both. Pictures and files stay on the device that got them.",
     "NVIDIA and Groq can join for free: Settings › AI Models › NVIDIA or Groq › Add Key. NVIDIA has the biggest free models (Mistral Large 4, Nemotron 3 Ultra) and helps with code and harder jobs; Groq is the fastest and answers quick questions in about a second.",
@@ -2224,11 +2232,23 @@ function stamp(ts) {
   el.textContent = (today ? "Today " : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) + " ") + timeLabel(ts);
   $("log").append(el);
 }
+// The typing dots, with the logo of the AI that's working on it in front (Claude, Groq, Hermes...) once the PC says.
+function typingHtml(ai) {
+  const m = ai && typeof Models !== "undefined" && Models.LIST.find(x => x.key === "use_" + ai);
+  const logo = m ? `<svg class="ai-mark" aria-label="${m.name} is answering" role="img"${m.tint ? ` style="color:${m.tint}"` : ""}><use href="#l-${m.logo}"/></svg>` : "";
+  return `<span class="typing">${logo}<i></i><i></i><i></i></span>`;
+}
+function setAi(p, ai) {
+  if (p.ai === ai) return;
+  p.ai = ai;
+  const t = p.el?.querySelector(".typing");
+  if (t) t.outerHTML = typingHtml(ai);
+}
 function bubble(text, who, ts = Date.now(), error = false, thinking = "") {
   clearHome(); stamp(ts);
   const el = document.createElement("div");
   el.className = `bubble ${who}` + (error ? " error" : "");
-  if (text === null) el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+  if (text === null) el.innerHTML = typingHtml();
   else el.innerHTML = rich(text);
   $("log").append(el);
   if (who === "jarvis" && text) { addThoughts(el, thinking); addActions(el, ts); }
@@ -2428,7 +2448,7 @@ function pill(kind, text, state = "") {   // state: "" (done) | "run" | "err"
     : kind === "Away mode" ? icon("shield", "i pi") : '<span class="pd"></span>';
   b.innerHTML = `${mark}<span class="pk"></span><span class="pt"></span>`;
   b.querySelector(".pk").textContent = kind || "Step";
-  b.querySelector(".pt").textContent = text;
+  b.querySelector(".pt").textContent = state === "run" ? text : String(text || "").replace(/(…|\.\.\.)$/, "");   // a finished step doesn't trail off
   return b;
 }
 // steps: [{k, t}]. running: the last one is still going. status: a "Thinking…"-style line with no step yet.
@@ -2549,7 +2569,7 @@ function renderChat() {
   }
   for (const p of pending.values()) {
     if (p.chatId !== chat.id || p.kind !== "cmd") continue;
-    p.step = stepRow(p.status || "Sending…"); drawSteps(p); p.el = bubble(null, "jarvis");
+    p.step = stepRow(p.status || "Sending…"); drawSteps(p); p.el = bubble(null, "jarvis"); if (p.ai) p.el.innerHTML = typingHtml(p.ai);
   }
   if (chat.unread) { chat.unread = false; saveDb(); updateBadges(); }
   queueMicrotask(autosize);   // stop or send, for this chat
@@ -3239,10 +3259,11 @@ async function send(text, tile = null, onReply = null, typed = true, hooks = {})
   if (atts.length) { attachments.length = 0; renderAttach(); }
   const chat = current();
   const recent = chat.messages.filter(m => m.who === "me" || m.who === "jarvis").slice(-6).map(m => ({ who: m.who, text: (m.text || "").slice(0, 250) }));
-  const shown = ready.map(a => ({ name: a.name, thumb: a.small || null }));
+  const shown = ready.map(a => ({ name: a.name, thumb: a.small || null, path: a.path, fid: a.file ? "sent-" + a.id : null }));
+  for (const a of ready) if (a.file) keepSent(a);   // the full picture stays on this device, to open it later
   addMessage(chat, { who: "me", text: (text + ready.map(a => "\n\u{1F4CE} " + a.name).join("")).trim(), atts: shown });
   const mine = bubble(text, "me");
-  if (ready.length) mine.prepend(attBox(ready.map(a => ({ name: a.name, thumb: a.thumb || a.small }))));
+  if (ready.length) mine.prepend(attBox(ready.map((a, i) => ({ ...shown[i], thumb: a.thumb || a.small }))));
   // Just a photo or file, no words: Jarvis still looks at it and answers.
   if (!text) text = ready.length > 1 ? "(No message, just these attachments: look at them and respond.)"
                                      : "(No message, just this attachment: look at it and respond.)";
@@ -3411,6 +3432,7 @@ async function onMessage(text) {
     if (data.kind === "siri") { onSiri(data); return; }
     if (data.kind === "key_saved") { KeyBox.done(data); return; }
     if (data.kind === "model_info") { AiInfo.got(data); return; }
+    if (data.kind === "upload_file") { onUploadFile(data); return; }
     if (data.kind === "chats") { ChatSync.on(data); return; }
     if (data.kind === "partial") { onPartial(data); return; }
     if (data.kind && data.kind.startsWith("clean_")) { Clean.on(data); return; }
@@ -3437,6 +3459,7 @@ async function onMessage(text) {
     if (!p && awaiting[data.id] && data.kind === "reply") p = adopt(data.id);   // an answer to a command from before a reload
     if (!p) return;
     clearTimeout(p.timer); clearTimeout(p.ackTimer); p.acked = true;
+    if (!data.done && data.step_kind === "AI") { setAi(p, data.text); return; }   // which AI is working: its logo
     if (!data.done) {
       setStep(p, data.text === "On it..." ? "Thinking…" : data.text, data.step_kind || "");
       p.onStep?.(data.text);
@@ -3455,7 +3478,7 @@ async function onMessage(text) {
     }
     const chat = chatById(p.chatId);
     if (!chat) return;
-    if (Array.isArray(data.steps) && data.steps.length) p.steps = data.steps;   // the PC's full list wins
+    if (Array.isArray(data.steps) && data.steps.length) p.steps = data.steps.filter(s => s.k !== "AI");   // the PC's full list wins
     p.finished = true;
     saveSteps(chat, p);
     addMessage(chat, { who: "jarvis", text: data.text, thinking: data.thinking || "" });
@@ -3476,7 +3499,7 @@ function onPartial(data) {
   clearTimeout(p.ackTimer); p.acked = true;
   if (p.chatId !== db.current || !p.el?.isConnected) return;
   const log = $("log"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
-  if (!data.text) { p.el.classList.remove("writing"); p.el.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; return; }
+  if (!data.text) { p.el.classList.remove("writing"); p.el.innerHTML = typingHtml(p.ai); return; }
   p.el.classList.add("writing");
   p.el.innerHTML = rich(data.text);
   if (atEnd) scrollDown(false);
@@ -5989,15 +6012,46 @@ $("text").addEventListener("paste", e => {
     $("text").focus();
   });
 }
-// The pictures (or file names) you sent, shown at the top of your message bubble.
+// The pictures (or file names) you sent, shown at the top of your message bubble. Tap one to see it full-size.
 function attBox(list) {
   const box = document.createElement("div"); box.className = "att";
   for (const a of list) {
-    if (a.thumb) { const img = new Image(); img.src = a.thumb; img.alt = ""; box.append(img); }
+    if (a.thumb) {
+      const img = new Image(); img.src = a.thumb; img.alt = a.name || "Photo you sent";
+      img.className = "press"; img.setAttribute("role", "button"); img.tabIndex = 0;
+      img.onclick = e => { e.stopPropagation(); openSent(a); };
+      box.append(img);
+    }
     else { const s = document.createElement("span"); s.className = "fn"; s.textContent = "\u{1F4CE} " + a.name; box.append(s); }
   }
   return box;
 }
+// The full photo you sent is kept on this device (with the files Jarvis sent you), so it opens full-size later.
+// On another device, or once it's been cleared out, it comes back from the PC's "From Phone" folder instead.
+function keepSent(a) {
+  fileStore("readwrite", st => st.put({ fid: "sent-" + a.id, name: a.name, mime: a.file.type, blob: a.file, ts: Date.now() })).catch(() => {});
+}
+const sentWait = new Map();
+async function openSent(a) {
+  const show = url => openViewer({ url, monitors: [] }, -1);
+  try {
+    const f = a.fid && await fileStore("readonly", st => st.get(a.fid));
+    if (f?.blob) { show(URL.createObjectURL(f.blob)); return; }
+  } catch {}
+  if (a.path && ws?.readyState === WebSocket.OPEN) {
+    const id = newId();
+    toast("Getting the photo from your PC…", "doc", "var(--blue)");
+    const got = await new Promise(resolve => {
+      sentWait.set(id, resolve);
+      setTimeout(() => { if (sentWait.delete(id)) resolve(null); }, 20000);
+      post({ type: "get_upload", path: a.path, id }).catch(() => { sentWait.delete(id); resolve(null); });
+    });
+    if (got?.ok) { show(URL.createObjectURL(new Blob([b64bytes(got.data)], { type: got.mime }))); return; }
+    if (got?.text) toast(got.text, "x", "var(--orange)");
+  }
+  show(a.thumb);   // the small copy is all there is
+}
+function onUploadFile(d) { const r = sentWait.get(d.id); if (r) { sentWait.delete(d.id); r(d); } }
 // A small copy of a photo (a few KB) that's saved with the chat, so the picture is still there next time.
 async function smallThumb(file) {
   try {
@@ -6011,7 +6065,8 @@ async function smallThumb(file) {
 const toB64 = bytes => { let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin); };
 async function uploadFile(file) {
   if (file.size > 40 * 1024 * 1024) { toast("That file is over 40 MB", "x", "var(--orange)"); return; }
-  const att = { id: newId(), name: file.name || "photo.jpg", thumb: /^image\//.test(file.type) ? URL.createObjectURL(file) : null, pct: 0, path: null, error: null };
+  const att = { id: newId(), name: file.name || "photo.jpg", thumb: /^image\//.test(file.type) ? URL.createObjectURL(file) : null, pct: 0, path: null, error: null,
+                file: /^image\//.test(file.type) ? file : null };
   attachments.push(att); renderAttach();
   if (att.thumb) smallThumb(file).then(t => { att.small = t; });
   try {

@@ -12,6 +12,7 @@ import collections
 import json
 import re
 import logging
+import mimetypes
 import secrets
 import threading
 import time
@@ -692,6 +693,8 @@ class PhoneChannel:
             self.send_state()
             self.deliver_messages(force=True)   # anything that was waiting for the app to open
             self.deliver_files(force=True)
+        elif kind == "get_upload":   # the app wants the full picture you sent earlier (it only kept a small copy)
+            self._publish({"kind": "upload_file", "id": msg_id, **self._read_upload(str(data.get("path") or ""))})
         elif kind == "chats_hello":   # a phone or computer connected: the chats it's missing, and the ones we want
             from . import chatsync
             out = chatsync.hello(data.get("have"), data.get("groups_at", 0))
@@ -1083,6 +1086,29 @@ class PhoneChannel:
         log.info("Saved a file from the phone: %s", dest)
         self._publish({"kind": "uploaded", "id": data.get("id", ""), "ok": True, "path": str(dest),
                        "text": f"Saved {dest.name} to {dest.parent}."})
+
+    @staticmethod
+    def _upload_folders() -> list:
+        from pathlib import Path
+        return [Path(settings.get("upload_folder") or (Path(ROOT).anchor + "From Phone")),
+                Path(os.path.expanduser("~/Downloads")) / "From Phone"]
+
+    @classmethod
+    def _read_upload(cls, path: str) -> dict:
+        """A file sent from the phone, read back for the app: only from the folders phone files are saved in, only
+        pictures, up to 25 MB."""
+        from pathlib import Path
+        try:
+            p = Path(path).resolve()
+        except (OSError, ValueError):
+            return {"ok": False, "text": "That picture isn't on your PC any more."}
+        inside = any(p.is_relative_to(f.resolve()) for f in cls._upload_folders() if f.exists())
+        mime = mimetypes.guess_type(p.name)[0] or ""
+        if not inside or not mime.startswith("image/") or not p.is_file():
+            return {"ok": False, "text": "That picture isn't on your PC any more."}
+        if p.stat().st_size > 25 * 1024 * 1024:
+            return {"ok": False, "text": "That picture is too big to show here."}
+        return {"ok": True, "mime": mime, "name": p.name, "data": base64.b64encode(p.read_bytes()).decode()}
 
     @staticmethod
     def _store_file(name: str, raw: bytes):
