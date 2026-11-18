@@ -102,7 +102,7 @@ def test_a_pasted_key_is_checked_before_it_is_kept(monkeypatch):
     import jarvis.config as config
     monkeypatch.setattr(config, "set_secret", lambda k, v: kept.__setitem__(k, v))
     monkeypatch.setattr(config, "set_setting", lambda k, v: ticked.__setitem__(k, v))
-    monkeypatch.setattr(cloud, "check_key", lambda provider, key: key.endswith("good"))
+    monkeypatch.setattr(cloud, "key_check", lambda provider, key: (True, "") if key.endswith("good") else (False, "401"))
     saved, text = cloud.save_key("openrouter", "sk-or-v1-" + "x" * 30 + "bad")
     assert not saved and "didn't accept" in text and not kept and not ticked
     saved, text = cloud.save_key("openrouter", "short")

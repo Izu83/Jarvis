@@ -133,3 +133,21 @@ def test_refused_twice_hands_over_to_the_next_brain(monkeypatch):
     brain = cloud.CloudBrain("gemini")
     brain.handle("hello")
     assert brain.failed   # so the next one in line answers
+
+
+def test_a_turned_down_key_says_why_and_a_silent_check_still_keeps_it(monkeypatch):
+    kept = {}
+    import importlib
+    config = importlib.import_module("jarvis.config")
+    monkeypatch.setattr(config, "set_secret", lambda k, v: kept.update({k: v}))
+    monkeypatch.setattr(config, "set_setting", lambda k, v: None)
+
+    def post(url, json=None, headers=None, timeout=None):
+        if headers["Authorization"].endswith("slow"):
+            raise cloud.requests.Timeout()
+        return _Resp(403, {"status": 403, "detail": "Authorization failed"})
+    monkeypatch.setattr(cloud.requests, "post", post)
+    saved, text = cloud.save_key("nvidia", "nvapi-" + "x" * 40 + "wrong")
+    assert not saved and "403: Authorization failed" in text and "build.nvidia.com" in text and not kept
+    saved, text = cloud.save_key("nvidia", "nvapi-" + "x" * 40 + "slow")
+    assert saved and kept == {"NVIDIA_API_KEY": "nvapi-" + "x" * 40 + "slow"} and "first question" in text

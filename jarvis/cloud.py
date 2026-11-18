@@ -111,26 +111,50 @@ KEY_PAGES = {"gemini": "https://aistudio.google.com/apikey", "openrouter": "http
              "nvidia": "https://build.nvidia.com/settings/api-keys", "groq": "https://console.groq.com/keys"}
 
 
-def check_key(provider: str, key: str) -> bool:
-    """Does the provider accept this key? (A cheap read-only call; nothing is spent.)"""
+# What to do when a provider turns a key down (on top of what it said)
+KEY_HINTS = {"nvidia": "Use a key from build.nvidia.com (Generate API Key there, not an NGC key from ngc.nvidia.com), "
+                       "after the phone check on your NVIDIA account is done.",
+             "groq": "Copy the whole key from console.groq.com/keys (it starts with gsk_)."}
+
+
+def key_check(provider: str, key: str) -> tuple[bool | None, str]:
+    """Does the provider accept this key? (True, "") yes; (False, what it said) no; (None, why) it couldn't tell
+    (no answer, or the provider's own error). A cheap call; nothing is spent. What it said never holds the key."""
     base = PROVIDERS[provider][1]
     check = f"{base}/key" if provider == "openrouter" else f"{base}/models"   # OpenRouter's model list is public
+    headers = {"Authorization": f"Bearer {key}"}
     try:
         if provider == "perplexity":
             # No read-only call checks a Perplexity key, so send an empty question: a wrong key gets 401 before
             # anything else; a good one gets "bad request" (400), and nothing is answered or charged.
-            r = requests.post(f"{base}/agent", json={}, headers={"Authorization": f"Bearer {key}"}, timeout=15)
-            return r.status_code not in (401, 403) and r.status_code < 500
-        if provider == "nvidia":
+            r = requests.post(f"{base}/agent", json={}, headers=headers, timeout=15)
+        elif provider == "nvidia":
             # NVIDIA's model list is public and an empty request is refused before the key is looked at, so ask a
-            # small model for one word (free).
-            r = requests.post(f"{base}/chat/completions", headers={"Authorization": f"Bearer {key}"}, timeout=30,
+            # small model for one word (free). A wrong key is refused at once (403), however busy the model is.
+            r = requests.post(f"{base}/chat/completions", headers=headers, timeout=30,
                               json={"model": "google/gemma-4-31b-it", "max_tokens": 1,
                                     "messages": [{"role": "user", "content": "hi"}]})
-            return r.status_code not in (401, 403) and r.status_code < 500
-        return requests.get(check, headers={"Authorization": f"Bearer {key}"}, timeout=15).ok
-    except requests.RequestException:
-        return False
+        else:
+            r = requests.get(check, headers=headers, timeout=15)
+    except requests.RequestException as e:
+        return None, f"no answer ({type(e).__name__})"
+    if r.status_code in (401, 403):
+        try:
+            d = r.json()
+            said = d.get("detail") or (d.get("error") or {}).get("message") or d.get("title") or ""
+        except (ValueError, AttributeError):
+            said = ""
+        said = str(said).replace(key, "…")[:160]
+        return False, f"{r.status_code}{': ' + said if said else ''}"
+    if r.status_code >= 500 or r.status_code == 429:
+        return None, f"error {r.status_code}"
+    if provider in ("perplexity", "nvidia"):
+        return True, ""   # anything but "not allowed" means the key got through
+    return (True, "") if r.ok else (False, f"error {r.status_code}")
+
+
+def check_key(provider: str, key: str) -> bool:
+    return key_check(provider, key)[0] is True
 
 
 def save_key(provider: str, key: str) -> tuple[bool, str]:
@@ -141,13 +165,20 @@ def save_key(provider: str, key: str) -> tuple[bool, str]:
     key = "".join(key.split())   # pasted with a stray space or line break
     if not 20 <= len(key) <= 300 or not key.isascii():
         return False, f"That doesn't look like a {name} key."
-    if not check_key(provider, key):
-        return False, f"{name} didn't accept that key. Nothing changed."
+    ok, why = key_check(provider, key)
+    if ok is False:
+        log.info("%s turned the pasted key down (%s).", name, why)
+        hint = KEY_HINTS.get(provider, "Copy the whole key and paste it again.")
+        return False, f"{name} didn't accept that key ({why}). {hint} Nothing changed."
+    if ok is None:   # it didn't say no: keep it, and the first question will tell
+        log.info("%s didn't answer the key check (%s); keeping the key anyway.", name, why)
     set_secret(PROVIDERS[provider][0], key)
     set_setting("use_" + provider, True)
     _ladders.pop(provider, None)        # its models may differ with this key: look again
     _provider_resting.pop(provider, None)
     log.info("%s key saved and %s ticked.", name, name)
+    if ok is None:
+        return True, f"{name} didn't answer the check just now, so the key is saved and switched on; the first question will show whether it works."
     return True, f"{name} is connected and switched on."
 
 
