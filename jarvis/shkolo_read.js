@@ -57,7 +57,10 @@ function readTimetable() {   // runs in the page: the week on show
   try {
     await page.goto(BASE + "/dashboard", { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
-    if (/\/auth|login/i.test(page.url())) { out.error = "logged_out"; return; }
+    // logged out: sent to a login page, or (since Nov 2026) the login form right on the home page, with "Сесията Ви е
+    // изтекла" (your session has expired)
+    const loginForm = await page.$('input[type="password"]').then(Boolean).catch(() => false);
+    if (/\/auth|login/i.test(page.url()) || loginForm) { out.error = "logged_out"; return; }
 
     // whose diary: the pupil the dashboard's stats card is about (this school year's class)
     const pupil = await page.$$eval('a[href*="/diary/pupil/"]', as => {

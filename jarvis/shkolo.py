@@ -27,6 +27,7 @@ CHECK_EVERY = 2 * 3600    # looking for news during the day
 LOGIN_URL = "https://app.shkolo.bg/"
 _lock = threading.Lock()
 _state: dict | None = None
+_last: dict = {}   # what the last read() gave: an older reading marked "stale" when a new one failed
 DAYS_BG = ["Понеделник", "Вторник", "Сряда", "Четвъртък", "Петък", "Събота", "Неделя"]
 DAYS_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -78,6 +79,12 @@ def _run_reader() -> dict:
 
 
 def read(force: bool = False) -> dict:
+    global _last
+    _last = _read(force)
+    return _last
+
+
+def _read(force: bool = False) -> dict:
     """The diary: from the last 20 minutes, or read now. On a failure the last good reading comes back too, with
     "error" set ("logged_out", "busy", "failed", ...)."""
     with _lock:
@@ -119,6 +126,29 @@ def _date(s: str) -> dt.date | None:
         return None
 
 
+def _why(err: str, bg: bool) -> str:
+    if err == "logged_out":
+        return ("излязъл съм от Shkolo. Кажи „влез в Shkolo“ и влез в app.shkolo.bg (отметни „Запомни ме“)" if bg else
+                "I'm logged out of Shkolo. Say \"log in to Shkolo\" and log in at app.shkolo.bg (tick \"Remember me\")")
+    if err == "busy":
+        return "браузърът ми беше зает" if bg else "my browser was busy"
+    return "не можах да отворя Shkolo" if bg else "I couldn't open Shkolo"
+
+
+def stale_note(data: dict, bg: bool) -> str:
+    """Said before an answer from an older reading, when a new one failed: how old it is, and why."""
+    if not data.get("stale"):
+        return ""
+    when = _load().get("fetched", 0)
+    days = int((time.time() - when) // 86400) if when else 0
+    since = (dt.datetime.fromtimestamp(when).strftime("%d.%m %H:%M") if when else "")
+    if bg:
+        age = f"отпреди {days} дни ({since})" if days else f"от {since}"
+        return f"Не можах да видя Shkolo сега: {_why(data.get('error', ''), True)}. Това е {age}, може да е остаряло.\n"
+    age = f"from {days} day{'s' * (days != 1)} ago ({since})" if days else f"from {since}"
+    return f"I couldn't check Shkolo now: {_why(data.get('error', ''), False)}. This is {age} and may be out of date.\n"
+
+
 def _problem(data: dict, bg: bool) -> str | None:
     err = data.get("error")
     if not err or data.get("stale"):
@@ -137,6 +167,19 @@ def _term(data: dict) -> str:
     return "term2" if any(s.get("term2") for s in data.get("grades", [])) else "term1"
 
 
+def _noted(fn):
+    """An answer from an older reading (a new one failed) starts by saying how old it is and why: the 13-day-old
+    average Jarvis kept giving while he was logged out of Shkolo looked like today's."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrap(question: str = "", *a, **k) -> str:
+        text = fn(question, *a, **k)
+        return stale_note(_last, _bg(question)) + text if _last.get("stale") else text
+    return wrap
+
+
+@_noted
 def grades_text(question: str = "", subject: str = "") -> str:
     data, bg = read(), _bg(question)
     if (p := _problem(data, bg)) or not data.get("grades"):
@@ -180,6 +223,7 @@ def _newest_grade(data: dict, details: dict):
     return best[1:] if best else None
 
 
+@_noted
 def homework_text(question: str = "", days: int = 21) -> str:
     data, bg = read(), _bg(question)
     if p := _problem(data, bg):
@@ -220,6 +264,7 @@ def _lessons(d: dict, bg: bool) -> str:
     return "\n".join(out)
 
 
+@_noted
 def timetable_text(question: str = "", day: dt.date | None = None) -> str:
     data, bg = read(), _bg(question)
     if p := _problem(data, bg):
@@ -242,6 +287,7 @@ def timetable_text(question: str = "", day: dt.date | None = None) -> str:
     return head + "\n" + _lessons(d, bg)
 
 
+@_noted
 def absences_text(question: str = "") -> str:
     data, bg = read(), _bg(question)
     if p := _problem(data, bg):
