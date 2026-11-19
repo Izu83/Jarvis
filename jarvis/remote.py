@@ -1198,7 +1198,29 @@ class PhoneChannel:
             self.tunnel.start()
             threading.Thread(target=self._re_announce, daemon=True, name="announce").start()
             threading.Thread(target=self._monitor, daemon=True, name="monitor").start()
+            threading.Thread(target=self._watchdog, daemon=True, name="watchdog").start()
             await asyncio.Future()  # run forever
+
+    def _watchdog(self) -> None:
+        """If the phone server stops answering for a few seconds (the phone can't connect then), write down what every
+        thread was doing at that moment, so the cause can be found. At most once a minute."""
+        import sys
+        import traceback
+        last = 0.0
+        while True:
+            time.sleep(2)
+            beat = threading.Event()
+            try:
+                self.loop.call_soon_threadsafe(beat.set)
+            except RuntimeError:
+                return
+            if beat.wait(5) or time.time() - last < 60:
+                continue
+            last = time.time()
+            names = {t.ident: t.name for t in threading.enumerate()}
+            parts = [f"--- {names.get(tid, tid)}\n" + "".join(traceback.format_stack(frame)[-12:])
+                     for tid, frame in sys._current_frames().items()]
+            log.warning("The phone server froze for over 5 s. What each thread was doing:\n%s", "\n".join(parts))
 
     def run(self) -> None:
         asyncio.run(self._serve())
