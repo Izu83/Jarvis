@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import threading
 import time
 
 from PIL import Image
@@ -83,12 +84,39 @@ async def _now() -> dict | None:
     }
 
 
+# Windows' media service sometimes stops answering. Giving up on a read after a few seconds doesn't end it: the request
+# stays stuck in one of Windows' worker threads for good. Asking again every 2 s then piled up hundreds of stuck threads
+# until the whole of Jarvis slowed to a crawl and the phone couldn't connect. So after a read that doesn't answer,
+# wait before asking again (longer each time it happens), and never have more than one read going at once.
+TIMEOUT = 4
+_backoff = {"until": 0.0, "wait": 0.0, "busy": False}
+_backoff_lock = threading.Lock()
+FIRST_WAIT, MAX_WAIT = 30.0, 1800.0
+
+
 def now_playing() -> dict | None:
+    with _backoff_lock:
+        if _backoff["busy"] or time.time() < _backoff["until"]:
+            return None
+        _backoff["busy"] = True
     try:
-        return asyncio.run(asyncio.wait_for(_now(), 4))
+        info = asyncio.run(asyncio.wait_for(_now(), TIMEOUT))
+        with _backoff_lock:
+            _backoff["wait"] = 0.0
+        return info
+    except (asyncio.TimeoutError, TimeoutError):
+        with _backoff_lock:
+            _backoff["wait"] = min(MAX_WAIT, _backoff["wait"] * 2 or FIRST_WAIT)
+            _backoff["until"] = time.time() + _backoff["wait"]
+            wait = _backoff["wait"]
+        log.warning("Windows' media service didn't answer; not asking it what's playing for %d s.", wait)
+        return None
     except Exception:
         log.debug("media session unavailable", exc_info=True)
         return None
+    finally:
+        with _backoff_lock:
+            _backoff["busy"] = False
 
 
 def art(art_id: str) -> bytes | None:
