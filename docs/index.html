@@ -547,8 +547,9 @@
   .logo-tile svg { width: 18px; height: 18px; fill: currentColor; color: var(--label); }
   .switch input:disabled + span { opacity: .45; }
   .key-state { font-size: 15px; color: var(--label2); white-space: nowrap; }
-  #keyRows .disclose { transition: transform .3s var(--ios); }
-  #keyRows [aria-expanded="true"] .disclose { transform: rotate(90deg); }
+  .key-add { flex: none; height: 30px; padding: 0 13px; border-radius: 15px; background: var(--fill); color: var(--blue); font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .key-add[aria-expanded="true"] { background: var(--blue); color: #fff; }
+  .ai-how { margin: 0 34px 0; padding-top: 2px; }
   .key-state.ok { color: var(--green); }
   .key-panel { padding: 2px 18px 16px; font-size: 15px; line-height: 20px; color: var(--label2); }
   .key-panel p { margin: 0 0 10px; }
@@ -947,6 +948,9 @@
   .model-menu .mm-opt .box svg.i { width: 15px; height: 15px; stroke-width: 3; color: #fff; opacity: 0; transform: scale(.5); transition: opacity .15s, transform .25s var(--spring); }
   .model-menu .mm-opt.on .box { background: var(--accent); box-shadow: none; }
   .model-menu .mm-opt.on .box svg.i { opacity: 1; transform: none; }
+  .model-menu .mm-more .box { background: var(--fill); box-shadow: none; }
+  .model-menu .mm-more .box svg.i { opacity: 1; transform: none; color: var(--blue); }
+  .model-menu .mm-more b { color: var(--blue); }
   .model-menu .mm-now { margin-top: 4px; padding: 9px 12px 8px; border-top: .5px solid var(--sep); font-size: 12.5px; line-height: 17px; color: var(--label2); }
 
   /* ---------- the desktop app (jarvis/desktop.py): chats down the side like Claude, the chat in a centred column ---------- */
@@ -1284,16 +1288,10 @@
     </div>
     <div class="spage" data-page="models" data-title="AI Models" hidden>
       <div class="page-gap"></div>
-      <div class="group" id="modelRows"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>
-      <div class="group-foot" id="modelHow"></div>
-      <div class="group-foot">Tap one to see how much it's been used, its limits and its models.</div>
-      <div class="group-title">API keys</div>
-      <div class="group" id="keyRows"></div>
-      <div class="group-foot">A key goes from here to your PC over the encrypted link. Your PC checks it, keeps it in its own .env file and switches that AI on. It's never shown again, here or on the PC.</div>
-      <div class="group-title">Local brain</div>
-      <div class="group" id="localList"><div class="row"><span class="grow">Waiting for your PC…</span></div></div>
+      <div class="group-foot ai-how" id="modelHow"></div>
+      <div id="modelRows"><div class="group"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div></div>
       <div class="group" style="margin-top:12px"><label class="row"><span class="grow">Try local models first<span class="sub">Free, but much slower, and they get real tasks wrong. Off = Claude does everything and they only step in when Claude can't answer.</span></span><span class="switch"><input type="checkbox" id="localFirstToggle"><span></span></span></label></div>
-      <div class="group-foot">Free models on your PC. Green = online; "in memory" means it answers right away, otherwise the first command takes a few extra seconds to load it.</div>
+      <div class="group-foot">Tap an AI to see how much it's been used, its limits and its models. A key goes from here to your PC over the encrypted link; your PC checks it, keeps it in its own .env file and switches that AI on. It's never shown again, here or on the PC.</div>
       <div class="group-title">Claude usage</div>
       <div class="group">
         <div class="row"><span class="grow">Times Jarvis used Claude</span><span class="value" id="uClaude">—</span></div>
@@ -1617,9 +1615,14 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-18.3";   // bump together with version.json
+const VERSION = "2026-11-21.1";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "JNIv53", when: "Nov 21, 2026", title: "Tidier model lists", notes: [
+    "The model menu in the message box shows only the AIs you can use, in groups: Your plan, Free, Pay per use and On your PC. Each has one short line on what it's best at.",
+    "The ones that still need a key are one row at the bottom, Add more AIs, which opens Settings › AI Models.",
+    "Settings › AI Models has the same groups. An AI that needs a key has Add Key where its switch would be, and the box to paste it opens right under it. Hermes and Qwen3 are under On your PC, with whether they're online.",
+  ]},
   { v: "JNIv52", when: "Nov 18, 2026", title: "Email at the end of the day", notes: [
     "New email comes as one summary at 10 PM your time (wherever your phone is), the important ones first, instead of a message every time one arrives.",
     "An email that really matters still comes straight away, with a sentence saying what it's about and whether you need to do anything. Important means Gmail marked it so, you marked the sender, or it sounds time-sensitive (an exam, a deadline, a meeting); automated mail with no subject doesn't count any more.",
@@ -2633,16 +2636,18 @@ const Models = {
   LIST: [
     { key: "use_claude", name: "Claude", group: "Your plan", logo: "claude", tint: "#d97757" },
     { key: "use_gemini", name: "Gemini", group: "Free", logo: "googlegemini", tint: "#3186ff" },
-    { key: "use_openrouter", name: "Free models", group: "Free", logo: "openrouter", tint: "#6467f2" },
-    { key: "use_nvidia", name: "NVIDIA", group: "Free", logo: "nvidia", tint: "#76b900" },
     { key: "use_groq", name: "Groq", group: "Free", logo: "groq", tint: "#f55036" },
-    { key: "use_chatgpt", name: "ChatGPT", group: "Pay per use", logo: "openai" },
-    { key: "use_grok", name: "Grok", group: "Pay per use", logo: "x" },
-    { key: "use_perplexity", name: "Perplexity", group: "Pay per use", logo: "perplexity" },
+    { key: "use_nvidia", name: "NVIDIA", group: "Free", logo: "nvidia", tint: "#76b900" },
+    { key: "use_openrouter", name: "Free models", group: "Free", logo: "openrouter", tint: "#6467f2" },
     { key: "use_deepseek", name: "DeepSeek", group: "Pay per use", logo: "deepseek", tint: "#4d6bfe" },
-    { key: "use_hermes", name: "Hermes", group: "On your PC", logo: "nous", model: "Hermes", sub: "Free and private. Quick one-step commands; slower." },
-    { key: "use_qwen", name: "Qwen3", group: "On your PC", logo: "qwen", tint: "#615ced", model: "Qwen3", sub: "Free and private. Thinks through bigger jobs; slower." },
+    { key: "use_chatgpt", name: "ChatGPT", group: "Pay per use", logo: "openai" },
+    { key: "use_perplexity", name: "Perplexity", group: "Pay per use", logo: "perplexity" },
+    { key: "use_grok", name: "Grok", group: "Pay per use", logo: "x" },
+    { key: "use_hermes", name: "Hermes", group: "On your PC", logo: "nous", model: "Hermes", sub: "Quick one-step commands." },
+    { key: "use_qwen", name: "Qwen3", group: "On your PC", logo: "qwen", tint: "#615ced", model: "Qwen3", sub: "Thinks through bigger jobs." },
   ],
+  // The same groups, in this order, in the message box's menu and in Settings › AI Models
+  GROUPS: ["Your plan", "Free", "Pay per use", "On your PC"],
   STATE: { missing: "not downloaded yet", offline: "Ollama isn't running", resting: "resting after errors" },
   s: null,
   usable(m) {
@@ -2665,45 +2670,25 @@ const Models = {
     if (on.length === 1) return on[0];
     return desktop && on.length === 2 ? on.join(" + ") : `${on[0]} +${on.length - 1}`;   // the phone has less room
   },
+  // One short line on what each is for (the group it's in already says what it costs; its own page has the rest)
   sub(m) {
     const s = this.s, x = s.models || {};
     if (m.key === "use_claude") {
       const v = /claude-sonnet-(\d+)-(\d+)/.exec(s.model_id || "");
-      return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}, on your Claude plan. Best at doing things on your PC, and code.`;
+      return `Sonnet${v ? ` ${v[1]}.${v[2]}` : ""}. Things on your PC, and code.`;
     }
-    if (m.key === "use_gemini") {
-      if (!x.gemini_key) return "Needs a free key: Settings › AI Models › Gemini.";
-      return "Free, with Google Search. Best for anything current, YouTube, long documents and everyday questions."
-        + (x.gemini_model ? ` First: ${esc(aiModelName("gemini", x.gemini_model))}.` : "");
-    }
-    if (m.key === "use_openrouter") {
-      if (!x.openrouter_key) return "Needs a free key: Settings › AI Models › Free models.";
-      return "Free, from OpenRouter: DeepSeek whenever it's free there, otherwise the best free model."
-        + (x.openrouter_now ? ` Now: ${esc(x.openrouter_now)}.` : "");
-    }
-    if (m.key === "use_perplexity") {
-      if (!this.usable(m)) return "Needs an API key (paid per use): Settings › AI Models › Perplexity.";
-      return "Pay per use. Answers from the web with sources, for news, prices and anything current. Within the budget.";
-    }
-    if (m.key === "use_nvidia") {
-      if (!x.nvidia_key) return "Needs a free key: Settings › AI Models › NVIDIA.";
-      return "Free: the biggest free models (Mistral Large 4, Nemotron 3 Ultra). Code and harder jobs.";
-    }
-    if (m.key === "use_groq") {
-      if (!x.groq_key) return "Needs a free key: Settings › AI Models › Groq.";
-      return "Free, and the fastest: answers in about a second. Quick questions and chat.";
-    }
-    if (m.key === "use_deepseek") {
-      if (!this.usable(m)) return "Needs an API key (paid, very cheap): Settings › AI Models › DeepSeek. The free DeepSeek comes through Free models.";
-      return "Pay per use, a fraction of a cent an answer. Code, and when the free ones can't answer. Within the budget.";
-    }
-    if (m.key === "use_chatgpt" || m.key === "use_grok") {
-      if (!this.usable(m)) return `Needs an API key (paid per use): Settings › AI Models › ${m.name}.`;
-      return m.key === "use_grok" ? "Pay per use. Only for X / Twitter, or when your plans can't answer."
-        : "Pay per use. Only when your plans can't answer, within the budget.";
-    }
+    if (m.key === "use_gemini") return "Google Search: anything current, YouTube.";
+    if (m.key === "use_groq") return "The fastest. Quick questions and chat.";
+    if (m.key === "use_nvidia") return "The biggest free models. Code, harder jobs.";
+    if (m.key === "use_openrouter") return x.openrouter_now ? `Now: ${esc(x.openrouter_now)}.` : "OpenRouter's best free model.";
+    if (m.key === "use_deepseek") return "Very cheap. Code, and backup.";
+    if (m.key === "use_chatgpt") return "When the others can't answer.";
+    if (m.key === "use_perplexity") return "The web, with sources: news, prices.";
+    if (m.key === "use_grok") return "X / Twitter.";
+    if (!this.usable(m)) return "Not set up on this PC.";
     const st = (s.local.find(x => x.name === m.model) || {}).state;
-    return !this.usable(m) ? "Not set up on this PC" : m.sub + (this.STATE[st] ? ` (${this.STATE[st]})` : "");
+    const now = { loaded: "Online, in memory", ready: "Online" }[st] || this.STATE[st];
+    return (now ? now[0].toUpperCase() + now.slice(1) + ". " : "") + m.sub;
   },
   how() {
     const on = this.on().map(m => m.key);
@@ -2743,21 +2728,27 @@ const Models = {
     post({ type: "set", key, value: s[key], id: newId() }).catch(() => toast("Not connected to your PC", "x", "var(--red)"));
     this.paint();
   },
-  renderMenu() {
+  renderMenu() {   // only the ones you can use, by group; the rest are one row that opens Settings › AI Models
     const s = this.s, x = s.models || {}, menu = $("modelMenu");
-    let html = "", group = "";
-    for (const m of this.LIST) {
-      if (m.group !== group) {
-        group = m.group;
-        const extra = group === "Pay per use" && (x.chatgpt_key || x.grok_key || x.perplexity_key || x.deepseek_key) ? ` · $${(x.spend || 0).toFixed(2)} of $${x.budget || 0} this month` : "";
-        html += `<div class="mm-sec">${group}${extra}</div>`;
+    let html = "";
+    for (const group of this.GROUPS) {
+      const list = this.LIST.filter(m => m.group === group && this.usable(m));
+      if (!list.length) continue;
+      const extra = group === "Pay per use" ? ` · $${(x.spend || 0).toFixed(2)} of $${x.budget || 0} this month` : "";
+      html += `<div class="mm-sec">${group}${extra}</div>`;
+      for (const m of list) {
+        const on = !!s[m.key];
+        html += `<button class="mm-opt${on ? " on" : ""}" role="menuitemcheckbox" aria-checked="${on}" data-key="${m.key}">`
+          + `<span class="box"><svg class="i"><use href="#i-check"/></svg></span><span class="t"><b><svg class="logo" aria-hidden="true"${m.tint ? ` style="color:${m.tint}"` : ""}><use href="#l-${m.logo}"/></svg>${m.name}</b><small>${this.sub(m)}</small></span></button>`;
       }
-      const ok = this.usable(m), on = !!s[m.key] && ok;
-      html += `<button class="mm-opt${on ? " on" : ""}" role="menuitemcheckbox" aria-checked="${on}" data-key="${m.key}"${ok ? "" : " disabled"}>`
-        + `<span class="box"><svg class="i"><use href="#i-check"/></svg></span><span class="t"><b><svg class="logo" aria-hidden="true"${m.tint ? ` style="color:${m.tint}"` : ""}><use href="#l-${m.logo}"/></svg>${m.name}</b><small>${this.sub(m)}</small></span></button>`;
     }
+    const more = this.LIST.filter(m => !this.usable(m)).length;
+    if (more) html += `<button class="mm-opt mm-more" role="menuitem" data-more><span class="box"><svg class="i"><use href="#i-plus"/></svg></span>`
+      + `<span class="t"><b>Add more AIs</b><small>${more} more you can set up in Settings › AI Models.</small></span></button>`;
     menu.innerHTML = html + `<div class="mm-now">${this.how()}</div>`;
-    for (const b of menu.querySelectorAll(".mm-opt")) b.onclick = () => this.toggle(b.dataset.key);
+    for (const b of menu.querySelectorAll(".mm-opt[data-key]")) b.onclick = () => this.toggle(b.dataset.key);
+    const add = menu.querySelector("[data-more]");
+    if (add) add.onclick = () => { this.close(); openProfile(); SetNav.show("models"); };
   },
   open() {
     if (!this.s) return;
@@ -2939,33 +2930,45 @@ const AiInfo = {
 const KeyBox = {
   open: null, waiting: new Map(),
   has(p) { return !!(Models.s?.models || {})[p + "_key"]; },
+  // Settings › AI Models: the same groups as the message box's menu. An AI that needs a key has Add Key where its
+  // switch would be, and the box to paste it opens right under it.
+  FOOT: {
+    "Free": "No cost: Jarvis asks these first for everyday questions, and the next one when one is busy or out of today's free uses.",
+    "On your PC": "Free and private, but slower. \"In memory\" answers right away; otherwise the first command takes a few seconds longer.",
+  },
+  row(m) {
+    const s = Models.s, p = m.key.slice(4), k = KEYS.find(k => k.p === p);
+    const needsKey = !!k && !this.has(p), open = !!k && this.open === p, ok = Models.usable(m), on = !!s[m.key] && ok;
+    const sub = needsKey ? "Needs a key." : Models.sub(m);
+    const right = needsKey
+      ? `<button class="key-add press" data-p="${p}" aria-expanded="${open}" aria-label="Add a ${m.name} key">Add Key</button>`
+      : `<span class="switch"><input type="checkbox" data-key="${m.key}"${on ? " checked" : ""}${ok ? "" : " disabled"} aria-label="Use ${m.name}"><span></span></span>`;
+    return `<div class="row ai-row"><button class="ai-open press" data-who="${p}" aria-label="${m.name}: usage and limits"><span class="logo-tile"><svg class="logo" aria-hidden="true"${m.tint ? ` style="color:${m.tint}"` : ""}><use href="#l-${m.logo}"/></svg></span>`
+      + `<span class="grow">${m.name}<span class="sub">${sub}</span></span><svg class="i disclose"><use href="#i-right"/></svg></button>${right}</div>`
+      + (open ? `<div class="key-panel"><p>${k.how} Get it at <a href="${k.url}" target="_blank" rel="noopener">${k.url.replace("https://", "")}</a>, then paste it here.${this.has(p) ? " Pasting a new one replaces the one your PC has." : ""}</p>`
+        + `<input class="key-input" id="keyIn-${p}" placeholder="Paste the key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="${m.name} API key">`
+        + `<div class="key-btns"><button class="mini ghost press" data-paste="${p}">Paste</button><button class="mini press" data-save="${p}">Save</button>`
+        + `${needsKey ? "" : `<button class="mini ghost press" data-p="${p}">Cancel</button>`}</div>`
+        + `<div class="key-msg" id="keyMsg-${p}" aria-live="polite"></div></div>` : "");
+  },
   render() {
-    const rows = $("modelRows"), keys = $("keyRows");
-    if (!rows || !keys) return;
-    const s = Models.s;
-    if (!s) { rows.innerHTML = '<div class="row"><span class="grow sub-only">Waiting for your PC…</span></div>'; keys.innerHTML = ""; return; }
-    rows.innerHTML = Models.LIST.map(m => {
-      const ok = Models.usable(m), on = !!s[m.key] && ok;
-      return `<div class="row ai-row"><button class="ai-open press" data-who="${m.key.slice(4)}" aria-label="${m.name}: usage and limits"><span class="logo-tile"><svg class="logo" aria-hidden="true"${m.tint ? ` style="color:${m.tint}"` : ""}><use href="#l-${m.logo}"/></svg></span>`
-        + `<span class="grow">${m.name}<span class="sub">${Models.sub(m).replace(/Settings › AI Models › [^.]+\./, "add it below.")}</span></span><svg class="i disclose"><use href="#i-right"/></svg></button>`
-        + `<span class="switch"><input type="checkbox" data-key="${m.key}"${on ? " checked" : ""}${ok ? "" : " disabled"} aria-label="Use ${m.name}"><span></span></span></div>`;
-    }).join("");
-    for (const i of rows.querySelectorAll("input[data-key]")) i.onchange = () => { Models.toggle(i.dataset.key); this.render(); };
-    for (const b of rows.querySelectorAll(".ai-open")) b.onclick = () => AiInfo.open(b.dataset.who);
-    $("modelHow").textContent = Models.how();
+    const box = $("modelRows");
+    if (!box) return;
+    const s = Models.s, x = s?.models || {};
+    if (!s) { box.innerHTML = '<div class="group"><div class="row"><span class="grow sub-only">Waiting for your PC…</span></div></div>'; return; }
     const keep = this.open && $("keyIn-" + this.open) ? $("keyIn-" + this.open).value : "";
-    keys.innerHTML = KEYS.map(k => {
-      const have = this.has(k.p), open = this.open === k.p;
-      return `<button class="row" data-p="${k.p}" aria-expanded="${open}"><span class="logo-tile"><svg class="logo" aria-hidden="true"${k.tint ? ` style="color:${k.tint}"` : ""}><use href="#l-${k.logo}"/></svg></span>`
-        + `<span class="grow">${k.name}<span class="sub">${k.free ? "Free" : "Paid per use"}</span></span>`
-        + `<span class="key-state${have ? " ok" : ""}">${have ? "Added" : "Add Key"}</span><svg class="i disclose"><use href="#i-right"/></svg></button>`
-        + (open ? `<div class="key-panel"><p>${k.how} Get it at <a href="${k.url}" target="_blank" rel="noopener">${k.url.replace("https://", "")}</a>, then paste it here.${have ? " Pasting a new one replaces the one your PC has." : ""}</p>`
-          + `<input class="key-input" id="keyIn-${k.p}" placeholder="Paste the key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="${k.name} API key">`
-          + `<div class="key-btns"><button class="mini ghost press" data-paste="${k.p}">Paste</button><button class="mini press" data-save="${k.p}">Save</button></div>`
-          + `<div class="key-msg" id="keyMsg-${k.p}" aria-live="polite"></div></div>` : "");
-    }).join("");
+    const foot = { ...this.FOOT, "Pay per use": `$${(x.spend || 0).toFixed(2)} of your $${x.budget || 0} spent this month, all of them together. Jarvis only uses them when the free ones and your plan can't answer, or for what they're best at.` };
+    box.innerHTML = Models.GROUPS.map(g => `<div class="group-title">${g}</div><div class="group">${Models.LIST.filter(m => m.group === g).map(m => this.row(m)).join("")}</div>`
+      + (foot[g] ? `<div class="group-foot">${foot[g]}</div>` : "")).join("");
+    $("modelHow").textContent = Models.how();
     if (keep && $("keyIn-" + this.open)) $("keyIn-" + this.open).value = keep;
-    for (const b of keys.querySelectorAll("button[data-p]")) b.onclick = () => { this.open = this.open === b.dataset.p ? null : b.dataset.p; this.render(); };
+    for (const i of box.querySelectorAll("input[data-key]")) i.onchange = () => { Models.toggle(i.dataset.key); this.render(); };
+    for (const b of box.querySelectorAll(".ai-open")) b.onclick = () => AiInfo.open(b.dataset.who);
+    for (const b of box.querySelectorAll("button[data-p]")) b.onclick = () => {
+      this.open = this.open === b.dataset.p ? null : b.dataset.p; this.render();
+      if (this.open) $("keyIn-" + this.open)?.focus({ preventScroll: true });
+    };
+    const keys = box;
     for (const b of keys.querySelectorAll("[data-paste]")) b.onclick = async () => {
       try { $("keyIn-" + b.dataset.paste).value = (await navigator.clipboard.readText()).trim(); }
       catch { this.say(b.dataset.paste, "Tap the box and paste the key there.", "bad"); }
@@ -3689,15 +3692,6 @@ function ring(el, pct) {
   el.style.strokeDasharray = c; el.style.strokeDashoffset = c * (1 - Math.min(100, pct) / 100);
   el.style.stroke = levelColor(pct);
 }
-// Settings › Local brain: is Hermes / Qwen3 online on the PC?
-const LOCAL_STATE = { loaded: ["ok", "Online · in memory"], ready: ["ok", "Online"], missing: ["warn", "Not downloaded"],
-                      offline: ["bad", "Offline"], resting: ["warn", "Kept failing · Claude covers for now"], off: ["", "Not in use"] };
-function renderLocal(list) {
-  $("localList").innerHTML = list.length ? list.map(m => { const [cls, label] = LOCAL_STATE[m.state] || ["", m.state];
-    return `<div class="row"><span class="grow">${esc(m.name)}<span class="sub">${esc(m.model)} · ${esc(m.role)}</span></span>` +
-           `<span class="value lstate"><span class="dot ${cls}"></span>${label}</span></div>`; }).join("")
-    : `<div class="row"><span class="grow">No local models set up</span></div>`;
-}
 const LANGS = [["en", "English"], ["bg", "Български"], ["both", "Both"]];
 const LANG_NOTE = { en: "English only: the fastest and most accurate for English.",
                     bg: "Bulgarian only. The first time, your PC downloads a bigger speech model (about 480 MB).",
@@ -3736,7 +3730,6 @@ function onState(data) {
     $("uClaude").textContent = n(u.claude_calls);
     $("uTokens").textContent = n(u.tokens_total != null ? u.tokens_total : (u.tokens_in || 0) + (u.tokens_out || 0));
     $("uLocal").textContent = n(u.local_calls); }
-  if (Array.isArray(data.local)) renderLocal(data.local);
   if (data.vapid) vapidKey = data.vapid;
   if (data.activity || data.watches) onActivity(data.activity, data.watches);
   if (typeof data.notify === "boolean") refreshNotifyToggle(data.notify);

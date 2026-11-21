@@ -29,7 +29,7 @@ Phone page (GitHub Pages) ── encrypted WebSocket via Cloudflare tunnel ─�
      with the 16k context fits fully on the GPU; without them part of it runs on the CPU and is too slow.
      By default (`"local_first": false`) Claude does every command and the local team only steps in when Claude
      can't answer (usage limit, offline, crash): in real use the 8B models were too slow and too unreliable to go
-     first. Settings › Local brain › **Try local models first** (or `"local_first": true`) switches to the order above.
+     first. Settings › AI Models › **Try local models first** (or `"local_first": true`) switches to the order above.
    - `"api"`: a paid key from https://console.anthropic.com/settings/keys in `.env` as `ANTHROPIC_API_KEY=`.
 2. **Dependencies** (already done on this PC):
    ```
@@ -109,7 +109,7 @@ Saying or typing **"stop"** ("Jarvis, stop", "cancel", "never mind") while he's 
 instead of waiting its turn. When he's idle, "stop" still pauses the music.
 
 With **local models first** on, a model that errors twice in a row (Ollama's "500", often when the graphics card is
-busy) rests for 15 minutes and Claude covers for it; Settings › Local brain shows it. Ollama's own output, with the
+busy) rests for 15 minutes and Claude covers for it; Settings › AI Models › On your PC shows it. Ollama's own output, with the
 reason for those errors, goes to `.brain/ollama.log` when Jarvis starts it.
 
 ## Things you can say
@@ -245,7 +245,7 @@ its chats' versions and gets what it's missing. Messages are merged by time and 
 title and group come from the newest change; a deleted chat is remembered for 60 days. Pictures and files stay on the
 device that got them.
 
-**Adding a key from the phone:** Settings › AI Models › API keys › Add Key. Paste the key and tap Save: it goes to the
+**Adding a key from the phone:** Settings › AI Models, then Add Key beside that AI (or on its own page). Paste the key and tap Save: it goes to the
 PC over the encrypted link (`set_key`), the PC checks it with the provider (a read-only call, nothing spent), keeps it
 in `.env` and switches that AI on (`cloud.save_key`, the same as `run.bat --keys`). It's never logged or sent back.
 
@@ -280,7 +280,7 @@ for half an hour, so a busy day at Google doesn't cost a wait on every message. 
   (USD per million tokens); past the budget they're skipped until next month.
 
 All four run through `jarvis/cloud.py` (the same chat-completions API with tool calling).
-- **Hermes, Qwen3**: free on your graphics card. Settings › Local brain › "Try local models first" puts them first.
+- **Hermes, Qwen3**: free on your graphics card. Settings › AI Models › "Try local models first" puts them first.
 
 ## Voice mode
 
