@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import os
 import threading
 import time
 
@@ -84,14 +85,107 @@ async def _now() -> dict | None:
     }
 
 
-# Windows' media service sometimes stops answering. Giving up on a read after a few seconds doesn't end it: the request
-# stays stuck in one of Windows' worker threads for good. Asking again every 2 s then piled up hundreds of stuck threads
-# until the whole of Jarvis slowed to a crawl and the phone couldn't connect. So after a read that doesn't answer,
-# wait before asking again (longer each time it happens), and never have more than one read going at once.
-TIMEOUT = 4
+# Windows' media service (NPSMSvc) sometimes hangs. A request to it then never ends: it stays stuck in a Windows worker
+# thread for good, and once Windows' media library is loaded it keeps starting more of them on its own (40 a second,
+# 14,000 in two days) until Jarvis crawled and the phone couldn't connect. So the reading happens in a helper process
+# (media_helper.py) that is killed, with all its stuck threads, when it doesn't answer or its threads start piling up.
+# After a read that doesn't answer, wait before asking again (longer each time), and only one read at a time.
+TIMEOUT, START_TIMEOUT = 4, 20
+MAX_HELPER_THREADS = 150
 _backoff = {"until": 0.0, "wait": 0.0, "busy": False}
 _backoff_lock = threading.Lock()
 FIRST_WAIT, MAX_WAIT = 30.0, 1800.0
+_helper: dict = {"proc": None, "lines": None}
+HELPER = ["-m", "jarvis.media_helper"]
+
+
+def _stop_helper() -> None:
+    proc, _helper["proc"] = _helper["proc"], None
+    if not proc:
+        return
+    import psutil
+    try:   # the venv's python.exe is a small launcher that starts the real one: end both
+        kids = psutil.Process(proc.pid).children(recursive=True)
+    except Exception:
+        kids = []
+    for p in kids:
+        try:
+            p.kill()
+        except Exception:
+            pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def _helper_threads(proc) -> int:
+    import psutil
+    try:
+        me = psutil.Process(proc.pid)
+        return sum(p.num_threads() for p in [me, *me.children(recursive=True)])
+    except Exception:
+        return 0
+
+
+def _ask() -> dict | None:
+    """What's playing, from the helper process. Raises TimeoutError when Windows doesn't answer."""
+    import json
+    import queue
+    import subprocess
+    import sys
+
+    from .config import ROOT
+
+    proc, fresh = _helper["proc"], False
+    if proc and (proc.poll() is not None or _helper_threads(proc) > MAX_HELPER_THREADS):
+        if proc.poll() is None:
+            log.warning("Windows' media service is stuck again (%d threads); restarting the media helper.",
+                        _helper_threads(proc))
+        _stop_helper()
+        proc = None
+    if proc is None:
+        exe = sys.executable.replace("pythonw.exe", "python.exe")
+        proc = subprocess.Popen([exe, *HELPER, str(os.getpid())], cwd=ROOT,
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                encoding="utf-8", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
+        lines: queue.Queue = queue.Queue()
+
+        def pump(out=proc.stdout, q=lines):
+            for line in out:
+                q.put(line)
+            q.put(None)
+
+        threading.Thread(target=pump, daemon=True, name="media-helper").start()
+        _helper.update(proc=proc, lines=lines)
+        fresh = True
+    lines = _helper["lines"]
+    try:
+        proc.stdin.write("now\n")
+        proc.stdin.flush()
+        line = lines.get(timeout=START_TIMEOUT if fresh else TIMEOUT)
+    except queue.Empty:
+        _stop_helper()
+        raise TimeoutError from None
+    except OSError:
+        _stop_helper()
+        return None
+    if line is None:
+        _stop_helper()
+        return None
+    reply = json.loads(line)
+    if reply.get("error"):   # the service refused (it does that while hung): back off like a timeout
+        log.debug("media helper: %s", reply["error"])
+        raise TimeoutError(reply["error"])
+    info = reply.get("info")
+    if info and info.get("art") and reply.get("art"):
+        import base64
+        _art[info["art"]] = base64.b64decode(reply["art"])
+        while len(_art) > 30:
+            _art.pop(next(iter(_art)))
+    if info and info.get("art") not in _art:
+        info["art"] = None
+    return info
 
 
 def now_playing() -> dict | None:
@@ -100,7 +194,7 @@ def now_playing() -> dict | None:
             return None
         _backoff["busy"] = True
     try:
-        info = asyncio.run(asyncio.wait_for(_now(), TIMEOUT))
+        info = _ask()
         with _backoff_lock:
             _backoff["wait"] = 0.0
         return info
