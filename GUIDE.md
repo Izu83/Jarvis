@@ -96,6 +96,17 @@ monitor shows what it heard live, then each step while it works, then the reply,
 voice (Microsoft's free neural voices via edge-tts; the built-in Windows voice when offline). Everything is logged to
 `jarvis.log`.
 
+**Listening costs CPU, so it can be switched off**: Settings › Voice › Listen for "Hey Jarvis" in the app, or the
+same item in the tray menu (config `listening`). Off, the microphone is closed and nothing runs; after 10 minutes
+Whisper is unloaded too. Ctrl+Alt+J still works, one command at a time (Whisper loads while you talk if it was put
+away). While listening, a quiet room is fed to the wake-word model four chunks at a time (it still scores every 80 ms
+inside them; anything louder than the room is scored at once). Waking on a plain "Jarvis" without "Hey"
+(`wake_name_alone`, Settings › Voice) is off by default: it runs Whisper on the start of everything said in the room.
+
+**/info** in the app shows, for free (no AI): the connection (tunnel address, what's connected, when the phone was
+last seen), Jarvis's own CPU and memory with its helpers, the PC's load, listening, which AIs are usable, and today's
+usage (`jarvis/info.py`).
+
 ## How a command is handled
 
 1. **Modes** ("work mode") run instantly with no AI.
@@ -191,7 +202,8 @@ like in Claude. Open it from the **Jarvis** shortcut, Windows search, or by clic
 
 Tap the model name in the message box (on the phone too) and tick the models Jarvis may use. For each message
 `jarvis/router.py` picks the best ticked one for the job that costs the least, with plain rules on the PC (picking
-costs nothing), and the next one in line answers if one fails or hits its limit:
+costs nothing), and the next one in line answers if one fails or hits its limit. The rules know English and
+Bulgarian words ("направи", "изтрий", "новини", "екрана"...), so a Bulgarian task isn't mistaken for small talk:
 
 | The job | Order |
 |---|---|

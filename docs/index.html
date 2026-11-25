@@ -478,21 +478,23 @@
   .sec .count { font-weight: 500; }
   .sec .more { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--label2); }
   .sec .more svg.i { width: 18px; height: 18px; }
-  .swipe { position: relative; border-radius: 14px; overflow: hidden; }
+  .swipe { position: relative; border-radius: 11px; overflow: hidden; margin-bottom: 1px; }
   .swipe .acts { position: absolute; inset: 0 0 0 auto; display: flex; opacity: 0; transition: opacity .2s; }
   .swipe .acts button { width: 76px; display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 600; gap: 2px; }
   .swipe .acts svg.i { width: 19px; height: 19px; }
   .swipe.open .acts, .swipe.dragging .acts { opacity: 1; }
-  .chat-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 14px; position: relative; background: transparent; transition: transform .35s var(--ease), background .2s; }
+  .chat-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 12px; min-height: 38px; border-radius: 11px; position: relative; background: transparent; transition: transform .35s var(--ease), background .2s; }
   .swipe.dragging .chat-row { transition: none; }
   .swipe.open .chat-row, .swipe.dragging .chat-row { background: var(--glass-strong); }
   .chat-row.active { background: var(--select) !important; }
   .chat-row .t { flex: 1; min-width: 0; }
   .chat-row .t b, .chat-row .t span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chat-row .t b { font-size: 16px; font-weight: 500; }
+  .chat-row .t b { font-size: 15px; font-weight: 450; color: color-mix(in srgb, var(--label) 88%, transparent); letter-spacing: -.2px; }
+  .chat-row.active .t b, .chat-row:has(.unread) .t b { color: var(--label); font-weight: 560; }
+  @media (hover: hover) { .chat-row:hover { background: var(--fill); } }
   .chat-row .t span { font-size: 13px; color: var(--label2); margin-top: 1px; letter-spacing: -.08px; }
   .chat-row time { font-size: 12px; color: var(--label2); align-self: flex-start; margin-top: 2px; letter-spacing: 0; }
-  .chat-row .unread { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); flex: none; }
+  .chat-row .unread { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
   .indent .chat-row { padding-left: 18px; }
   .empty-note { padding: 30px 20px; text-align: center; color: var(--label2); font-size: 15px; line-height: 21px; }
   .me-row { margin: 4px 12px 0; padding: 10px 12px; border-radius: 20px; display: flex; align-items: center; gap: 12px; width: calc(100% - 24px); text-align: left; }
@@ -993,6 +995,50 @@
   .bubble { animation: rise .32s var(--ios) both; }
   /* Sheets follow your finger from the grabber or the title (the script handles the drag) */
   .sheet .grabber, .sheet .sheet-head { touch-action: none; }
+
+  /* ---------- 2JNIv1: calmer and cleaner ----------
+     Jarvis's answers are text on the page, like a document, not grey bubbles: easier to read, less to look at.
+     Your messages keep their bubble, so it's still clear who said what. The wallpaper is quieter, so the glass reads as
+     clear glass instead of coloured plastic, and the glass itself has a thinner, brighter edge. */
+  :root {
+    --ambient-bg:
+      radial-gradient(circle 48vmax at 4% 0%, color-mix(in srgb, var(--wall-hue) 46%, transparent), transparent 70%),
+      radial-gradient(circle 38vmax at 100% 24%, color-mix(in srgb, var(--pink) 20%, transparent), transparent 70%),
+      radial-gradient(circle 46vmax at 94% 82%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%),
+      radial-gradient(circle 34vmax at 0% 70%, color-mix(in srgb, var(--teal) 18%, transparent), transparent 70%);
+    --frost: blur(18px) saturate(190%) brightness(1.03); --frost-strong: blur(34px) saturate(185%);
+    --rim-hi: rgba(255,255,255,.55); --rim-mid: rgba(255,255,255,.14);
+  }
+  .glass::before { padding: .75px; background: linear-gradient(140deg, var(--rim-hi), rgba(255,255,255,.08) 28%, transparent 55%, var(--rim-mid) 88%, var(--rim-hi)); }
+  .glass { box-shadow: var(--shade), inset 0 1px 0 -.25px var(--spec-lo), inset 0 -10px 18px -14px rgba(0,0,0,.35), inset 0 0 0 .5px var(--edge); }
+  .jarvis { align-self: stretch; max-width: 100%; background: none; box-shadow: none; padding: 2px 2px 4px; border-radius: 0;
+    font-size: 16.5px; line-height: 25px; letter-spacing: -.22px; color: color-mix(in srgb, var(--label) 94%, transparent); }
+  html.desktop .jarvis { font-size: 15.5px; line-height: 24px; }
+  .jarvis b, .jarvis strong { font-weight: 620; color: var(--label); }
+  .jarvis code { font-size: .9em; }
+  .me { border-radius: 20px; padding: 9px 15px 10px;
+    background: color-mix(in srgb, var(--accent) 82%, #0b0c18); box-shadow: inset 0 .5px 0 rgba(255,255,255,.28), 0 1px 2px rgba(0,0,0,.2); }
+  .me + .jarvis, .jarvis + .me { margin-top: 14px; }
+  .msg-actions { margin-left: 0; opacity: .75; }
+  .stamp { font-weight: 500; font-size: 11.5px; letter-spacing: .1px; text-transform: none; opacity: .8; }
+  /* the big clock: smaller and lighter, it's a backdrop, not the subject */
+  .bc-time { font-size: 34px; font-weight: 200; opacity: .7; }
+  .bc-date { font-size: 12px; }
+  /* the desktop app: the chat list floats as a sheet of glass, inset from the window edge (like macOS) */
+  html.desktop .drawer { top: 10px; bottom: 10px; left: 10px; width: calc(var(--side) - 20px); border-radius: 22px; padding-top: 14px; }
+  html.desktop .drawer.glass.strong { background: color-mix(in srgb, var(--base) 62%, transparent); }
+  html.desktop .drawer-head h2 { font-size: 22px; letter-spacing: -.3px; }
+  .sec .name { font-weight: 600; }
+  .chats .sec:first-child { padding-top: 6px; }
+  @media (prefers-color-scheme: light) { html[data-theme="auto"] .me { color: #fff; } }
+  html[data-theme="light"] .jarvis, html[data-theme="light"] .jarvis b { color: var(--label); }
+  .desk-only { display: none !important; }
+  html.desktop .desk-only { display: grid !important; position: relative; }
+  html.desktop .desk-only .badge-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; }
+  html.desktop #tabbar { display: none; }
+  html.desktop .drawer-head .btns { gap: 6px; }
+  html.desktop .drawer-head .round { width: 34px; height: 34px; }
+  html.desktop .drawer-head .round svg.i { width: 18px; height: 18px; }
   /* Reduce Motion: things fade instead of sliding or springing */
   @media (prefers-reduced-motion: reduce) {
     .sheet, .actions-sheet, .drawer, .bubble, .pills, .lost, .toast, .alert, .msg-actions { animation-name: fadeOnly !important; animation-duration: .2s !important; }
@@ -1224,7 +1270,9 @@
   <div class="drawer-head">
     <h2>Chats</h2>
     <div class="btns">
-      <button class="round glass press" id="newGroupBtn" aria-label="New group"><svg class="i"><use href="#i-folder-plus"/></svg></button>
+      <button class="round glass press desk-only" id="deskPcBtn" aria-label="Your PC" title="Your PC"><svg class="i"><use href="#i-display"/></svg></button>
+      <button class="round glass press desk-only" id="deskActBtn" aria-label="Activity" title="Activity"><svg class="i"><use href="#i-clock"/></svg><span class="badge-dot live" id="deskActBadge" hidden></span></button>
+      <button class="round glass press" id="newGroupBtn" aria-label="New group" title="New group"><svg class="i"><use href="#i-folder-plus"/></svg></button>
       <button class="round glass press" id="drawerNewBtn" aria-label="New chat"><svg class="i"><use href="#i-compose"/></svg></button>
     </div>
   </div>
@@ -1366,6 +1414,12 @@
       <div class="group-foot">Create or change a mode by asking, e.g. "Make a gaming mode with Discord on the vertical monitor and Steam on the main one."</div>
     </div>
     <div class="spage" data-page="voice" data-title="Voice" hidden>
+      <div class="group-title">On your PC</div>
+      <div class="group">
+        <label class="row"><span class="grow">Listen for “Hey Jarvis”<span class="sub">Off: the microphone is closed and listening uses no CPU</span></span><span class="switch"><input type="checkbox" id="listenToggle"><span></span></span></label>
+        <label class="row"><span class="grow">Wake on just “Jarvis”<span class="sub">Without the “Hey”. Checks everything said in the room, so it uses a lot more CPU</span></span><span class="switch"><input type="checkbox" id="aloneToggle"><span></span></span></label>
+      </div>
+      <div class="group-foot">Ctrl + Alt + J on the PC works either way. The same switch is in the tray icon's menu.</div>
       <div class="group-title">Jarvis's voice</div>
       <div class="group" id="voiceList"></div>
       <div class="group-foot">Tap one to hear it. Replies in Bulgarian are read by a Bulgarian voice of the same kind.</div>
@@ -1615,9 +1669,20 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-21.1";   // bump together with version.json
+const VERSION = "2026-11-26.1";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "2JNIv1", when: "Nov 26, 2026", title: "Jarvis 2: lighter, cleaner, smarter", notes: [
+    "Much less CPU when Jarvis is just waiting. A quiet room is listened to in bigger pieces (a quarter of the work), and waking on a plain “Jarvis” without the “Hey” is now off: it ran Whisper on everything said in the room. Turn it back on in Settings › Voice if you miss it.",
+    "Listening can be switched off: Settings › Voice › Listen for “Hey Jarvis”, or the same switch in the tray icon's menu. Off, the microphone is closed and nothing runs; after 10 minutes Whisper is put away too, freeing its memory. Ctrl + Alt + J still works, one command at a time.",
+    "The chat list shows just the names of your chats, nothing under them. Hover one on the PC to see when it was.",
+    "Jarvis's answers are plain text on the page instead of grey bubbles: easier to read. Your own messages keep their bubble.",
+    "Calmer colours behind everything, and the glass has a thinner, brighter edge, so it looks like clear glass rather than coloured plastic.",
+    "The desktop app: the chat list floats as its own glass panel, and the tab bar at the bottom is gone. Your PC and Activity moved to the top of the chat list, next to New Chat.",
+    "New /info: the connection (tunnel, who's connected, when your phone was last seen), how much of the PC Jarvis is using, listening, which AIs answer, and today's usage. Free: no AI is asked.",
+    "Smarter with Bulgarian: requests like “направи домашното” or “изтрий папката” used to look like small talk and went to a slow free chat model. Tasks, code, the screen, news and videos are now recognised in Bulgarian too, so the right AI gets them.",
+    "Your phone could lose the connection for good when Windows' media service hung: Jarvis now asks what's playing through a small helper it can restart, so stuck requests can't pile up inside Jarvis any more.",
+  ]},
   { v: "JNIv53", when: "Nov 21, 2026", title: "Tidier model lists", notes: [
     "The model menu in the message box shows only the AIs you can use, in groups: Your plan, Free, Pay per use and On your PC. Each has one short line on what it's best at.",
     "The ones that still need a key are one row at the bottom, Add more AIs, which opens Settings › AI Models.",
@@ -1925,7 +1990,9 @@ const RELEASES = [
   ] },
 ];
 // Jarvis's own release name (Jarvis · Niko · Izu83 · version N): always the newest release above
-const JNI = RELEASES.map(r => r.v).sort((a, b) => parseInt(b.slice(4)) - parseInt(a.slice(4)))[0];
+// "JNIv53" is generation 1, "2JNIv1" generation 2: newer generations come first, then the higher number
+const relRank = v => { const m = /^(\d*)JNIv(\d+)/.exec(v) || []; return (+m[1] || 1) * 10000 + (+m[2] || 0); };
+const JNI = RELEASES.map(r => r.v).sort((a, b) => relRank(b) - relRank(a))[0];
 const TINTS = { briefcase: "#0a84ff", code: "#5e5ce6", gamepad: "#ff375f", book: "#ff9f0a", music: "#ff2d55",
   film: "#bf5af2", moon: "#5856d6", chat: "#30d158", house: "#32ade6", sparkles: "#af52de" };
 const GROUP_COLORS = ["#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#32ade6", "#5e5ce6"];
@@ -3028,7 +3095,6 @@ const relTime = ts => {
   if (s < 7 * 86400) return new Date(ts).toLocaleDateString([], { weekday: "short" });
   return new Date(ts).toLocaleDateString([], { day: "numeric", month: "short" });
 };
-const preview = c => { const m = c.messages.at(-1); return !m ? "No messages yet" : m.who === "shots" ? "Screenshot" : m.who === "steps" ? "Working…" : m.who === "file" ? fileKind(m.mime) + ": " + m.name : m.text; };
 
 function chatRow(c, indent) {
   const wrap = document.createElement("div");
@@ -3036,9 +3102,9 @@ function chatRow(c, indent) {
   wrap.innerHTML = `<div class="acts"><button style="background:var(--indigo)">${icon("folder")}Move</button><button style="background:var(--red)">${icon("trash")}Delete</button></div>`;
   const b = document.createElement("button");
   b.className = "chat-row" + (c.id === db.current ? " active" : "");
-  b.innerHTML = `<span class="t"><b></b><span></span></span><time>${relTime(c.updated)}</time>` + (c.unread ? '<span class="unread"></span>' : "");
+  b.innerHTML = `<span class="t"><b></b></span>` + (c.unread ? '<span class="unread"></span>' : "");
   b.querySelector("b").textContent = c.title || "New chat";
-  b.querySelector(".t span").textContent = preview(c);
+  b.title = `${c.title || "New chat"} · ${relTime(c.updated)}`;   // when it was, on hover (desktop)
   b.onclick = () => { if (wrap.classList.contains("open")) { closeSwipe(wrap); return; } openChat(c.id); };
   const [moveBtn, delBtn] = wrap.querySelectorAll(".acts button");
   moveBtn.onclick = () => { closeSwipe(wrap); moveMenu(c); };
@@ -3725,6 +3791,8 @@ function onState(data) {
   if (typeof data.ask_permission === "boolean" && document.activeElement !== $("askToggle")) $("askToggle").checked = data.ask_permission;
   setModes(data.modes || []);
   if (typeof data.hotkey_enabled === "boolean" && document.activeElement !== $("hotkeyToggle")) $("hotkeyToggle").checked = data.hotkey_enabled;
+  if (typeof data.listening === "boolean") { $("listenToggle").checked = data.listening; $("aloneToggle").disabled = !data.listening; }
+  if (typeof data.name_alone === "boolean") $("aloneToggle").checked = data.name_alone;
   if (typeof data.local_first === "boolean" && document.activeElement !== $("localFirstToggle")) $("localFirstToggle").checked = data.local_first;
   if (data.usage) { const u = data.usage, n = x => (x || 0).toLocaleString();
     $("uClaude").textContent = n(u.claude_calls);
@@ -3876,6 +3944,7 @@ function slashCommands() {
     { name: "briefing", alias: ["morning", "brief", "today"], icon: "sun", tint: "#ffb020", desc: "Weather, calendar, email and your PC", run: () => askQuick("briefing", 45000) },
     { name: "find", alias: ["file", "search"], icon: "search", tint: "#0a84ff", desc: "Find a file and send it here",
       run: () => { text.value = "Send me the "; autosize(); text.focus(); } },
+    { name: "info", alias: ["about", "connection", "tunnel"], icon: "chart", tint: "#5e5ce6", desc: "Connection, CPU use, listening and the AIs, right now", run: () => askQuick("info", 15000, { app: RELEASES[0].v }) },
     { name: "health", alias: ["check", "status"], icon: "check", tint: "#30d158", desc: "Is everything working?", run: () => askQuick("health") },
     { name: "voice", alias: ["call", "talk"], icon: "mic", tint: "#30b0c7", desc: "Voice mode: just talk, the chat stays saved", run: () => setMainMode("voice", true) },
     { name: "newmode", alias: ["mode"], icon: "plus", tint: "#8e8e93", desc: "Make a new mode",
@@ -4150,12 +4219,12 @@ async function stopCommand() {
   try { await post({ type: "stop", id: newId(), target: b.id }); }
   catch { b.p.stopping = false; autosize(); toast("Can't reach your PC right now.", "x", "var(--red)"); }
 }
-async function askQuick(type, timeout = 15000) {   // instant PC answers (even while a command runs) that belong in the chat
+async function askQuick(type, timeout = 15000, extra = {}) {   // instant PC answers (even while a command runs) that belong in the chat
   const id = newId();
   track(id, { kind: "quick", timeout, onReply: t => {
     const chat = current(); addMessage(chat, { who: "jarvis", text: t }); bubble(t, "jarvis"); scrollDown();
   } });
-  try { await post({ type, id }); } catch { fail(id, "Can't reach your PC right now."); }
+  try { await post({ type, id, ...extra }); } catch { fail(id, "Can't reach your PC right now."); }
 }
 async function stopAnything() {   // /stop: this chat's command, or else whatever Jarvis is doing (from anywhere)
   if (busyCmd()) return stopCommand();
@@ -4685,6 +4754,10 @@ $("profileBtn").onclick = openProfile;
 $("meRow").onclick = () => { closeDrawer(); openProfile(); };
 $("titlePill").onclick = openControl;
 $("actTab").onclick = openActivity;
+// the desktop app has no tab bar (the sidebar has New and You already): Your PC and Activity sit in the sidebar's header
+$("deskPcBtn").onclick = openControl;
+$("deskActBtn").onclick = openActivity;
+new MutationObserver(() => { $("deskActBadge").hidden = $("actBadge").hidden; }).observe($("actBadge"), { attributes: true, attributeFilter: ["hidden"] });
 $("versionLabel").textContent = VERSION;
 $("jniLabel").textContent = JNI;
 $("versionRow").onclick = openNews;
@@ -4896,6 +4969,12 @@ document.addEventListener("pointerdown", e => {
 }, { passive: true });
 
 $("localFirstToggle").onchange = e => { post({ type: "set", key: "local_first", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Local models first" : "Claude does everything", e.target.checked ? "check" : "sparkles", e.target.checked ? "var(--green)" : "var(--blue)"); };
+$("listenToggle").onchange = e => {
+  post({ type: "set", key: "listening", value: e.target.checked, id: newId() }).catch(() => {});
+  $("aloneToggle").disabled = !e.target.checked;
+  toast(e.target.checked ? "Listening for \u201cHey Jarvis\u201d" : "Not listening \u2014 Ctrl + Alt + J still works", e.target.checked ? "mic" : "check", e.target.checked ? "var(--blue)" : "var(--green)");
+};
+$("aloneToggle").onchange = e => post({ type: "set", key: "wake_name_alone", value: e.target.checked, id: newId() }).catch(() => {});
 $("hotkeyToggle").onchange = e => { post({ type: "set", key: "hotkey_enabled", value: e.target.checked, id: newId() }).catch(() => {}); toast(e.target.checked ? "Talk shortcut on \u2014 Ctrl + Alt + J" : "Talk shortcut off", e.target.checked ? "sparkles" : "check", e.target.checked ? "var(--blue)" : "var(--green)"); };
 $("usageReset").onclick = () => { post({ type: "usage_reset", id: newId() }).catch(() => {}); toast("Usage counter reset", "check", "var(--green)"); };
 $("deleteAllBtn").onclick = () => { if (!confirm("Delete all chats and groups? They go from your other devices too.")) return; db = { chats: [], groups: [], current: null }; saveDb(); closeSheets(); renderChat(); updateBadges(); };
