@@ -1676,6 +1676,7 @@ const RELEASES = [
     "Much less CPU when Jarvis is just waiting. A quiet room is listened to in bigger pieces (a quarter of the work), and waking on a plain “Jarvis” without the “Hey” is now off: it ran Whisper on everything said in the room. Turn it back on in Settings › Voice if you miss it.",
     "Listening can be switched off: Settings › Voice › Listen for “Hey Jarvis”, or the same switch in the tray icon's menu. Off, the microphone is closed and nothing runs; after 10 minutes Whisper is put away too, freeing its memory. Ctrl + Alt + J still works, one command at a time.",
     "The chat list shows just the names of your chats, nothing under them. Hover one on the PC to see when it was.",
+    "Shorter chat names: “Yo Jarv, so now i have ChatG…” is now “I have ChatGPT Go”. The greeting, his name and words like “so now” are left out, and only the first sentence is kept. Your existing chats got the new names too, except ones you renamed yourself. With a Groq key, a free AI names each new chat after the first answer.",
     "Jarvis's answers are plain text on the page instead of grey bubbles: easier to read. Your own messages keep their bubble.",
     "Calmer colours behind everything, and the glass has a thinner, brighter edge, so it looks like clear glass rather than coloured plastic.",
     "The desktop app: the chat list floats as its own glass panel, and the tab bar at the bottom is gone. Your PC and Activity moved to the top of the chat list, next to New Chat.",
@@ -2164,12 +2165,61 @@ function current() {
   if (!c) { c = makeChat(); db.chats.push(c); db.current = c.id; saveDb(); }
   return c;
 }
+// A chat's name from your first message, without the greeting and the filler: "Yo Jarv, so now i have ChatGPT Go.
+// Can you…" is "I have ChatGPT Go", "Джарвис, има една папка в D:" is "Има една папка в D:". Instant and free.
+const OLD_TITLE = t => t.length > 42 ? t.slice(0, 40).trim() + "…" : t;   // how chats were named before 2JNIv1
+function shortTitle(text) {
+  const first = String(text || "").split("\n").map(l => l.trim()).find(Boolean) || "";
+  const end = "(?=[\\s,!.:;?-]|$)[\\s,!.:;-]*";
+  let t = first.replace(new RegExp("^(?:(?:hey|hi|hello|yo|ok|okay|ей|хей|ало|здрасти)[\\s,!.]+)?(?:jarvis|jarv|jr|jervis|джарвис|джарв)" + end, "i"), "");
+  for (let i = 0; i < 3; i++)
+    t = t.replace(new RegExp("^(?:so now|so|and|well|ok|okay|now|hey|yo|и|а|ами|значи|добре|ей)" + end, "i"), "");
+  t = t.replace(/^(?:i want you to|i need you to|can you please|can you|could you|please)\s+/i, "");
+  const s = /^(.{8,}?[.?!])(?=\s|$)/.exec(t);
+  if (s) t = s[1];
+  t = t.replace(/[.!,;:\s]+$/, "").trim();
+  const words = t.split(/\s+/);
+  if (words.length > 8) t = words.slice(0, 7).join(" ") + "…";
+  if (t.length > 46) t = t.slice(0, 44).trim() + "…";
+  if (t.length < 2) t = OLD_TITLE(first);
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+// Once on each device: chats still called by the old rule get the new, shorter name (never one you renamed)
+function retitleOld() {
+  const flag = Devices.k("jarvis.titles2");
+  if (load(flag)) return;
+  let n = 0;
+  for (const c of db.chats) {
+    const mine = c.messages.find(m => m.who === "me" && m.text);
+    if (!mine || c.named || c.title !== OLD_TITLE(mine.text)) continue;
+    const t = shortTitle(mine.text);
+    if (t && t !== c.title) { c.title = t; n++; }
+  }
+  if (n) saveDb();
+  store(flag, "1");
+}
+// After Jarvis's first answer in a chat, the PC asks a free AI for a short name ("ChatGPT Go and Codex") to replace
+// the start of your first message. Once per chat, never over a name you gave it, and quietly: no name, no fuss.
+function nameChat(chat, answer) {
+  if (chat.named || !answer) return;
+  const mine = chat.messages.filter(m => m.who === "me");
+  if (mine.length !== 1 || !mine[0].text) return;
+  chat.named = "asking";
+  const id = newId();
+  track(id, { kind: "quick", silent: true, timeout: 30000, onReply: t => {
+    t = (t || "").trim();
+    if (!t || chat.named === "you") return;
+    chat.named = "auto"; chat.title = t; saveDb(); renderSidebar();
+    if (chat.id === db.current) setChatTitle(chat);
+  } });
+  post({ type: "title", id, text: mine[0].text.slice(0, 600), reply: answer.slice(0, 800) }).catch(() => {});
+}
 function addMessage(chat, msg) {
   msg.ts ||= Date.now();
   chat.messages.push(msg);
   if (chat.messages.length > 200) chat.messages.splice(0, chat.messages.length - 200);
   chat.updated = msg.ts;
-  if (!chat.title && msg.who === "me") chat.title = msg.text.length > 42 ? msg.text.slice(0, 40).trim() + "…" : msg.text;
+  if (!chat.title && msg.who === "me") chat.title = shortTitle(msg.text);
   saveDb();
 }
 
@@ -3226,7 +3276,7 @@ function actionSheet(title, items) {
 }
 function chatMenu(c) {
   actionSheet(c.title || "New chat", [
-    { label: "Rename", run: () => { const t = prompt("Rename chat", c.title); if (t?.trim()) { c.title = t.trim(); saveDb(); renderSidebar(); if (c.id === db.current) setChatTitle(c); } } },
+    { label: "Rename", run: () => { const t = prompt("Rename chat", c.title); if (t?.trim()) { c.title = t.trim(); c.named = "you"; saveDb(); renderSidebar(); if (c.id === db.current) setChatTitle(c); } } },
     { label: "Move to Group", run: () => moveMenu(c) },
     { label: "Delete Chat", danger: true, run: () => deleteChat(c) },
   ]);
@@ -3291,7 +3341,7 @@ function fail(id, msg) {
   if (!p) return;
   pending.delete(id); clearTimeout(p.timer); clearTimeout(p.ackTimer); setAwaiting(id);
   if (p.tile) tileState(p.tile, "");
-  if (p.kind === "quick") { toast(msg, "x", "var(--red)"); return; }
+  if (p.kind === "quick") { if (!p.silent) toast(msg, "x", "var(--red)"); return; }
   if (p.kind === "shots") {   // no picture: drop the empty card and say why, like any other failed command
     p.card?.remove();
     const chat = chatById(p.chatId);
@@ -3555,6 +3605,7 @@ async function onMessage(text) {
     p.finished = true;
     saveSteps(chat, p);
     addMessage(chat, { who: "jarvis", text: data.text, thinking: data.thinking || "" });
+    nameChat(chat, data.text);
     if (p.chatId === db.current && p.el?.isConnected) {
       if (p.steps?.length) drawSteps(p); else p.step?.remove();   // the steps stay, now all done
       p.el.classList.remove("error", "writing"); p.el.innerHTML = rich(data.text); addThoughts(p.el, data.thinking); addActions(p.el, Date.now()); scrollDown();
@@ -6458,6 +6509,7 @@ async function start() {
   if (!cfg) return;
   $("relayName").textContent = "Direct, encrypted";
   loadDb();
+  retitleOld();
   try { modes = JSON.parse(load(MODES_KEY)) || []; } catch { modes = []; }
   restoreAwaiting();
   renderCmds(); renderModeList(); renderChat(); updateBadges(); renderStatus();

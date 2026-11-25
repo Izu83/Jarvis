@@ -753,6 +753,11 @@ class PhoneChannel:
         elif kind == "briefing_set":
             threading.Thread(target=lambda: (self._set_briefing(data), self.send_memory()), daemon=True,
                              name="briefing-set").start()
+        elif kind == "title":   # a new chat's name, after Jarvis's first answer in it (titles.py)
+            from . import titles
+            user, answer = str(data.get("text") or ""), str(data.get("reply") or "")
+            threading.Thread(target=lambda: self.reply(msg_id, titles.title_for(user, answer)), daemon=True,
+                             name="title").start()
         elif kind == "info":   # /info in the app: the connection, Jarvis's share of the PC, listening, AIs, usage
             from . import info
             app = str(data.get("app") or "")[:40]
