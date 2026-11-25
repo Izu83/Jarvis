@@ -28,6 +28,7 @@ PROMPTS = {"en": "Hey Jarvis, open Spotify, Claude, File Explorer, VS Code, Disc
 RATE = 16000
 CHUNK = 1280  # 80 ms, the frame size openWakeWord expects
 PRE_ROLL_CHUNKS = 22  # keep ~1.8 s before the wake word so words right after it aren't lost
+UNLOAD_AFTER = 600    # listening off for this long (s): Whisper is put away to free its memory
 
 # Vocabulary hint so Whisper spells app names right
 WHISPER_PROMPT = PROMPTS["en"]
@@ -55,6 +56,22 @@ def language_changed() -> None:
     for listener in _listeners:
         if getattr(listener, "loaded_for", None) and model_for(language()) != model_for(listener.loaded_for):
             threading.Thread(target=listener._load_whisper, daemon=True, name="whisper-reload").start()
+
+
+def set_listening(on: bool) -> None:
+    """Settings › Voice and the tray: listen for "Hey Jarvis" or not (the microphone closes when it's off)."""
+    if _listeners:
+        for listener in _listeners:
+            listener.set_listening(on)
+    else:
+        set_setting("listening", bool(on))
+
+
+def set_name_alone(on: bool) -> None:
+    """Also wake on a plain "Jarvis, ..." (Whisper checks the start of everything said in the room: more CPU)."""
+    set_setting("wake_name_alone", bool(on))
+    for listener in _listeners:
+        listener._reopen.set()
 
 
 def language() -> str:
@@ -157,8 +174,24 @@ class VoiceListener:
         self._gen, self._spotted, self._utter_from, self._n, self._quiet_for = 0, None, None, 0, 1.0
         self._tape: collections.deque = collections.deque(maxlen=120)   # the last ~10 s, numbered
         self._to_check: queue.Queue = queue.Queue(maxsize=3)
+        self._wakeup = threading.Event()        # listening was turned back on, or the shortcut was pressed
+        self._whisper_lock = threading.Lock()
+        self.whisper = None
+        self.used = time.time()                  # when Whisper last did something (it's put away after a while off)
         threading.Thread(target=self._check_names, daemon=True, name="name-check").start()
         _listeners.append(self)
+
+    @staticmethod
+    def listening() -> bool:
+        """Settings › Voice › Listen for "Hey Jarvis" (and the tray). Off: the microphone is closed and nothing runs;
+        Ctrl+Alt+J still works, one command at a time."""
+        return bool(settings.get("listening", True))
+
+    def set_listening(self, on: bool) -> None:
+        set_setting("listening", bool(on))
+        log.info("Listening for \"Hey Jarvis\": %s.", "on" if on else "off (Ctrl+Alt+J still works)")
+        self._reopen.set()
+        self._wakeup.set()
 
     def trigger(self) -> None:
         """The Ctrl+Alt+J shortcut: start listening, or — if already listening — stop."""
@@ -166,6 +199,7 @@ class VoiceListener:
             self._cancel.set()
         else:
             self._manual.set()
+            self._wakeup.set()
 
     def cancel(self) -> None:
         """Stop the command currently being recorded (the pop-up's X button)."""
@@ -184,17 +218,46 @@ class VoiceListener:
         log.info("Loading wake word model '%s'...", name)
         download_models(model_names=[name])
         self.wake = Model(wakeword_models=[name], inference_framework="onnx")
-        self._load_whisper()
 
     def _load_whisper(self) -> None:
         """(Re)load Whisper for the current voice language. Called again when the language changes."""
-        lang = language()
-        name = model_for(lang)
-        log.info("Loading Whisper '%s' for %s (first run downloads it)...", name,
-                 {"en": "English", "bg": "Bulgarian", "both": "English and Bulgarian"}[lang])
-        self.whisper = load_model(name)
-        self.loaded_for = lang
-        self.last_lang = "bg" if lang == "bg" else "en"
+        with self._whisper_lock:
+            lang = language()
+            name = model_for(lang)
+            log.info("Loading Whisper '%s' for %s (first run downloads it)...", name,
+                     {"en": "English", "bg": "Bulgarian", "both": "English and Bulgarian"}[lang])
+            self.whisper = load_model(name)
+            self.loaded_for = lang
+            self.last_lang = "bg" if lang == "bg" else "en"
+            self.used = time.time()
+
+    def _ensure_whisper(self):
+        """Whisper, loading it first if it was put away while listening was off."""
+        if self.whisper is None:
+            with self._whisper_lock:
+                loaded = self.whisper is not None
+            if not loaded:
+                self._load_whisper()
+        self.used = time.time()
+        return self.whisper
+
+    def _unload_whisper(self) -> None:
+        with self._whisper_lock:
+            if self.whisper is not None:
+                self.whisper = None
+                import gc
+                gc.collect()
+                log.info("Listening is off, so Whisper is put away to free memory (it loads again when needed).")
+
+    def _rest(self) -> None:
+        """Listening is off: the microphone is closed and nothing runs until it's turned on or Ctrl+Alt+J is pressed.
+        After a while Whisper is put away too (several hundred MB); it loads again when it's needed."""
+        log.info("Not listening for \"Hey Jarvis\" (turned off in Settings or the tray). Ctrl+Alt+J still works.")
+        while not self.listening() and not self._manual.is_set():
+            self._wakeup.wait(30)
+            self._wakeup.clear()
+            if self.whisper is not None and time.time() - self.used > UNLOAD_AFTER and not self._active.is_set():
+                self._unload_whisper()
 
     def _callback(self, indata, _frames, _time, status):
         if status:
@@ -206,6 +269,14 @@ class VoiceListener:
         fails = 0   # in a row: one blip isn't worth a message, a mic that stays broken is
         while True:
             self._reopen.clear()
+            if not self.listening() and not self._manual.is_set():
+                self._rest()
+                continue
+            if self.whisper is None:
+                if self._manual.is_set():   # the shortcut while it was put away: record now, load it meanwhile
+                    threading.Thread(target=self._ensure_whisper, daemon=True, name="whisper-load").start()
+                else:
+                    self._ensure_whisper()
             dev = settings["input_device"]
             opened = 0.0
             try:
@@ -233,12 +304,15 @@ class VoiceListener:
     def _wake_loop(self) -> None:
         check = settings.get("wake_check", True)
         threshold = settings["wake_check_threshold"] if check else settings["wake_threshold"]
-        alone = settings.get("wake_name_alone", "auto")
+        alone = settings.get("wake_name_alone", False)
         alone = alone is True or (alone == "auto" and self._on_gpu())
-        if alone:
+        if alone and self.listening():
             log.info("Listening for \"Jarvis\" / \"Джарвис\" on its own too.")
         recent = collections.deque(maxlen=PRE_ROLL_CHUNKS)
+        quiet_run: list[np.ndarray] = []   # chunks of a quiet room, scored together (a quarter of the work)
         while not self._reopen.is_set():
+            if not self.listening() and not self._manual.is_set():
+                return   # turned off, or the one command from the shortcut is done: close the microphone
             try:
                 chunk = self.audio.get(timeout=0.5)
             except queue.Empty:
@@ -250,10 +324,24 @@ class VoiceListener:
                 self._barge(chunk, recent)
             elif self._burst:
                 self._burst, self._burst_quiet = [], 0.0
+            manual = self._manual.is_set()
+            if not manual and not self.listening():
+                continue
             if alone and not talking:
                 self._listen_for_name(chunk, recent)
-            scores = self.wake.predict(chunk)
-            manual = self._manual.is_set()
+            # The wake-word model costs about the same for 80 ms as for 320 ms of audio, and it still scores every
+            # 80 ms inside a longer piece. So while the room is quiet it's run on 4 chunks at once; anything louder
+            # than the room is scored straight away, so "Hey Jarvis" doesn't wake him any slower.
+            if not manual and not talking and _rms(chunk) < max(self._floor(recent) * 1.8, 120.0):
+                quiet_run.append(chunk)
+                if len(quiet_run) < 4:
+                    continue
+                scores, quiet_run = self.wake.predict(np.concatenate(quiet_run)), []
+            else:
+                if quiet_run:
+                    self.wake.predict(np.concatenate(quiet_run))
+                    quiet_run = []
+                scores = self.wake.predict(chunk)
             spotted = self._spotted
             if spotted is not None:   # "Jarvis, ..." on its own, found in what you just said
                 self._spotted, pre_roll, source = None, self.spotted_audio(spotted), "wake"
@@ -291,6 +379,7 @@ class VoiceListener:
             recent.clear()
             _drain(self.audio)
             self._woke()
+            quiet_run = []
             if self._cancel.is_set():   # stopped by the shortcut or the X button
                 log.info("Listening cancelled.")
                 if self.on_idle:
@@ -329,6 +418,8 @@ class VoiceListener:
         from . import speak
         try:
             samples = audio.astype(np.float32) / 32768.0
+            if self.whisper is None:
+                return
             segments, _ = self.whisper.transcribe(samples, language=self.last_lang, beam_size=1,
                                                   condition_on_previous_text=False)
             said = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.7).strip()
@@ -357,6 +448,11 @@ class VoiceListener:
         finally:
             self._barge_busy = False
 
+    @staticmethod
+    def _floor(recent) -> float:
+        """How loud the room is: the quieter end of the last ~2 s."""
+        return float(np.percentile([_rms(c) for c in recent], 20)) if recent else 0.0
+
     # ------------------------------------------------------------ making sure it was really his name
     def _on_gpu(self) -> bool:
         try:
@@ -368,7 +464,8 @@ class VoiceListener:
         """A quick, plain pass over a couple of seconds: no prompt, so Whisper isn't nudged towards hearing "Jarvis"."""
         samples = audio.astype(np.float32) / 32768.0
         lang = "en" if model_for(self.loaded_for or "en").endswith(".en") else None
-        segments, _ = self.whisper.transcribe(samples, language=lang, beam_size=1, condition_on_previous_text=False,
+        whisper = self._ensure_whisper()
+        segments, _ = whisper.transcribe(samples, language=lang, beam_size=1, condition_on_previous_text=False,
                                               without_timestamps=True)
         return " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.7).strip()
 
@@ -476,9 +573,12 @@ class VoiceListener:
 
     def _quick_transcribe(self, audio: np.ndarray) -> str:
         """A fast, rough pass for the live pop-up (the accurate pass runs once you stop talking)."""
+        whisper = self.whisper
+        if whisper is None:   # still loading (the shortcut was pressed while it was put away)
+            return ""
         samples = audio.astype(np.float32) / 32768.0
         lang = self.last_lang   # in "both", the language of your last command is the best quick guess
-        segments, _ = self.whisper.transcribe(samples, language=lang, beam_size=1,
+        segments, _ = whisper.transcribe(samples, language=lang, beam_size=1,
                                               condition_on_previous_text=False, initial_prompt=PROMPTS[lang])
         text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.85).strip()
         if text.lower().strip(" .!?,") in _PHANTOMS:   # "Thank you!" heard in a quiet room
@@ -501,6 +601,7 @@ class VoiceListener:
             return self.last_lang
 
     def _transcribe(self, audio: np.ndarray) -> str:
+        self._ensure_whisper()
         if language() != self.loaded_for and model_for(language()) != model_for(self.loaded_for):
             self._load_whisper()   # the language was changed in Settings
         self.loaded_for = language()
@@ -536,6 +637,7 @@ def _model_for_phone():
     want = model_for(language())
     for listener in _listeners:
         if getattr(listener, "whisper", None) and listener.loaded_for and model_for(listener.loaded_for) == want:
+            listener.used = time.time()
             return listener.whisper
     global _phone_model
     with _phone_lock:

@@ -284,6 +284,8 @@ class PhoneChannel:
                                    "last": self.last_client},
                        "local_first": bool(settings.get("local_first", False)),
                        "hotkey_enabled": settings["hotkey_enabled"], "hotkey": settings["hotkey"],
+                       "listening": bool(settings.get("listening", True)) and bool(settings["voice_enabled"]),
+                       "name_alone": settings.get("wake_name_alone") is True,
                        "voice_language": settings.get("voice_language", "en"), "voice": settings["edge_voice"],
                        # your name and photo, so every phone and the desktop app show the same (None = never set)
                        "me": {"name": settings.get("user_name"), "photo": settings.get("user_photo")},
@@ -878,6 +880,13 @@ class PhoneChannel:
             elif key == "local_first":
                 set_setting("local_first", value)
                 log.info("Local models first turned %s from the phone.", "on" if value else "off")
+            elif key == "listening":   # Settings › Voice › Listen for "Hey Jarvis"
+                from . import voice
+                voice.set_listening(value)
+            elif key == "wake_name_alone":
+                from . import voice
+                voice.set_name_alone(value)
+                log.info("Waking on just \"Jarvis\" turned %s.", "on" if value else "off")
             elif key == "hotkey_enabled":
                 set_setting("hotkey_enabled", value)
                 from . import hotkey

@@ -481,6 +481,7 @@ def main() -> None:
             # otherwise keep running in the background).
             tray = Tray(listener=listener, on_quit=lambda: getattr(brain, "close", lambda: None)(),
                         on_stop=stop_command, busy=lambda: bool(working["text"]))
+            tray.on_change = lambda: _bridge["phone"] and _bridge["phone"].send_state()   # the apps' switches follow
             threading.Thread(target=tray.run, daemon=True, name="tray").start()
         except Exception:
             log.debug("couldn't start the tray icon", exc_info=True)

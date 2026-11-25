@@ -79,7 +79,12 @@ def test_news_learns_first_then_tells(diary, monkeypatch):
     assert shkolo.news() == []
 
 
-def test_quick_questions_reach_the_diary(diary):
+def test_quick_questions_reach_the_diary(diary, monkeypatch):
+    class Day(dt.date):   # the diary's homework is from early November: ask as if it were then
+        @classmethod
+        def today(cls):
+            return TUE
+    monkeypatch.setattr(shkolo.dt, "date", Day)
     assert nlu.try_handle("какви оценки имам").startswith("Оценки, I срок")
     assert "Homework" in nlu.try_handle("what homework do i have")
     assert nlu.try_handle("колко отсъствия имам").startswith("Отсъствия: 3")

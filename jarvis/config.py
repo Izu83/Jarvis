@@ -131,8 +131,12 @@ DEFAULTS = {
     "wake_check_threshold": 0.15,
     "wake_threshold": 0.5,
     # Also catch a plain "Jarvis, ..." / "Джарвис, ..." at the start of anything you say (the fast model only really
-    # knows "Hey Jarvis", and not in Bulgarian). "auto": only when Whisper runs on the graphics card.
-    "wake_name_alone": "auto",
+    # knows "Hey Jarvis", and not in Bulgarian). Whisper then checks the start of everything said in the room, which
+    # costs a lot of CPU, so it's off unless turned on (Settings › Voice). "auto": only on the graphics card.
+    "wake_name_alone": False,
+    # Settings › Voice / the tray: listen for "Hey Jarvis" at all. Off = the microphone is closed (no CPU); the
+    # Ctrl+Alt+J shortcut still works, one command at a time.
+    "listening": True,
     "whisper_model": "small.en",  # good accuracy on CPU; "base.en" is faster but mishears more, "medium.en" is slower but best
     # Which language you talk to Jarvis in: "en", "bg" (Bulgarian) or "both". Bulgarian uses the multilingual
     # whisper_model_multi (a ~480 MB download the first time, kept in .brain/whisper).

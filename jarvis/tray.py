@@ -25,6 +25,7 @@ WM_TRAY = win32con.WM_USER + 20   # the message Windows sends us when the icon i
 ID_PHONE, ID_LOG, ID_QUIT, ID_SPEAK, ID_RESTART, ID_PAIR, ID_STOP, ID_FACEID = 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030
 ID_APP = 1031
 ID_LOGIN = 1032
+ID_LISTEN = 1033
 MIC_BASE = 1100                   # microphone items get ids MIC_BASE, MIC_BASE+1, ...
 
 
@@ -51,6 +52,7 @@ class Tray:
         self.on_stop = on_stop       # stops the command Jarvis is working on
         self.busy = busy or (lambda: False)   # is there one? (otherwise the Stop item is greyed out)
         self.listener = listener     # the VoiceListener, so we can list and switch microphones
+        self.on_change = None        # a setting changed here: tell the apps (set by __main__)
         self._mic_ids = {}           # menu id -> device index (or None for the Windows default)
 
     def _load_icon(self):
@@ -104,6 +106,8 @@ class Tray:
                 win32gui.AppendMenu(menu, win32con.MF_STRING | idle, ID_STOP, "Stop what Jarvis is doing")
                 win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
             if self.listener is not None:
+                on = win32con.MF_CHECKED if self.listener.listening() else win32con.MF_UNCHECKED
+                win32gui.AppendMenu(menu, win32con.MF_STRING | on, ID_LISTEN, 'Listen for "Hey Jarvis"')
                 win32gui.AppendMenu(menu, win32con.MF_POPUP, self._mic_submenu(), "Microphone")
                 speak = win32con.MF_CHECKED if settings["speak_on_shortcut"] else win32con.MF_UNCHECKED
                 win32gui.AppendMenu(menu, win32con.MF_STRING | speak, ID_SPEAK, "Speak reply on Ctrl+Alt+J")
@@ -153,6 +157,10 @@ class Tray:
             index = self._mic_ids[cmd]
             log.info("Microphone changed to %s from the tray.", voice.device_name(index))
             self.listener.set_device(index)
+        elif cmd == ID_LISTEN and self.listener is not None:
+            self.listener.set_listening(not self.listener.listening())
+            if self.on_change:
+                self.on_change()
         elif cmd == ID_SPEAK:
             new = not settings["speak_on_shortcut"]
             set_setting("speak_on_shortcut", new)
