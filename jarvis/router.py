@@ -38,6 +38,20 @@ CURRENT = re.compile(r"\b(news|latest|today'?s|this week|right now|currently|pri
 LONG = re.compile(r"(youtube\.com|youtu\.be|\bvideo\b|\bpdf\b|\bdocument\b|\bsummari[sz]e\b|\btranscript\b)", re.I)
 X = re.compile(r"(\btwitter\b|\btweets?\b|\bx\.com\b|on x\b|\belon\b|\bgrok\b)", re.I)
 
+# The same in Bulgarian (word starts, so every ending counts: "отвори", "отворих", "отворете"...). Without these, a
+# Bulgarian task ("направи домашното", "изтрий папката") looked like small talk and went to a free chat model.
+ACTION_BG = re.compile(
+    r"\b(отвор|затвор|пусн|спри|спрете|премест|сложи|подреди|минимизир|максимизир|паузир|прескоч|заглуш|звука|"
+    r"изпрат|прати|препрат|качи|свали|изтег|изтри|махни|преименув|копир|инсталир|деинсталир|кликн|натисн|напиши|"
+    r"напишете|запиш|запази|заключ|изключ|рестартир|приспи|включ|смени|промени|създай|създад|направи|направете|"
+    r"организир|почист|изчист|подреди|намери (ми )?(файл|папк|снимк|видео|pdf)|папк|файл|десктоп|монитор|прозор|"
+    r"браузър|напомни|насрочи|всеки ден|всяка сутрин|всяка вечер|домашн|упражнени|задачата|отговори на)\w*", re.I)
+CODE_BG = re.compile(r"\b(код|скрипт|програм|функци|грешка в|бъг|дебъг|numpy|pandas|java\b|c\+\+|c#|компилир)\w*", re.I)
+SIGHT_BG = re.compile(r"(\bекран|\bпогледни|какво виждаш|\bснимка(та)?\b|\bкартина(та)?\b|\bизображение(то)?\b)", re.I)
+CURRENT_BG = re.compile(r"\b(новин|днешн|в момента|цена|цени|колко струва|курс|борс|крипто|биткойн|резултат|кой спечели|"
+                        r"времето в|прогноз|потърси|търси|в интернет|онлайн|последни|актуалн)\w*", re.I)
+LONG_BG = re.compile(r"\b(видео|документ|обобщи|резюмир|транскрипц)\w*", re.I)
+
 
 PLEASANTRY = re.compile(r"^\W*(thanks?( you)?|thx|ty|ok(ay)?|cool|nice|great|perfect|lol|haha|good( job)?|"
                         r"awesome|wow|yes|yep|no|nope)\W*$", re.I)
@@ -60,15 +74,16 @@ def _kind(command: str) -> str:
     c = command.split("\n\n[")[0]   # what the user said, not the notes added to it (files, where they are)
     if X.search(c):
         return "x"
-    if SIGHT.search(c):
+    if SIGHT.search(c) or SIGHT_BG.search(c):
         return "sight"
-    if CODE.search(c) and not CURRENT.search(c):
+    current = CURRENT.search(c) or CURRENT_BG.search(c)
+    if (CODE.search(c) or CODE_BG.search(c)) and not current:
         return "code"
-    if ACTION.search(c):
+    if ACTION.search(c) or ACTION_BG.search(c):
         return "action"
-    if LONG.search(c):
+    if LONG.search(c) or LONG_BG.search(c):
         return "long"
-    if CURRENT.search(c):
+    if current:
         return "current"
     return "chat"
 

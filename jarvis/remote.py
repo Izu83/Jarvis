@@ -753,6 +753,11 @@ class PhoneChannel:
         elif kind == "briefing_set":
             threading.Thread(target=lambda: (self._set_briefing(data), self.send_memory()), daemon=True,
                              name="briefing-set").start()
+        elif kind == "info":   # /info in the app: the connection, Jarvis's share of the PC, listening, AIs, usage
+            from . import info
+            app = str(data.get("app") or "")[:40]
+            threading.Thread(target=lambda: self.reply(msg_id, info.safe_text(self, app)), daemon=True,
+                             name="info").start()
         elif kind == "health":   # /health on the phone
             from . import health
             self.reply(msg_id, health.check_now())

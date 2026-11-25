@@ -98,3 +98,20 @@ def test_a_follow_up_carries_on_the_job():
     assert router.kind("thanks!", "action") == "chat"                      # just thanks: small talk
     assert router.kind("what's the bitcoin price", "action") == "current"  # a new kind of question is its own
     assert router.kind("how are you", "current") == "chat"                 # only jobs carry on
+
+
+@pytest.mark.parametrize("command, k", [
+    ("Искам да направиш още едно домашно. Упражнение 8: Множества", "action"),
+    ("Нали ти бях казал да ми направиш домашното, къде си го запазил?", "action"),
+    ("отвори spotify на левия монитор", "action"),
+    ("изтрий папката с обувките", "action"),
+    ("напиши скрипт на python, който преименува снимките", "code"),
+    ("какво виждаш на екрана", "sight"),
+    ("какви са новините днес", "current"),
+    ("колко струва биткойн", "current"),
+    ("обобщи това видео", "long"),
+    ("как си", "chat"),
+    ("разкажи ми виц", "chat"),
+])
+def test_bulgarian(command, k):
+    assert router.kind(command) == k
