@@ -496,6 +496,22 @@
   .chat-row time { font-size: 12px; color: var(--label2); align-self: flex-start; margin-top: 2px; letter-spacing: 0; }
   .chat-row .unread { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
   .indent .chat-row { padding-left: 18px; }
+  /* Select: tick several chats and delete them together */
+  .pick-btn { height: 34px; padding: 0 12px; border-radius: 17px; font-size: 15px; font-weight: 600; color: var(--blue); }
+  .drawer.picking .drawer-head .round { display: none !important; }
+  .pick-btn[hidden] { display: none; }
+  .drawer.picking .link-card, .drawer.picking .me-row { display: none !important; }
+  .chat-row .tick { width: 22px; height: 22px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    box-shadow: inset 0 0 0 1.5px var(--label3); transition: background .2s, box-shadow .2s; }
+  .chat-row .tick svg.i { width: 14px; height: 14px; stroke-width: 3; color: #fff; opacity: 0; transform: scale(.5); transition: opacity .15s, transform .25s var(--spring); }
+  .chat-row.picked .tick { background: var(--blue); box-shadow: none; }
+  .chat-row.picked .tick svg.i { opacity: 1; transform: none; }
+  .chat-row.picked { background: color-mix(in srgb, var(--blue) 14%, transparent) !important; }
+  .pick-bar { display: flex; gap: 10px; padding: 8px 14px 4px; }
+  .pick-bar[hidden] { display: none; }
+  .pick-bar button { flex: 1; height: 44px; border-radius: 14px; font-size: 15.5px; font-weight: 600; background: var(--fill); color: var(--label); }
+  .pick-bar .del { background: var(--red); color: #fff; }
+  .pick-bar .del[disabled] { opacity: .4; }
   .empty-note { padding: 30px 20px; text-align: center; color: var(--label2); font-size: 15px; line-height: 21px; }
   .me-row { margin: 4px 12px 0; padding: 10px 12px; border-radius: 20px; display: flex; align-items: center; gap: 12px; width: calc(100% - 24px); text-align: left; }
   .me-row img { width: 40px; height: 40px; }
@@ -1036,8 +1052,9 @@
   html.desktop .desk-only { display: grid !important; position: relative; }
   html.desktop .desk-only .badge-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; }
   html.desktop #tabbar { display: none; }
+  html.desktop .drawer-head { padding: 6px 12px 10px 18px; }
   html.desktop .drawer-head .btns { gap: 6px; }
-  html.desktop .drawer-head .round { width: 34px; height: 34px; }
+  html.desktop .drawer-head .round { width: 32px; height: 32px; }
   html.desktop .drawer-head .round svg.i { width: 18px; height: 18px; }
   /* Reduce Motion: things fade instead of sliding or springing */
   @media (prefers-reduced-motion: reduce) {
@@ -1110,6 +1127,7 @@
   <symbol id="i-clip-down" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16" rx="2.5"/><path d="M9 4.5V3.8A.8.8 0 0 1 9.8 3h4.4a.8.8 0 0 1 .8.8v.7M12 10.5v6M9.5 14l2.5 2.5 2.5-2.5"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M12 8.5v4.5M12 16.2v.3"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M8.3 12.3l2.6 2.6 4.9-5.4"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/></symbol>
   <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.8"/><path d="M15 9.5h3.5M15 13.5h3.5M5 17v2.5M8 17v2.5"/></symbol>
   <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.8"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4M6 17v2.5M18 17v2.5"/></symbol>
@@ -1268,8 +1286,10 @@
 <div class="scrim" id="drawerScrim" hidden></div>
 <aside class="drawer glass strong" id="drawer" hidden>
   <div class="drawer-head">
-    <h2>Chats</h2>
+    <h2 id="drawerTitle">Chats</h2>
     <div class="btns">
+      <button class="pick-btn press" id="pickDone" hidden>Done</button>
+      <button class="round glass press" id="pickBtn" aria-label="Select chats" title="Select chats"><svg class="i"><use href="#i-check-circle"/></svg></button>
       <button class="round glass press desk-only" id="deskPcBtn" aria-label="Your PC" title="Your PC"><svg class="i"><use href="#i-display"/></svg></button>
       <button class="round glass press desk-only" id="deskActBtn" aria-label="Activity" title="Activity"><svg class="i"><use href="#i-clock"/></svg><span class="badge-dot live" id="deskActBadge" hidden></span></button>
       <button class="round glass press" id="newGroupBtn" aria-label="New group" title="New group"><svg class="i"><use href="#i-folder-plus"/></svg></button>
@@ -1278,6 +1298,7 @@
   </div>
   <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="search" placeholder="Search" autocomplete="off"></label>
   <nav class="chats" id="chatList"></nav>
+  <div class="pick-bar" id="pickBar" hidden><button class="press" id="pickAll">Select All</button><button class="press del" id="pickDel" disabled>Delete</button></div>
   <div class="link-card" id="linkCard"><svg class="i"><use href="#i-phone"/></svg><span class="t"><b id="linkTitle">Your phone</b><small id="linkSub">Checking…</small></span><button class="press" id="linkPair">Pair</button></div>
   <button class="me-row glass press" id="meRow">
     <img class="avatar me-pic" src="avatar.jpg" alt="">
@@ -1669,9 +1690,12 @@ const $ = id => document.getElementById(id);
 const desktop = location.hostname === "127.0.0.1" && location.port === "8788";
 if (desktop) document.documentElement.classList.add("desktop");
 const enc = new TextEncoder(), dec = new TextDecoder();
-const VERSION = "2026-11-26.2";   // bump together with version.json
+const VERSION = "2026-11-26.3";   // bump together with version.json
 // Release history — newest first. Lives here in the shared page, so it reads the same on your computer and your phone.
 const RELEASES = [
+  { v: "2JNIv2", when: "Nov 26, 2026", title: "Delete many chats at once", notes: [
+    "Select in the chat list (the tick button next to New Group): tick the chats you want gone, or Select All, then Delete. Long-press or right-click a chat › Select Chats… starts with that one ticked. Search first to select only the chats that match.",
+  ] },
   { v: "2JNIv1", when: "Nov 26, 2026", title: "Jarvis 2: lighter, cleaner, smarter", notes: [
     "Much less CPU when Jarvis is just waiting. A quiet room is listened to in bigger pieces (a quarter of the work), and waking on a plain “Jarvis” without the “Hey” is now off: it ran Whisper on everything said in the room. Turn it back on in Settings › Voice if you miss it.",
     "Listening can be switched off: Settings › Voice › Listen for “Hey Jarvis”, or the same switch in the tray icon's menu. Off, the microphone is closed and nothing runs; after 10 minutes Whisper is put away too, freeing its memory. Ctrl + Alt + J still works, one command at a time.",
@@ -3137,6 +3161,7 @@ $("linkPair").onclick = () => {
 };
 
 // ================= sidebar =================
+let picking = null, shownChats = [];   // Select mode: the ticked chat ids, and the chats on screen (for Select All)
 const relTime = ts => {
   const s = (Date.now() - ts) / 1000;
   if (s < 60) return "now";
@@ -3151,18 +3176,25 @@ function chatRow(c, indent) {
   wrap.className = "swipe" + (indent ? " indent" : "");
   wrap.innerHTML = `<div class="acts"><button style="background:var(--indigo)">${icon("folder")}Move</button><button style="background:var(--red)">${icon("trash")}Delete</button></div>`;
   const b = document.createElement("button");
-  b.className = "chat-row" + (c.id === db.current ? " active" : "");
-  b.innerHTML = `<span class="t"><b></b></span>` + (c.unread ? '<span class="unread"></span>' : "");
+  b.className = "chat-row" + (c.id === db.current && !picking ? " active" : "") + (picking?.has(c.id) ? " picked" : "");
+  b.innerHTML = (picking ? `<span class="tick">${icon("check")}</span>` : "") + `<span class="t"><b></b></span>` + (c.unread ? '<span class="unread"></span>' : "");
+  shownChats.push(c);
   b.querySelector("b").textContent = c.title || "New chat";
   b.title = `${c.title || "New chat"} · ${relTime(c.updated)}`;   // when it was, on hover (desktop)
-  b.onclick = () => { if (wrap.classList.contains("open")) { closeSwipe(wrap); return; } openChat(c.id); };
+  b.onclick = () => {
+    if (picking) { picking.has(c.id) ? picking.delete(c.id) : picking.add(c.id); b.classList.toggle("picked", picking.has(c.id)); pickCount(); return; }
+    if (wrap.classList.contains("open")) { closeSwipe(wrap); return; }
+    openChat(c.id);
+  };
   const [moveBtn, delBtn] = wrap.querySelectorAll(".acts button");
   moveBtn.onclick = () => { closeSwipe(wrap); moveMenu(c); };
   delBtn.onclick = () => deleteChat(c);
   wrap.append(b);
-  onLongPress(b, () => chatMenu(c));
-  b.addEventListener("contextmenu", e => { e.preventDefault(); chatMenu(c); });   // the desktop app: right-click
-  swipeable(wrap, b);
+  if (!picking) {
+    onLongPress(b, () => chatMenu(c));
+    b.addEventListener("contextmenu", e => { e.preventDefault(); chatMenu(c); });   // the desktop app: right-click
+    swipeable(wrap, b);
+  }
   return wrap;
 }
 // iOS-style swipe-left on a row to reveal Move / Delete
@@ -3187,13 +3219,14 @@ function swipeable(wrap, row) {
 }
 function renderSidebar() {
   const list = $("chatList"), q = $("search").value.trim().toLowerCase();
-  list.innerHTML = "";
+  list.innerHTML = ""; shownChats = [];
   const visible = db.chats.filter(c => c.messages.length || c.id === db.current);
   const byDate = arr => arr.sort((a, b) => b.updated - a.updated);
   if (q) {
     const hits = byDate(visible.filter(c => (c.title + " " + c.messages.map(m => m.text || "").join(" ")).toLowerCase().includes(q)));
     if (!hits.length) list.innerHTML = '<div class="empty-note">No chats found</div>';
     hits.forEach(c => list.append(chatRow(c)));
+    pickCount();
     return;
   }
   for (const g of db.groups) {
@@ -3215,10 +3248,53 @@ function renderSidebar() {
     list.append(head);
     loose.forEach(c => list.append(chatRow(c)));
   }
+  pickCount();
   if (!visible.length && !db.groups.length) list.innerHTML = '<div class="empty-note">Your chats will appear here.<br>' + (desktop ? "Right-click" : "Swipe left on") + ' a chat to move or delete it.</div>';
 }
+// Select: tick several chats (or Select All) and delete them in one go
+function startPicking(first) {
+  picking = new Set(first ? [first.id] : []);
+  $("drawer").classList.add("picking"); $("pickBar").hidden = $("pickDone").hidden = false;
+  renderSidebar();
+}
+function stopPicking() {
+  if (!picking) return;
+  picking = null;
+  $("drawer").classList.remove("picking"); $("pickBar").hidden = $("pickDone").hidden = true;
+  $("drawerTitle").textContent = "Chats";
+  renderSidebar();
+}
+function pickCount() {
+  if (!picking) return;
+  for (const id of [...picking]) if (!db.chats.some(c => c.id === id)) picking.delete(id);
+  const n = picking.size, all = shownChats.length && shownChats.every(c => picking.has(c.id));
+  $("drawerTitle").textContent = n ? `${n} Selected` : "Select Chats";
+  $("pickDel").disabled = !n;
+  $("pickDel").textContent = n ? `Delete ${n}` : "Delete";
+  $("pickAll").textContent = all ? "Deselect All" : "Select All";
+}
+$("pickBtn").onclick = () => startPicking();
+$("pickDone").onclick = () => stopPicking();
+$("pickAll").onclick = () => {
+  const all = shownChats.length && shownChats.every(c => picking.has(c.id));
+  shownChats.forEach(c => all ? picking.delete(c.id) : picking.add(c.id));
+  renderSidebar();
+};
+$("pickDel").onclick = () => {
+  const gone = db.chats.filter(c => picking.has(c.id));
+  if (!gone.length) return;
+  const synced = gone.some(c => ChatSync.sent[c.id]);
+  const what = gone.length === 1 ? "this chat" : `these ${gone.length} chats`;
+  if (!confirm(`Delete ${what}? This can't be undone.` + (synced ? " They go from your other devices too." : ""))) return;
+  db.chats = db.chats.filter(c => !picking.has(c.id));
+  if (gone.some(c => c.id === db.current)) db.current = null;
+  saveDb(); stopPicking(); renderChat(); updateBadges();
+  toast(gone.length === 1 ? "Chat deleted" : `${gone.length} chats deleted`, "trash", "var(--red)");
+};
+document.addEventListener("keydown", e => { if (e.key === "Escape" && picking) stopPicking(); });
 function openDrawer() { renderSidebar(); for (const id of ["drawer", "drawerScrim"]) { $(id).classList.remove("closing"); $(id).hidden = false; } $("drawer").style.transform = ""; }
 function closeDrawer() {
+  if (picking) { picking = null; $("drawer").classList.remove("picking"); $("pickBar").hidden = $("pickDone").hidden = true; $("drawerTitle").textContent = "Chats"; }
   if (desktop) { $("search").value = ""; renderSidebar(); return; }   // on the desktop the chats stay down the side
   hideAnimated($("drawer"), () => { $("search").value = ""; $("drawer").style.transform = ""; }); hideAnimated($("drawerScrim")); }
 function openChat(id) { db.current = id; saveDb(); closeDrawer(); renderChat(); }
@@ -3278,6 +3354,7 @@ function chatMenu(c) {
   actionSheet(c.title || "New chat", [
     { label: "Rename", run: () => { const t = prompt("Rename chat", c.title); if (t?.trim()) { c.title = t.trim(); c.named = "you"; saveDb(); renderSidebar(); if (c.id === db.current) setChatTitle(c); } } },
     { label: "Move to Group", run: () => moveMenu(c) },
+    { label: "Select Chats…", run: () => startPicking(c) },
     { label: "Delete Chat", danger: true, run: () => deleteChat(c) },
   ]);
 }
